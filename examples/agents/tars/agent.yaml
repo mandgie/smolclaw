@@ -1,0 +1,9 @@
+name: tars
+model: claude-opus-4-6
+channels:
+  telegram:
+    token_env: TARS_TELEGRAM_TOKEN
+    authorized_users: []
+memory:
+  enabled: true
+  cross_agent: true

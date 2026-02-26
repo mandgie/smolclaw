@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>smolclaw</title>
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --border: #222; --text: #e0e0e0;
+    --muted: #888; --accent: #4ade80; --accent-dim: #1a3a2a; --red: #ef4444;
+    --yellow: #eab308; --font: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); padding: 24px; }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; cursor: pointer; transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .card-name { font-size: 15px; font-weight: 600; }
+  .status { width: 8px; height: 8px; border-radius: 50%; }
+  .status.on { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .status.off { background: var(--muted); }
+  .card-meta { font-size: 11px; color: var(--muted); line-height: 1.8; }
+  .card-meta span { display: inline-block; background: var(--bg); padding: 2px 6px; border-radius: 4px; margin-right: 4px; }
+  .section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 8px; border-bottom: 1px solid var(--border); }
+  td { padding: 8px; border-bottom: 1px solid var(--border); }
+  .tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+  .tag-ok { background: var(--accent-dim); color: var(--accent); }
+  .tag-err { background: #2a1a1a; color: var(--red); }
+  .tag-pending { background: #1a1a0a; color: var(--yellow); }
+  .health { position: fixed; bottom: 16px; right: 16px; font-size: 11px; color: var(--muted); }
+  .empty { color: var(--muted); font-size: 13px; padding: 32px; text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>smolclaw</h1>
+<p class="subtitle">multi-agent gateway</p>
+
+<div class="section-title">Agents</div>
+<div class="grid" id="agents"><div class="empty">Loading...</div></div>
+
+<div class="section-title">Scheduled Jobs</div>
+<table id="jobs-table">
+  <thead><tr><th>ID</th><th>Agent</th><th>Schedule</th><th>Status</th><th>Last Run</th><th>Next Run</th></tr></thead>
+  <tbody id="jobs"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
+</table>
+
+<div class="health" id="health"></div>
+
+<script>
+const API = '';
+
+async function fetchAgents() {
+  try {
+    const res = await fetch(`${API}/api/agents`);
+    const data = await res.json();
+    const el = document.getElementById('agents');
+    if (!data.agents.length) { el.innerHTML = '<div class="empty">No agents configured.</div>'; return; }
+    el.innerHTML = data.agents.map(a => `
+      <div class="card">
+        <div class="card-header">
+          <span class="card-name">${a.name}</span>
+          <span class="status ${a.connected ? 'on' : 'off'}"></span>
+        </div>
+        <div class="card-meta">
+          <span>${a.model}</span><br>
+          ${a.channels.map(c => `<span>${c}</span>`).join('')}
+          <span>${a.skills} skills</span>
+          ${a.memory ? `<span>${a.memory.facts} facts</span>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { document.getElementById('agents').innerHTML = '<div class="empty">Failed to connect.</div>'; }
+}
+
+async function fetchJobs() {
+  try {
+    const res = await fetch(`${API}/api/cron/jobs`);
+    const data = await res.json();
+    const el = document.getElementById('jobs');
+    if (!data.jobs.length) { el.innerHTML = '<tr><td colspan="6" class="empty">No jobs.</td></tr>'; return; }
+    el.innerHTML = data.jobs.map(j => `
+      <tr>
+        <td>${j.id}</td>
+        <td>${j.agent}</td>
+        <td><code>${j.schedule}</code></td>
+        <td><span class="tag tag-${j.status === 'ok' ? 'ok' : j.status === 'error' ? 'err' : 'pending'}">${j.status}</span></td>
+        <td>${j.last_run ? new Date(j.last_run).toLocaleString() : '—'}</td>
+        <td>${j.next_run ? new Date(j.next_run).toLocaleString() : '—'}</td>
+      </tr>
+    `).join('');
+  } catch(e) {}
+}
+
+async function fetchHealth() {
+  try {
+    const res = await fetch(`${API}/api/health`);
+    const data = await res.json();
+    document.getElementById('health').textContent =
+      `${data.agents} agents · ${data.channels} channels · ${data.jobs} jobs`;
+  } catch(e) { document.getElementById('health').textContent = 'disconnected'; }
+}
+
+fetchAgents(); fetchJobs(); fetchHealth();
+setInterval(() => { fetchAgents(); fetchJobs(); fetchHealth(); }, 10000);
+</script>
+</body>
+</html>

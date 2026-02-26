@@ -1,0 +1,93 @@
+"""Message routing — any source → correct agent → response delivery."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .agent import Agent
+
+log = logging.getLogger("smolclaw")
+
+
+@dataclass
+class InboundMessage:
+    """A message from any source, normalized."""
+
+    agent: str
+    text: str
+    source: str  # "telegram", "cli", "cron", "api"
+    chat_id: str = ""
+    session_key: str = ""
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class OutboundMessage:
+    """A response to be delivered."""
+
+    agent: str
+    text: str
+    source: str
+    chat_id: str = ""
+
+
+class Router:
+    """Routes messages to agents and collects responses."""
+
+    def __init__(self):
+        self._agents: dict[str, Agent] = {}
+        self._handlers: dict[str, list] = {}  # source → callback list
+
+    def register_agent(self, agent: Agent):
+        self._agents[agent.name] = agent
+        log.info(f"Router: registered agent '{agent.name}'")
+
+    def on_response(self, source: str, callback):
+        """Register a callback for outbound messages from a source."""
+        self._handlers.setdefault(source, []).append(callback)
+
+    async def route(self, message: InboundMessage) -> OutboundMessage:
+        """Route an inbound message to the correct agent, return response."""
+        agent = self._agents.get(message.agent)
+        if not agent:
+            log.error(f"Router: no agent '{message.agent}' registered")
+            return OutboundMessage(
+                agent=message.agent,
+                text=f"Agent '{message.agent}' not found.",
+                source=message.source,
+                chat_id=message.chat_id,
+            )
+
+        try:
+            response_text = await agent.send(message.text, session_key=message.session_key)
+        except Exception as e:
+            log.error(f"Router: agent '{message.agent}' error: {e}")
+            response_text = f"Error: {e}"
+
+        outbound = OutboundMessage(
+            agent=message.agent,
+            text=response_text,
+            source=message.source,
+            chat_id=message.chat_id,
+        )
+
+        # Notify handlers for this source
+        for callback in self._handlers.get(message.source, []):
+            try:
+                await callback(outbound)
+            except Exception as e:
+                log.error(f"Router: handler error for source '{message.source}': {e}")
+
+        return outbound
+
+    def get_agent(self, name: str) -> Agent | None:
+        return self._agents.get(name)
+
+    @property
+    def agents(self) -> dict[str, Agent]:
+        return dict(self._agents)

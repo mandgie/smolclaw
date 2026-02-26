@@ -1,0 +1,9 @@
+name: coach
+model: claude-sonnet-4-6
+channels:
+  telegram:
+    token_env: COACH_TELEGRAM_TOKEN
+    authorized_users: []
+memory:
+  enabled: true
+  cross_agent: false
