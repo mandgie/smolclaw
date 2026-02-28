@@ -63,7 +63,8 @@ class Memory:
         conn = self._connect()
         try:
             cursor = conn.execute(
-                "INSERT INTO facts (agent, content, category, source, created_at) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO facts (agent, content, category, source, created_at)"
+                " VALUES (?, ?, ?, ?, ?)",
                 (self.agent, content, category, source, datetime.now().isoformat()),
             )
             conn.commit()
@@ -71,9 +72,7 @@ class Memory:
         finally:
             conn.close()
 
-    def search_facts(
-        self, query: str, limit: int = 10, cross_agent: bool = False
-    ) -> list[dict]:
+    def search_facts(self, query: str, limit: int = 10, cross_agent: bool = False) -> list[dict]:
         """Search facts. By default only this agent's namespace."""
         conn = self._connect()
         try:
@@ -84,7 +83,8 @@ class Memory:
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT * FROM facts WHERE agent = ? AND content LIKE ? ORDER BY created_at DESC LIMIT ?",
+                    "SELECT * FROM facts WHERE agent = ? AND content LIKE ?"
+                    " ORDER BY created_at DESC LIMIT ?",
                     (self.agent, f"%{query}%", limit),
                 ).fetchall()
             return [dict(r) for r in rows]
@@ -102,8 +102,9 @@ class Memory:
         conn = self._connect()
         try:
             cursor = conn.execute(
-                "INSERT INTO chunks (agent, session_id, timestamp, user_text, assistant_text, combined) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO chunks"
+                " (agent, session_id, timestamp, user_text, assistant_text, combined)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     self.agent,
                     session_id,
@@ -118,9 +119,7 @@ class Memory:
         finally:
             conn.close()
 
-    def search_chunks(
-        self, query: str, limit: int = 10, cross_agent: bool = False
-    ) -> list[dict]:
+    def search_chunks(self, query: str, limit: int = 10, cross_agent: bool = False) -> list[dict]:
         """Search conversation chunks."""
         conn = self._connect()
         try:
@@ -131,7 +130,8 @@ class Memory:
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT * FROM chunks WHERE agent = ? AND combined LIKE ? ORDER BY timestamp DESC LIMIT ?",
+                    "SELECT * FROM chunks WHERE agent = ? AND combined LIKE ?"
+                    " ORDER BY timestamp DESC LIMIT ?",
                     (self.agent, f"%{query}%", limit),
                 ).fetchall()
             return [dict(r) for r in rows]

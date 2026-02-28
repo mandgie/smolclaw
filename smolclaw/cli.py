@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -32,6 +31,88 @@ def cli(ctx, home):
     ctx.obj["base"] = get_base_dir(home)
 
 
+def _scaffold(base: Path, agent_name: str = "myagent", model: str = "claude-sonnet-4-6"):
+    """Scaffold smolclaw home directory and first agent. Safe to re-run."""
+    click.echo(f"\n  First run — setting up smolclaw at {base}\n")
+
+    # Shared directories
+    for d in ["shared/skills", "shared/cron"]:
+        (base / d).mkdir(parents=True, exist_ok=True)
+
+    # Shared USER.md
+    user_md = base / "shared" / "USER.md"
+    if not user_md.exists():
+        user_md.write_text(
+            "# User\n\n"
+            "Describe yourself here. All agents see this file.\n\n"
+            "- Name: \n"
+            "- Location: \n"
+            "- Preferences: \n"
+        )
+        click.echo("  Created shared/USER.md")
+
+    # Create the first agent
+    agent_dir = base / "agents" / agent_name
+    for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+        (agent_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+    # agent.yaml
+    yaml_path = agent_dir / "agent.yaml"
+    if not yaml_path.exists():
+        yaml_path.write_text(
+            f"name: {agent_name}\n"
+            f"model: {model}\n"
+            "channels: {}\n"
+            "memory:\n"
+            "  enabled: true\n"
+            "  cross_agent: false\n"
+        )
+        click.echo(f"  Created agents/{agent_name}/agent.yaml")
+
+    # soul.md
+    soul_path = agent_dir / "soul.md"
+    if not soul_path.exists():
+        soul_path.write_text(
+            f"# {agent_name.upper()}\n\n"
+            "You are a helpful personal AI assistant.\n\n"
+            "## Personality\n"
+            "- Friendly but concise. Respect the user's time.\n"
+            "- Lead with actions and answers, not explanations.\n"
+            "- Use structured output (bullets, tables) when it helps.\n"
+            "- Be honest when you don't know something.\n"
+            "- Light humor is welcome, never forced.\n"
+        )
+        click.echo(f"  Created agents/{agent_name}/soul.md")
+
+    # agents.md
+    agents_path = agent_dir / "agents.md"
+    if not agents_path.exists():
+        agents_path.write_text(
+            f"# {agent_name.upper()} — Operational Rules\n\n"
+            "## Core Behavior\n"
+            "- Default to doing, not explaining. Deliver results first.\n"
+            "- Keep responses short. If it fits in 2 lines, don't use 10.\n"
+            "- Ask clarifying questions only when truly ambiguous.\n"
+            "- Remember context from previous conversations when possible.\n\n"
+            "## Tools & Skills\n"
+            "- Use available tools proactively to get things done.\n"
+            "- Skills are loaded from the skills/ directory.\n"
+            "- Each skill folder contains a SKILL.md with instructions.\n\n"
+            "## Memory\n"
+            "- Store important facts and user preferences in memory.\n"
+            "- Reference past context to avoid asking the same questions.\n"
+        )
+        click.echo(f"  Created agents/{agent_name}/agents.md")
+
+    # Gateway config
+    config_path = base / "config.yaml"
+    if not config_path.exists():
+        config_path.write_text("host: 127.0.0.1\nport: 7890\nlog_level: INFO\n")
+        click.echo("  Created config.yaml")
+
+    click.echo(f"\n  Agent '{agent_name}' ready. Starting gateway...\n")
+
+
 @cli.command()
 @click.option("--no-api", is_flag=True, help="Disable the API server")
 @click.pass_context
@@ -40,10 +121,10 @@ def up(ctx, no_api):
     from .gateway import run_gateway
 
     base = ctx.obj["base"]
-    if not (base / "agents").exists():
-        click.echo(f"No agents found at {base}/agents/")
-        click.echo("Run 'smolclaw add <name>' to create your first agent.")
-        sys.exit(1)
+
+    # Auto-scaffold on first run
+    if not (base / "agents").exists() or not any(d.is_dir() for d in (base / "agents").iterdir()):
+        _scaffold(base)
 
     asyncio.run(run_gateway(base, with_api=not no_api))
 

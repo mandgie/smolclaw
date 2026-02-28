@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 
 if TYPE_CHECKING:
     from .gateway import Gateway
@@ -23,14 +22,16 @@ def create_app(gateway: Gateway) -> FastAPI:
         agents = []
         for name, agent in gateway.agents.items():
             channels = list(agent.info.config.channels.keys())
-            agents.append({
-                "name": name,
-                "model": agent.model,
-                "connected": agent.is_connected,
-                "channels": channels,
-                "skills": len(agent.info.skills),
-                "memory": agent.memory.stats() if hasattr(agent, "memory") else None,
-            })
+            agents.append(
+                {
+                    "name": name,
+                    "model": agent.model,
+                    "connected": agent.is_connected,
+                    "channels": channels,
+                    "skills": len(agent.info.skills),
+                    "memory": agent.memory.stats() if hasattr(agent, "memory") else None,
+                }
+            )
         return {"agents": agents}
 
     @app.get("/api/agents/{name}")

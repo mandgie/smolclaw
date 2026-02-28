@@ -7,7 +7,6 @@ import logging
 import os
 import time
 from datetime import datetime
-from pathlib import Path
 
 # Strip nested session detection so SDK works from inside Claude Code / cron / etc.
 os.environ.pop("CLAUDECODE", None)

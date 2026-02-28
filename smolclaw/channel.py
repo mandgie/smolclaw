@@ -8,10 +8,9 @@ import logging
 import os
 import re
 from abc import ABC, abstractmethod
-from pathlib import Path
 
-from .config import AgentInfo, ChannelConfig
-from .router import InboundMessage, OutboundMessage, Router
+from .config import ChannelConfig
+from .router import InboundMessage, Router
 
 log = logging.getLogger("smolclaw")
 
@@ -220,7 +219,8 @@ class TelegramChannel(Channel):
 
         async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not is_auth(update.effective_user.id):
-                await update.message.reply_text(f"Unauthorized. Your ID: {update.effective_user.id}")
+                uid = update.effective_user.id
+                await update.message.reply_text(f"Unauthorized. Your ID: {uid}")
                 return
             await update.message.reply_text(f"{agent_name} online. Send me a message.")
 

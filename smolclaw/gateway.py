@@ -99,10 +99,7 @@ class Gateway:
     async def _deliver_cron(self, job, text: str):
         """Deliver cron job output to the right channel."""
         for channel in self.channels:
-            if (
-                channel.agent_name == job.agent
-                and channel.channel_type == job.delivery
-            ):
+            if channel.agent_name == job.agent and channel.channel_type == job.delivery:
                 await channel.send(job.delivery_chat_id, text)
                 return
         log.warning(f"No {job.delivery} channel found for agent {job.agent}")
@@ -152,9 +149,9 @@ async def run_gateway(base_dir: Path, with_api: bool = True):
     api_task = None
     if with_api:
         try:
-            from .api import create_app
-
             import uvicorn
+
+            from .api import create_app
 
             app = create_app(gw)
             config = uvicorn.Config(
