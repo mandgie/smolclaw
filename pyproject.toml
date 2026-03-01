@@ -41,6 +41,7 @@ memory = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
     "ruff>=0.8.0",
 ]
 
@@ -50,6 +51,7 @@ smolclaw = "smolclaw.cli:main"
 [project.urls]
 Homepage = "https://github.com/mandgie/smolclaw"
 Repository = "https://github.com/mandgie/smolclaw"
+"Bug Tracker" = "https://github.com/mandgie/smolclaw/issues"
 
 [tool.ruff]
 target-version = "py311"
@@ -60,3 +62,12 @@ select = ["E", "F", "I", "N", "W"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+addopts = "--cov=smolclaw --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["smolclaw"]
+omit = ["smolclaw/dashboard/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

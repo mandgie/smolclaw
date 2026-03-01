@@ -13,6 +13,8 @@ venv/
 !examples/**/*.env
 .ruff_cache/
 .pytest_cache/
+htmlcov/
+.coverage
 .mypy_cache/
 *.log
 *.pid
