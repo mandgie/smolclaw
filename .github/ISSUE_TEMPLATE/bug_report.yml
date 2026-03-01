@@ -1,0 +1,38 @@
+name: Bug Report
+description: Report a bug in smolclaw
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Run `smolclaw up`
+        2. Send a message via API
+        3. See error in logs
+  - type: input
+    id: version
+    attributes:
+      label: smolclaw version
+      description: Output of `python -c "import smolclaw; print(smolclaw.__version__)"`
+      placeholder: "0.1.0"
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.12"
