@@ -45,7 +45,14 @@ class Gateway:
         # Discover and load agents
         agents_dir = self.base_dir / self.config.agents_dir
         agent_infos = discover_all_agents(self.base_dir)
-        memory_db = self.base_dir / self.config.shared_dir / "memory.db"
+
+        if not agent_infos:
+            log.warning("No agents discovered — gateway will run with zero agents")
+
+        # Ensure shared dir exists for memory DB
+        shared_dir = self.base_dir / self.config.shared_dir
+        shared_dir.mkdir(parents=True, exist_ok=True)
+        memory_db = shared_dir / "memory.db"
 
         for name, info in agent_infos.items():
             agent = Agent(info, user_md=self._user_md)
@@ -63,11 +70,14 @@ class Gateway:
             channels_dir = agent.info.path / "channels"
             if channels_dir.exists():
                 for env_file in channels_dir.glob("*.env"):
-                    for line in env_file.read_text().splitlines():
-                        line = line.strip()
-                        if line and not line.startswith("#") and "=" in line:
-                            key, _, value = line.partition("=")
-                            os.environ.setdefault(key.strip(), value.strip())
+                    try:
+                        for line in env_file.read_text().splitlines():
+                            line = line.strip()
+                            if line and not line.startswith("#") and "=" in line:
+                                key, _, value = line.partition("=")
+                                os.environ.setdefault(key.strip(), value.strip())
+                    except OSError as e:
+                        log.error(f"Failed to read env file {env_file}: {e}")
 
             for ch_type, ch_config in agent.info.config.channels.items():
                 try:
@@ -99,7 +109,10 @@ class Gateway:
         """Deliver cron job output to the right channel."""
         for channel in self.channels:
             if channel.agent_name == job.agent and channel.channel_type == job.delivery:
-                await channel.send(job.delivery_chat_id, text)
+                try:
+                    await channel.send(job.delivery_chat_id, text)
+                except Exception as e:
+                    log.error(f"Failed to deliver cron job {job.id} via {job.delivery}: {e}")
                 return
         log.warning(f"No {job.delivery} channel found for agent {job.agent}")
 
@@ -142,7 +155,11 @@ async def run_gateway(base_dir: Path, with_api: bool = True):
     )
 
     gw = Gateway(base_dir)
-    await gw.start()
+    try:
+        await gw.start()
+    except Exception as e:
+        log.critical(f"Gateway failed to start: {e}")
+        raise
 
     # Start API server if requested
     api_task = None
