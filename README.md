@@ -14,6 +14,8 @@
 
 Run multiple AI agents — each with its own personality, skills, and channels — from a single process. Agents are defined as folders with markdown files. No code required.
 
+**Not another enterprise orchestration framework.** smolclaw is for people who want a personal AI assistant that runs on their laptop — not a distributed system that needs a DevOps team. ~10 modules, filesystem-as-config, zero boilerplate.
+
 ## Features
 
 - **Filesystem-as-config** — Drop a folder, get an agent. `soul.md` for personality, `agent.yaml` for model/channels, `skills/` for capabilities.
@@ -154,6 +156,10 @@ smolclaw/              # Python package
 - [ ] Cross-agent messaging
 - [ ] Discord / Slack channel adapters
 - [ ] PyPI publish
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
