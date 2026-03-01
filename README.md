@@ -1,6 +1,28 @@
-# smolclaw
+<p align="center">
+  <h1 align="center">smolclaw</h1>
+  <p align="center">Lightweight multi-agent framework for personal AI assistants</p>
+</p>
 
-Lightweight multi-agent framework for personal AI assistants.
+<p align="center">
+  <a href="https://github.com/mandgie/smolclaw/actions/workflows/ci.yml"><img src="https://github.com/mandgie/smolclaw/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://pypi.org/project/smolclaw/"><img src="https://img.shields.io/pypi/v/smolclaw" alt="PyPI"></a>
+  <a href="https://pypi.org/project/smolclaw/"><img src="https://img.shields.io/pypi/pyversions/smolclaw" alt="Python"></a>
+  <a href="https://github.com/mandgie/smolclaw/blob/main/LICENSE"><img src="https://img.shields.io/github/license/mandgie/smolclaw" alt="License"></a>
+</p>
+
+---
+
+Run multiple AI agents — each with its own personality, skills, and channels — from a single process. Agents are defined as folders with markdown files. No code required.
+
+## Features
+
+- **Filesystem-as-config** — Drop a folder, get an agent. `soul.md` for personality, `agent.yaml` for model/channels, `skills/` for capabilities.
+- **Single gateway process** — All agents, channels, scheduler, and API run in one async process. No microservices, no Docker, no infra.
+- **Telegram integration** — Each agent gets its own Telegram bot with typing indicators, markdown rendering, and user authorization.
+- **Cron scheduler** — Schedule jobs with cron expressions. Jobs route through the same message bus as everything else.
+- **Namespaced memory** — Shared SQLite database with per-agent isolation. Opt-in cross-agent memory sharing.
+- **REST API + dashboard** — FastAPI on `:7890` with agent management, messaging, and a built-in dark-mode dashboard.
+- **Claude SDK powered** — Built on Anthropic's Claude Agent SDK with session management and tool support.
 
 ## Quick Start
 
@@ -10,44 +32,129 @@ smolclaw add myagent
 smolclaw up
 ```
 
-## What is this?
+This scaffolds a new agent at `~/.smolclaw/agents/myagent/` and starts the gateway. Edit the generated `soul.md` to give your agent a personality.
 
-smolclaw lets you run multiple AI agents — each with its own personality, skills, and Telegram bot — from a single process. Agents are defined as folders with markdown files. No code required.
+## How Agents Work
+
+Each agent is a folder:
+
+```
+~/.smolclaw/agents/tars/
+├── agent.yaml       # Model, channels, memory config
+├── soul.md          # Personality & voice
+├── agents.md        # Operational rules & tool access
+├── skills/          # Folder per skill (or symlinks to shared/)
+├── context/         # Extra .md files loaded into system prompt
+├── channels/        # Channel credentials (*.env files)
+└── prompts/         # Templates for scheduled jobs
+```
+
+The system prompt is assembled automatically from these files. Change a file, restart, and the agent updates.
+
+### Example agent.yaml
+
+```yaml
+name: tars
+model: claude-opus-4-6
+channels:
+  telegram:
+    token_env: TARS_TELEGRAM_TOKEN
+    authorized_users: []
+memory:
+  enabled: true
+  cross_agent: true
+```
+
+### Example soul.md
+
+```markdown
+# TARS
+
+You are TARS, a personal virtual assistant. Inspired by Interstellar.
+
+## Voice & Tone
+- Humor setting: 60%
+- Concise and direct. No filler.
+- Dry humor when appropriate.
+```
 
 ## Architecture
 
 ```
-~/.smolclaw/
-├── config.yaml              # Gateway config
-├── shared/
-│   ├── USER.md              # Who you are (shared across agents)
-│   ├── memory.db            # Shared memory, namespaced per agent
-│   └── cron/jobs.json       # Scheduled jobs
-└── agents/
-    ├── tars/
-    │   ├── agent.yaml       # Model, channels
-    │   ├── soul.md          # Personality
-    │   ├── agents.md        # Rules & tools
-    │   └── skills/          # Folder = enabled
-    └── coach/
-        ├── agent.yaml
-        ├── soul.md
-        ├── agents.md
-        └── skills/
+Gateway (single process)
+├── Agent: tars     (Opus, Telegram, cross-agent memory)
+├── Agent: coach    (Sonnet, no channel, isolated memory)
+├── Scheduler       (croniter, fires through router)
+├── API             (FastAPI :7890, serves dashboard)
+└── Router          (any source → correct agent → response)
 ```
+
+All messages — whether from Telegram, the API, the CLI, or the scheduler — flow through the same router.
 
 ## CLI
 
 ```bash
-smolclaw up                     # Start gateway (all agents + API)
-smolclaw add <name>             # Scaffold a new agent
-smolclaw list                   # List agents
-smolclaw send <agent> "msg"     # One-shot message
-smolclaw cron list              # List scheduled jobs
-smolclaw cron add --agent tars --schedule "0 8 * * 1-5" --prompt "morning briefing"
-smolclaw add-skill <agent> <skill>   # Link shared skill to agent
+smolclaw up                          # Start gateway (all agents + API)
+smolclaw add <name>                  # Scaffold a new agent
+smolclaw list                        # List discovered agents
+smolclaw send <agent> "message"      # Send a one-shot message
+smolclaw cron list                   # List scheduled jobs
+smolclaw cron add \
+  --agent tars \
+  --schedule "0 8 * * 1-5" \
+  --prompt "morning briefing"        # Add a cron job
+smolclaw add-skill <agent> <skill>   # Symlink shared skill to agent
 ```
 
 ## Dashboard
 
-Runs at `http://localhost:7890` when the gateway starts.
+A built-in dark-mode dashboard runs at `http://localhost:7890` when the gateway starts. Shows agent status, config, and lets you send messages.
+
+## Development
+
+```bash
+git clone https://github.com/mandgie/smolclaw.git
+cd smolclaw
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Lint
+ruff check smolclaw/
+ruff format --check smolclaw/
+```
+
+## Project Structure
+
+```
+smolclaw/              # Python package
+├── gateway.py         # Single-process orchestrator
+├── agent.py           # Agent class (loads identity, wraps Claude SDK)
+├── router.py          # Message routing
+├── channel.py         # Channel adapters (Telegram)
+├── memory.py          # Namespaced SQLite memory
+├── scheduler.py       # Cron scheduler (croniter)
+├── api.py             # FastAPI REST endpoints
+├── config.py          # Filesystem-based agent discovery
+├── cli.py             # Click CLI
+└── dashboard/
+    └── index.html     # Single-file dashboard
+```
+
+## Roadmap
+
+- [ ] Vector search in memory (sqlite-vec embeddings)
+- [ ] Session persistence (save/resume per agent per chat)
+- [ ] Hot-reload on config changes (no restart needed)
+- [ ] Multiple Telegram bots (one per agent)
+- [ ] CLI interactive REPL mode
+- [ ] Cross-agent messaging
+- [ ] Discord / Slack channel adapters
+- [ ] PyPI publish
+
+## License
+
+[MIT](LICENSE)
