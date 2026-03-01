@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from croniter import croniter
 
@@ -20,7 +21,7 @@ log = logging.getLogger("smolclaw")
 class Job:
     """A scheduled job definition."""
 
-    def __init__(self, data: dict, prompts_base: Path | None = None):
+    def __init__(self, data: dict[str, Any], prompts_base: Path | None = None):
         self.id: str = data["id"]
         self.agent: str = data["agent"]
         self.schedule: str = data["schedule"]
@@ -51,7 +52,7 @@ class Job:
         cron = croniter(self.schedule, base)
         return cron.get_next(datetime)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "agent": self.agent,
@@ -71,10 +72,17 @@ class Job:
 class Scheduler:
     """Cron scheduler that fires job triggers through the router."""
 
-    def __init__(self, jobs_path: Path, agents_dir: Path, router: Router):
+    def __init__(
+        self,
+        jobs_path: Path,
+        agents_dir: Path,
+        router: Router,
+        deliver_callback: Callable[[Job, str], Awaitable[None]] | None = None,
+    ):
         self.jobs_path = jobs_path
         self.agents_dir = agents_dir
         self.router = router
+        self._deliver_callback = deliver_callback
         self.jobs: list[Job] = []
         self._task: asyncio.Task | None = None
         self._running = False
@@ -167,14 +175,15 @@ class Scheduler:
 
             await asyncio.sleep(30)
 
-    async def _deliver(self, job: Job, text: str):
-        """Deliver job output to a channel."""
-        # Find the channel for this agent + delivery type
-        # This is handled by the gateway which has access to channels
-        # For now, log the delivery intent
-        log.info(
-            f"Scheduler: deliver job '{job.id}' output to {job.delivery}:{job.delivery_chat_id}"
-        )
+    async def _deliver(self, job: Job, text: str) -> None:
+        """Deliver job output to a channel via the registered callback."""
+        if self._deliver_callback:
+            await self._deliver_callback(job, text)
+        else:
+            log.info(
+                f"Scheduler: deliver job '{job.id}' output to"
+                f" {job.delivery}:{job.delivery_chat_id} (no delivery callback set)"
+            )
 
     def add_job(self, job_data: dict) -> Job:
         """Add a new job at runtime."""

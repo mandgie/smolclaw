@@ -29,7 +29,7 @@ def create_app(gateway: Gateway) -> FastAPI:
                     "connected": agent.is_connected,
                     "channels": channels,
                     "skills": len(agent.info.skills),
-                    "memory": agent.memory.stats() if hasattr(agent, "memory") else None,
+                    "memory": agent.memory.stats() if agent.memory else None,
                 }
             )
         return {"agents": agents}
@@ -48,7 +48,7 @@ def create_app(gateway: Gateway) -> FastAPI:
             "skills": len(agent.info.skills),
             "soul": agent.info.soul[:500] if agent.info.soul else "",
             "agents_md": agent.info.agents_md[:500] if agent.info.agents_md else "",
-            "memory": agent.memory.stats() if hasattr(agent, "memory") else None,
+            "memory": agent.memory.stats() if agent.memory else None,
             "context_files": list(agent.info.context_files.keys()),
         }
 

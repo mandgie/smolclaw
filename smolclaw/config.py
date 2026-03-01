@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, Field
+
+log = logging.getLogger("smolclaw")
 
 # --- Agent Config (agent.yaml) ---
 
@@ -139,9 +142,7 @@ def discover_all_agents(base_dir: Path) -> dict[str, AgentInfo]:
         try:
             agents[agent_dir.name] = discover_agent(agent_dir)
         except Exception as e:
-            import logging
-
-            logging.getLogger("smolclaw").warning(f"Failed to load agent {agent_dir.name}: {e}")
+            log.warning(f"Failed to load agent {agent_dir.name}: {e}")
 
     return agents
 

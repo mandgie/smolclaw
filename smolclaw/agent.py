@@ -21,6 +21,7 @@ from claude_agent_sdk import (
 )
 
 from .config import AgentInfo
+from .memory import Memory
 
 log = logging.getLogger("smolclaw")
 
@@ -33,6 +34,8 @@ class Agent:
         self.name = info.config.name
         self.model = info.config.model
         self.user_md = user_md
+
+        self.memory: Memory | None = None
 
         self._client: ClaudeSDKClient | None = None
         self._connected = False

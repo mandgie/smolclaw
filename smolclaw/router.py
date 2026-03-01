@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -38,15 +39,17 @@ class OutboundMessage:
 class Router:
     """Routes messages to agents and collects responses."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._agents: dict[str, Agent] = {}
-        self._handlers: dict[str, list] = {}  # source → callback list
+        self._handlers: dict[str, list[Callable[[OutboundMessage], Awaitable[None]]]] = {}
 
-    def register_agent(self, agent: Agent):
+    def register_agent(self, agent: Agent) -> None:
         self._agents[agent.name] = agent
         log.info(f"Router: registered agent '{agent.name}'")
 
-    def on_response(self, source: str, callback):
+    def on_response(
+        self, source: str, callback: Callable[[OutboundMessage], Awaitable[None]]
+    ) -> None:
         """Register a callback for outbound messages from a source."""
         self._handlers.setdefault(source, []).append(callback)
 

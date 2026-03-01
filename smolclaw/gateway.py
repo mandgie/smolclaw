@@ -18,7 +18,7 @@ from .config import (
 )
 from .memory import Memory
 from .router import Router
-from .scheduler import Scheduler
+from .scheduler import Job, Scheduler
 
 log = logging.getLogger("smolclaw")
 
@@ -80,10 +80,9 @@ class Gateway:
 
         # Start scheduler
         jobs_path = self.base_dir / self.config.shared_dir / "cron" / "jobs.json"
-        self.scheduler = Scheduler(jobs_path, agents_dir, self.router)
-
-        # Wire up cron delivery to channels
-        self.scheduler._deliver = self._deliver_cron
+        self.scheduler = Scheduler(
+            jobs_path, agents_dir, self.router, deliver_callback=self._deliver_cron
+        )
 
         await self.scheduler.start()
 
@@ -96,7 +95,7 @@ class Gateway:
             f"{agent_count} agents, {channel_count} channels, {job_count} jobs"
         )
 
-    async def _deliver_cron(self, job, text: str):
+    async def _deliver_cron(self, job: Job, text: str) -> None:
         """Deliver cron job output to the right channel."""
         for channel in self.channels:
             if channel.agent_name == job.agent and channel.channel_type == job.delivery:

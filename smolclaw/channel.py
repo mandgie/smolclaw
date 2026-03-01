@@ -172,7 +172,8 @@ class TelegramChannel(Channel):
             for chunk in split_message(html_text):
                 try:
                     await update.message.reply_text(chunk, parse_mode=ParseMode.HTML)
-                except Exception:
+                except Exception as e:
+                    log.debug(f"[{agent_name}] HTML send failed, falling back to plain: {e}")
                     plain = re.sub(r"<[^>]+>", "", chunk)
                     try:
                         await update.message.reply_text(plain)
@@ -272,7 +273,8 @@ class TelegramChannel(Channel):
                     text=chunk,
                     parse_mode="HTML",
                 )
-            except Exception:
+            except Exception as e:
+                log.debug(f"[{self.agent_name}] HTML send failed, falling back to plain: {e}")
                 plain = re.sub(r"<[^>]+>", "", chunk)
                 try:
                     await self._app.bot.send_message(chat_id=int(chat_id), text=plain)
