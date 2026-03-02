@@ -87,7 +87,7 @@ class Scheduler:
         self._task: asyncio.Task | None = None
         self._running = False
 
-    def load_jobs(self):
+    def load_jobs(self) -> None:
         """Load jobs from jobs.json."""
         if not self.jobs_path.exists():
             self.jobs = []
@@ -109,20 +109,20 @@ class Scheduler:
             log.error(f"Scheduler: failed to load jobs: {e}")
             self.jobs = []
 
-    def save_jobs(self):
+    def save_jobs(self) -> None:
         """Persist jobs back to jobs.json."""
         self.jobs_path.parent.mkdir(parents=True, exist_ok=True)
         data = [j.to_dict() for j in self.jobs]
         self.jobs_path.write_text(json.dumps(data, indent=2))
 
-    async def start(self):
+    async def start(self) -> None:
         """Start the scheduler loop."""
         self.load_jobs()
         self._running = True
         self._task = asyncio.create_task(self._loop())
         log.info("Scheduler: started")
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the scheduler."""
         self._running = False
         if self._task:
@@ -133,7 +133,7 @@ class Scheduler:
                 pass
         log.info("Scheduler: stopped")
 
-    async def _loop(self):
+    async def _loop(self) -> None:
         """Main scheduler loop — check every 30 seconds for due jobs."""
         from .router import InboundMessage
 

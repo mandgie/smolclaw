@@ -344,7 +344,7 @@ def add_skill(ctx, agent_name, skill_name):
     click.echo(f"Linked {skill_name} → {agent_name}")
 
 
-def main():
+def main() -> None:
     cli()
 
 

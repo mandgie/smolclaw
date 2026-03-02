@@ -26,15 +26,15 @@ class Channel(ABC):
         self.router = router
 
     @abstractmethod
-    async def start(self):
+    async def start(self) -> None:
         """Start listening for messages."""
 
     @abstractmethod
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the channel."""
 
     @abstractmethod
-    async def send(self, chat_id: str, text: str):
+    async def send(self, chat_id: str, text: str) -> None:
         """Send a message to a chat."""
 
 
@@ -145,7 +145,7 @@ class TelegramChannel(Channel):
             return True
         return user_id in self._authorized
 
-    async def start(self):
+    async def start(self) -> None:
         from telegram import Update
         from telegram.constants import ChatAction, ParseMode
         from telegram.ext import (
@@ -253,7 +253,7 @@ class TelegramChannel(Channel):
         await app.start()
         await app.updater.start_polling(drop_pending_updates=True)
 
-    async def stop(self):
+    async def stop(self) -> None:
         if self._app:
             log.info(f"[{self.agent_name}] Telegram channel stopping")
             await self._app.updater.stop()
@@ -261,7 +261,7 @@ class TelegramChannel(Channel):
             await self._app.shutdown()
             self._app = None
 
-    async def send(self, chat_id: str, text: str):
+    async def send(self, chat_id: str, text: str) -> None:
         """Send a message to a specific chat (for cron delivery etc.)."""
         if not self._app:
             return

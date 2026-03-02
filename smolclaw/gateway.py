@@ -35,7 +35,7 @@ class Gateway:
         self.scheduler: Scheduler | None = None
         self._user_md = ""
 
-    async def start(self):
+    async def start(self) -> None:
         """Boot everything: agents, channels, scheduler."""
         log.info(f"smolclaw gateway starting (base={self.base_dir})")
 
@@ -116,7 +116,7 @@ class Gateway:
                 return
         log.warning(f"No {job.delivery} channel found for agent {job.agent}")
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Graceful shutdown."""
         log.info("smolclaw gateway shutting down")
 
@@ -146,7 +146,7 @@ class Gateway:
         return outbound.text
 
 
-async def run_gateway(base_dir: Path, with_api: bool = True):
+async def run_gateway(base_dir: Path, with_api: bool = True) -> None:
     """Main entry point — run the gateway with optional API server."""
     logging.basicConfig(
         level=logging.INFO,

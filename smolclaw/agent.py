@@ -119,7 +119,7 @@ class Agent:
             self._connected = False
             return False
 
-    async def _disconnect_stale(self):
+    async def _disconnect_stale(self) -> None:
         if self._client:
             try:
                 await self._client.disconnect()
@@ -161,13 +161,13 @@ class Agent:
         log.info(f"[{self.name}] Response ({time.time() - start:.1f}s, {len(response)} chars)")
         return response
 
-    async def new_session(self):
+    async def new_session(self) -> None:
         """Drop current session and start fresh."""
         await self._disconnect_stale()
         self._session_id = None
         log.info(f"[{self.name}] Session cleared")
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Clean shutdown."""
         await self._disconnect_stale()
         log.info(f"[{self.name}] Shut down")

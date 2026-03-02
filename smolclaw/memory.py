@@ -27,7 +27,7 @@ class Memory:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def _ensure_schema(self):
+    def _ensure_schema(self) -> None:
         """Create tables if they don't exist."""
         conn = self._connect()
         try:
