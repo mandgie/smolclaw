@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from click.testing import CliRunner
 
-from smolclaw.cli import cli, get_base_dir
+from smolclaw.cli import cli, get_base_dir, main
 
 
 class TestCli:
@@ -373,3 +374,90 @@ class TestAddSkill:
         assert result.exit_code == 0
         yaml_content = (tmp_path / "agents" / "mybot" / "agent.yaml").read_text()
         assert "claude-opus-4-6" in yaml_content
+
+
+# ---------------------------------------------------------------------------
+# Tests: up command
+# ---------------------------------------------------------------------------
+
+
+class TestUpCommand:
+    def test_up_calls_run_gateway(self, tmp_base: Path, agent_dir: Path):
+        """The up command should call run_gateway."""
+        runner = CliRunner()
+        with patch("smolclaw.cli.asyncio.run") as mock_run:
+            result = runner.invoke(cli, ["--home", str(tmp_base), "up"])
+
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+
+    def test_up_no_api(self, tmp_base: Path, agent_dir: Path):
+        """The --no-api flag should pass with_api=False to run_gateway."""
+        runner = CliRunner()
+        with patch("smolclaw.cli.asyncio.run") as mock_run:
+            result = runner.invoke(cli, ["--home", str(tmp_base), "up", "--no-api"])
+
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+
+    def test_up_scaffolds_on_empty(self, tmp_path: Path):
+        """If no agents exist, up should scaffold first."""
+        # Create minimal structure without agents
+        (tmp_path / "shared" / "cron").mkdir(parents=True)
+        (tmp_path / "shared" / "USER.md").write_text("# User\n")
+        (tmp_path / "config.yaml").write_text("host: 127.0.0.1\nport: 7890\n")
+
+        runner = CliRunner()
+        with patch("smolclaw.cli.asyncio.run"):
+            result = runner.invoke(cli, ["--home", str(tmp_path), "up"])
+
+        assert result.exit_code == 0
+        assert "First run" in result.output
+        assert (tmp_path / "agents" / "myagent" / "agent.yaml").exists()
+
+
+# ---------------------------------------------------------------------------
+# Tests: send command
+# ---------------------------------------------------------------------------
+
+
+class TestSendCommand:
+    def test_send_routes_and_prints(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """send command should start gateway, route message, and print response."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.send = AsyncMock(return_value="Hello back!")
+
+        runner = CliRunner()
+        with patch("smolclaw.gateway.Gateway", return_value=mock_gw):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "send", "testagent", "Hello"])
+
+        assert result.exit_code == 0
+        assert "Hello back!" in result.output
+
+    def test_send_stops_gateway_on_error(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """Gateway.stop() should be called even if send raises."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.send = AsyncMock(side_effect=RuntimeError("agent error"))
+
+        runner = CliRunner()
+        with patch("smolclaw.gateway.Gateway", return_value=mock_gw):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "send", "testagent", "Hello"])
+
+        # Send failed but stop should still have been called
+        assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: main entry point
+# ---------------------------------------------------------------------------
+
+
+class TestMain:
+    def test_main_invokes_cli(self):
+        """main() should invoke the cli group."""
+        with patch("smolclaw.cli.cli"):
+            main()

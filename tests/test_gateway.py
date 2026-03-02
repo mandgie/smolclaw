@@ -1,13 +1,14 @@
-"""Tests for smolclaw.gateway — Gateway class with mocked dependencies."""
+"""Tests for smolclaw.gateway — Gateway class and run_gateway."""
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from smolclaw.gateway import Gateway
+from smolclaw.gateway import Gateway, run_gateway
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -109,6 +110,30 @@ class TestGatewayStart:
         with patch("smolclaw.gateway.create_channel"):
             await gw.start()
         assert (shared / "memory.db").exists() or "testagent" in gw.agents
+
+    @pytest.mark.asyncio
+    async def test_channel_starts_successfully(self, gw_base: Path, agent_dir: Path):
+        """When channel creates and starts without error, it's appended to gw.channels."""
+        (agent_dir / "agent.yaml").write_text(
+            "name: testagent\n"
+            "model: claude-sonnet-4-6\n"
+            "channels:\n"
+            "  telegram:\n"
+            "    token_env: TELEGRAM_BOT_TOKEN\n"
+            "    allowed_chats: []\n"
+            "memory:\n"
+            "  enabled: true\n"
+            "  cross_agent: false\n"
+        )
+        mock_channel = MagicMock()
+        mock_channel.start = AsyncMock()  # succeeds
+
+        with patch("smolclaw.gateway.create_channel", return_value=mock_channel):
+            gw = Gateway(gw_base)
+            await gw.start()
+
+        assert mock_channel in gw.channels
+        mock_channel.start.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_channel_start_failure_continues(self, gw_base: Path, agent_dir: Path):
@@ -303,3 +328,169 @@ class TestGatewaySend:
 
         result = await gw.send("testagent", "Hello")
         assert result == "Response text"
+
+
+# ---------------------------------------------------------------------------
+# Tests: run_gateway
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_gateway(**overrides):
+    """Create a mock Gateway with sensible defaults."""
+    gw = MagicMock()
+    gw.start = AsyncMock()
+    gw.stop = AsyncMock()
+    gw.agents = overrides.get("agents", {"testagent": MagicMock()})
+    gw.channels = overrides.get("channels", [])
+    gw.config.host = overrides.get("host", "127.0.0.1")
+    gw.config.port = overrides.get("port", 7890)
+    return gw
+
+
+class TestRunGateway:
+    @pytest.mark.asyncio
+    async def test_start_failure_raises(self, gw_base: Path):
+        """If Gateway.start() fails, run_gateway should re-raise."""
+        mock_gw = _make_mock_gateway()
+        mock_gw.start = AsyncMock(side_effect=RuntimeError("boot failed"))
+
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            pytest.raises(RuntimeError, match="boot failed"),
+        ):
+            await run_gateway(gw_base)
+
+    @pytest.mark.asyncio
+    async def test_without_api(self, gw_base: Path):
+        """run_gateway with_api=False should skip uvicorn entirely."""
+        mock_gw = _make_mock_gateway()
+        loop = asyncio.get_running_loop()
+        orig_handler = loop.add_signal_handler
+
+        def auto_trigger(sig, cb, *args):
+            loop.call_soon(cb, *args)
+
+        with patch("smolclaw.gateway.Gateway", return_value=mock_gw):
+            loop.add_signal_handler = auto_trigger
+            try:
+                await run_gateway(gw_base, with_api=False)
+            finally:
+                loop.add_signal_handler = orig_handler
+
+        mock_gw.start.assert_awaited_once()
+        mock_gw.stop.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_with_api(self, gw_base: Path):
+        """run_gateway with_api=True should start uvicorn server."""
+        mock_gw = _make_mock_gateway()
+        loop = asyncio.get_running_loop()
+        orig_handler = loop.add_signal_handler
+
+        def auto_trigger(sig, cb, *args):
+            loop.call_soon(cb, *args)
+
+        mock_server = MagicMock()
+        mock_server.serve = AsyncMock()
+        mock_uvicorn = MagicMock()
+        mock_uvicorn.Server.return_value = mock_server
+
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch.dict("sys.modules", {"uvicorn": mock_uvicorn}),
+            patch("smolclaw.api.create_app", return_value=MagicMock()),
+        ):
+            loop.add_signal_handler = auto_trigger
+            try:
+                await run_gateway(gw_base, with_api=True)
+            finally:
+                loop.add_signal_handler = orig_handler
+
+        mock_gw.start.assert_awaited_once()
+        mock_gw.stop.assert_awaited_once()
+        mock_uvicorn.Config.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_uvicorn_continues(self, gw_base: Path):
+        """If uvicorn is not installed, run_gateway should log warning and continue."""
+        mock_gw = _make_mock_gateway()
+        loop = asyncio.get_running_loop()
+        orig_handler = loop.add_signal_handler
+
+        def auto_trigger(sig, cb, *args):
+            loop.call_soon(cb, *args)
+
+        # Setting module to None causes import to raise ImportError
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch.dict("sys.modules", {"uvicorn": None}),
+        ):
+            loop.add_signal_handler = auto_trigger
+            try:
+                await run_gateway(gw_base, with_api=True)
+            finally:
+                loop.add_signal_handler = orig_handler
+
+        # Should still start and stop cleanly
+        mock_gw.start.assert_awaited_once()
+        mock_gw.stop.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_prints_banner(self, gw_base: Path, capsys):
+        """run_gateway should print the ASCII box banner."""
+        mock_gw = _make_mock_gateway()
+        loop = asyncio.get_running_loop()
+        orig_handler = loop.add_signal_handler
+
+        def auto_trigger(sig, cb, *args):
+            loop.call_soon(cb, *args)
+
+        with patch("smolclaw.gateway.Gateway", return_value=mock_gw):
+            loop.add_signal_handler = auto_trigger
+            try:
+                await run_gateway(gw_base, with_api=False)
+            finally:
+                loop.add_signal_handler = orig_handler
+
+        captured = capsys.readouterr()
+        assert "smolclaw gateway" in captured.out
+        assert "Agents:" in captured.out
+        assert "Channels:" in captured.out
+
+    @pytest.mark.asyncio
+    async def test_api_task_cancelled_on_stop(self, gw_base: Path):
+        """When gateway stops, the API task should be cancelled."""
+        mock_gw = _make_mock_gateway()
+        loop = asyncio.get_running_loop()
+        orig_handler = loop.add_signal_handler
+
+        def auto_trigger(sig, cb, *args):
+            loop.call_soon(cb, *args)
+
+        # Create a real async function that hangs until cancelled
+        serve_cancelled = asyncio.Event()
+
+        async def fake_serve():
+            try:
+                await asyncio.Event().wait()  # hang forever
+            except asyncio.CancelledError:
+                serve_cancelled.set()
+                raise
+
+        mock_server = MagicMock()
+        mock_server.serve = fake_serve
+        mock_uvicorn = MagicMock()
+        mock_uvicorn.Server.return_value = mock_server
+
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch.dict("sys.modules", {"uvicorn": mock_uvicorn}),
+            patch("smolclaw.api.create_app", return_value=MagicMock()),
+        ):
+            loop.add_signal_handler = auto_trigger
+            try:
+                await run_gateway(gw_base, with_api=True)
+            finally:
+                loop.add_signal_handler = orig_handler
+
+        assert serve_cancelled.is_set()
