@@ -101,9 +101,9 @@ class TestSendMessage:
         assert resp.json()["response"] == "Hello from the agent!"
         mock_gateway.send.assert_awaited_once_with("testagent", "Hello")
 
-    def test_400_missing_text(self, client):
+    def test_422_missing_text(self, client):
         resp = client.post("/api/agents/testagent/send", json={})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_500_on_agent_error(self, client, mock_gateway):
         mock_gateway.send = AsyncMock(side_effect=RuntimeError("boom"))
@@ -156,7 +156,10 @@ class TestAddJob:
 
     def test_500_no_scheduler(self, client, mock_gateway):
         mock_gateway.scheduler = None
-        resp = client.post("/api/cron/jobs", json={"id": "x"})
+        resp = client.post(
+            "/api/cron/jobs",
+            json={"id": "x", "agent": "a", "schedule": "0 * * * *"},
+        )
         assert resp.status_code == 500
 
 
