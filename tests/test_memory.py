@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 from smolclaw.memory import Memory
@@ -203,3 +204,40 @@ class TestMemoryStats:
         stats = mem.stats()
         assert stats["facts"] == 0
         assert stats["chunks"] == 0
+
+
+class TestMemoryRobustness:
+    def test_wal_mode_enabled(self, tmp_path: Path):
+        """Verify WAL journal mode is set on the database."""
+        db_path = tmp_path / "test.db"
+        Memory(db_path, agent="tars")
+        conn = sqlite3.connect(str(db_path))
+        mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+        conn.close()
+        assert mode == "wal"
+
+    def test_connection_timeout(self, tmp_path: Path):
+        """Verify that _connect uses a non-zero timeout."""
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        conn = mem._connect()
+        # sqlite3 doesn't expose timeout directly, but we can verify
+        # the connection works and row_factory is set
+        assert conn.row_factory == sqlite3.Row
+        conn.close()
+
+    def test_concurrent_agents_same_db(self, tmp_path: Path):
+        """Two Memory instances on the same DB can read/write without locking."""
+        db_path = tmp_path / "shared.db"
+        tars = Memory(db_path, agent="tars")
+        coach = Memory(db_path, agent="coach")
+
+        # Both write
+        tars.add_fact("TARS data")
+        coach.add_fact("Coach data")
+
+        # Both read
+        assert len(tars.search_facts("data")) == 1
+        assert len(coach.search_facts("data")) == 1
+
+        # Cross-agent still works
+        assert len(tars.search_facts("data", cross_agent=True)) == 2

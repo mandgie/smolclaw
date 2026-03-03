@@ -18,6 +18,10 @@ if TYPE_CHECKING:
 log = logging.getLogger("smolclaw")
 
 
+class InvalidScheduleError(ValueError):
+    """Raised when a cron schedule expression is invalid."""
+
+
 class Job:
     """A scheduled job definition."""
 
@@ -26,6 +30,14 @@ class Job:
         self.agent: str = data["agent"]
         self.schedule: str = data["schedule"]
         self.enabled: bool = data.get("enabled", True)
+
+        # Validate cron expression early — fail at creation, not at runtime
+        try:
+            croniter(self.schedule)
+        except (ValueError, KeyError, TypeError) as e:
+            raise InvalidScheduleError(
+                f"Job '{self.id}': invalid cron schedule '{self.schedule}': {e}"
+            ) from e
         self.delivery: str = data.get("delivery", "")
         self.delivery_chat_id: str = data.get("delivery_chat_id", "")
         self.session_mode: str = data.get("session_mode", "isolated")
@@ -95,19 +107,29 @@ class Scheduler:
 
         try:
             data = json.loads(self.jobs_path.read_text())
+        except (json.JSONDecodeError, OSError) as e:
+            log.error(f"Scheduler: failed to read jobs file: {e}")
             self.jobs = []
-            for job_data in data:
+            return
+
+        self.jobs = []
+        for job_data in data:
+            try:
                 prompts_base = self.agents_dir / job_data["agent"] / "prompts"
                 job = Job(job_data, prompts_base=prompts_base)
-                if job.enabled and job.prompt:
-                    # Compute next run if not set
-                    if not job.next_run:
-                        job.next_run = job.compute_next_run().isoformat()
-                    self.jobs.append(job)
-            log.info(f"Scheduler: loaded {len(self.jobs)} jobs")
-        except Exception as e:
-            log.error(f"Scheduler: failed to load jobs: {e}")
-            self.jobs = []
+            except InvalidScheduleError as e:
+                log.warning(f"Scheduler: skipping job with bad schedule: {e}")
+                continue
+            except (KeyError, TypeError) as e:
+                log.warning(f"Scheduler: skipping malformed job: {e}")
+                continue
+
+            if job.enabled and job.prompt:
+                # Compute next run if not set
+                if not job.next_run:
+                    job.next_run = job.compute_next_run().isoformat()
+                self.jobs.append(job)
+        log.info(f"Scheduler: loaded {len(self.jobs)} jobs")
 
     def save_jobs(self) -> None:
         """Persist jobs back to jobs.json."""

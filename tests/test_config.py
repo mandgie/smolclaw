@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from smolclaw.config import (
     AgentConfig,
     AgentInfo,
@@ -43,6 +45,22 @@ class TestModels:
         assert cfg.host == "127.0.0.1"
         assert cfg.port == 7890
         assert cfg.log_level == "INFO"
+
+    def test_gateway_config_valid_port(self):
+        cfg = GatewayConfig(port=8080)
+        assert cfg.port == 8080
+
+    def test_gateway_config_port_too_high(self):
+        with pytest.raises(ValueError, match="port must be 1–65535"):
+            GatewayConfig(port=99999)
+
+    def test_gateway_config_port_zero(self):
+        with pytest.raises(ValueError, match="port must be 1–65535"):
+            GatewayConfig(port=0)
+
+    def test_gateway_config_port_negative(self):
+        with pytest.raises(ValueError, match="port must be 1–65535"):
+            GatewayConfig(port=-1)
 
 
 class TestLoaders:

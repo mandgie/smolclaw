@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 log = logging.getLogger("smolclaw")
 
@@ -63,6 +63,13 @@ class GatewayConfig(BaseModel):
     agents_dir: str = "agents"
     shared_dir: str = "shared"
     log_level: str = "INFO"
+
+    @field_validator("port")
+    @classmethod
+    def port_in_range(cls, v: int) -> int:
+        if not 1 <= v <= 65535:
+            raise ValueError(f"port must be 1–65535, got {v}")
+        return v
 
 
 # --- Loader Functions ---

@@ -274,6 +274,32 @@ class TestCronAdd:
         assert len(jobs) == 2
 
 
+    def test_cron_add_invalid_schedule(self, tmp_path: Path):
+        """Invalid cron expression should fail with a clear error."""
+        runner = CliRunner()
+        (tmp_path / "agents" / "tars" / "prompts").mkdir(parents=True)
+
+        result = runner.invoke(
+            cli,
+            [
+                "--home",
+                str(tmp_path),
+                "cron",
+                "add",
+                "--agent",
+                "tars",
+                "--schedule",
+                "not-a-cron",
+                "--prompt",
+                "Hello",
+            ],
+        )
+        assert result.exit_code != 0
+        # jobs.json should not have been created
+        jobs_path = tmp_path / "shared" / "cron" / "jobs.json"
+        assert not jobs_path.exists()
+
+
 class TestCronRemove:
     def test_cron_remove_existing(self, tmp_path: Path):
         """Remove an existing job."""

@@ -267,6 +267,15 @@ def cron_list(ctx):
 @click.pass_context
 def cron_add(ctx, agent, schedule, prompt, delivery, chat_id, job_id):
     """Add a new scheduled job."""
+    from croniter import croniter
+
+    # Validate cron expression before doing anything
+    try:
+        croniter(schedule)
+    except (ValueError, KeyError, TypeError) as e:
+        click.echo(f"Invalid cron schedule '{schedule}': {e}", err=True)
+        sys.exit(1)
+
     base = ctx.obj["base"]
     jobs_path = base / "shared" / "cron" / "jobs.json"
     jobs_path.parent.mkdir(parents=True, exist_ok=True)

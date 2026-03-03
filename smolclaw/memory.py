@@ -23,14 +23,17 @@ class Memory:
         self._ensure_schema()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=5.0)
         conn.row_factory = sqlite3.Row
         return conn
 
     def _ensure_schema(self) -> None:
-        """Create tables if they don't exist."""
+        """Create tables if they don't exist. Enables WAL mode for concurrent access."""
         conn = self._connect()
         try:
+            # WAL mode allows concurrent readers with one writer — prevents
+            # "database is locked" errors when multiple agents share one DB.
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS facts (
                     id         INTEGER PRIMARY KEY AUTOINCREMENT,

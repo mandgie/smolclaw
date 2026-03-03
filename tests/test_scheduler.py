@@ -8,7 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from smolclaw.scheduler import Job, Scheduler
+import pytest
+
+from smolclaw.scheduler import InvalidScheduleError, Job, Scheduler
 
 
 class TestJob:
@@ -48,6 +50,21 @@ class TestJob:
         next_run = job.compute_next_run(after=base)
         assert next_run.hour == 8
         assert next_run.day == 1
+
+    def test_invalid_schedule_raises(self):
+        """Invalid cron expression raises InvalidScheduleError at creation."""
+        with pytest.raises(InvalidScheduleError, match="invalid cron schedule"):
+            Job({"id": "bad", "agent": "tars", "schedule": "not-a-cron"})
+
+    def test_invalid_schedule_bad_field(self):
+        """Out-of-range cron fields raise InvalidScheduleError."""
+        with pytest.raises(InvalidScheduleError):
+            Job({"id": "bad", "agent": "tars", "schedule": "99 99 99 99 99"})
+
+    def test_valid_schedule_passes(self):
+        """Valid cron expressions don't raise."""
+        job = Job({"id": "ok", "agent": "tars", "schedule": "*/5 * * * *"})
+        assert job.schedule == "*/5 * * * *"
 
     def test_to_dict_roundtrip(self):
         data = {
@@ -169,6 +186,49 @@ class TestScheduler:
                         "prompt": "Hello",
                         "enabled": False,
                     }
+                ]
+            )
+        )
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+        assert scheduler.jobs == []
+
+    def test_load_jobs_skips_invalid_schedule(self, tmp_base: Path):
+        """Jobs with invalid cron schedules are skipped with a warning."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "good-job",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Hello",
+                    },
+                    {
+                        "id": "bad-job",
+                        "agent": "testagent",
+                        "schedule": "not-valid",
+                        "prompt": "Broken",
+                    },
+                ]
+            )
+        )
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+        # Only the valid job should be loaded
+        assert len(scheduler.jobs) == 1
+        assert scheduler.jobs[0].id == "good-job"
+
+    def test_load_jobs_skips_malformed_entry(self, tmp_base: Path):
+        """Jobs missing required fields (like 'agent') are skipped."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {"id": "no-agent", "schedule": "0 8 * * *", "prompt": "Hello"},
                 ]
             )
         )
