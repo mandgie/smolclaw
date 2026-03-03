@@ -123,6 +123,82 @@ class TestNewSession:
         assert resp.status_code == 404
 
 
+# --- Memory endpoint tests ---
+
+
+class TestListFacts:
+    def test_returns_facts(self, client, mock_gateway, tmp_path):
+        agent = mock_gateway.agents["testagent"]
+        agent.memory.add_fact("Test fact", category="tech")
+        resp = client.get("/api/agents/testagent/memory/facts")
+        assert resp.status_code == 200
+        facts = resp.json()["facts"]
+        assert len(facts) == 1
+        assert facts[0]["content"] == "Test fact"
+
+    def test_filter_by_category(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        agent.memory.add_fact("Tech fact", category="tech")
+        agent.memory.add_fact("Personal fact", category="personal")
+        resp = client.get("/api/agents/testagent/memory/facts?category=tech")
+        assert resp.status_code == 200
+        facts = resp.json()["facts"]
+        assert len(facts) == 1
+        assert facts[0]["category"] == "tech"
+
+    def test_404_unknown_agent(self, client):
+        resp = client.get("/api/agents/nobody/memory/facts")
+        assert resp.status_code == 404
+
+    def test_400_no_memory(self, client, mock_gateway):
+        mock_gateway.agents["testagent"].memory = None
+        resp = client.get("/api/agents/testagent/memory/facts")
+        assert resp.status_code == 400
+
+
+class TestDeleteFact:
+    def test_deletes_fact(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        fact_id = agent.memory.add_fact("Delete me")
+        resp = client.delete(f"/api/agents/testagent/memory/facts/{fact_id}")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "deleted"
+
+    def test_404_unknown_fact(self, client):
+        resp = client.delete("/api/agents/testagent/memory/facts/9999")
+        assert resp.status_code == 404
+
+    def test_404_unknown_agent(self, client):
+        resp = client.delete("/api/agents/nobody/memory/facts/1")
+        assert resp.status_code == 404
+
+    def test_400_no_memory(self, client, mock_gateway):
+        mock_gateway.agents["testagent"].memory = None
+        resp = client.delete("/api/agents/testagent/memory/facts/1")
+        assert resp.status_code == 400
+
+
+class TestClearMemory:
+    def test_clears_memory(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        agent.memory.add_fact("Fact 1")
+        agent.memory.add_chunk("Q", "A")
+        resp = client.delete("/api/agents/testagent/memory")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["facts_deleted"] == 1
+        assert data["chunks_deleted"] == 1
+
+    def test_404_unknown_agent(self, client):
+        resp = client.delete("/api/agents/nobody/memory")
+        assert resp.status_code == 404
+
+    def test_400_no_memory(self, client, mock_gateway):
+        mock_gateway.agents["testagent"].memory = None
+        resp = client.delete("/api/agents/testagent/memory")
+        assert resp.status_code == 400
+
+
 # --- Cron endpoint tests ---
 
 
@@ -190,6 +266,12 @@ class TestHealth:
         assert data["status"] == "ok"
         assert data["agents"] == 1
         assert data["channels"] == 0
+
+    def test_includes_version(self, client):
+        resp = client.get("/api/health")
+        data = resp.json()
+        assert "version" in data
+        assert data["version"] == "0.1.0"
 
 
 class TestDashboard:

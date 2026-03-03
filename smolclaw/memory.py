@@ -138,6 +138,53 @@ class Memory:
         finally:
             conn.close()
 
+    def list_facts(self, limit: int = 100, category: str | None = None) -> list[dict]:
+        """List facts for this agent, optionally filtered by category."""
+        conn = self._connect()
+        try:
+            if category:
+                rows = conn.execute(
+                    "SELECT * FROM facts WHERE agent = ? AND category = ?"
+                    " ORDER BY created_at DESC LIMIT ?",
+                    (self.agent, category, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM facts WHERE agent = ? ORDER BY created_at DESC LIMIT ?",
+                    (self.agent, limit),
+                ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def delete_fact(self, fact_id: int) -> bool:
+        """Delete a fact by ID (must belong to this agent). Returns True if deleted."""
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                "DELETE FROM facts WHERE id = ? AND agent = ?",
+                (fact_id, self.agent),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    def clear(self) -> dict[str, int]:
+        """Clear all facts and chunks for this agent. Returns counts of deleted rows."""
+        conn = self._connect()
+        try:
+            facts_deleted = conn.execute(
+                "DELETE FROM facts WHERE agent = ?", (self.agent,)
+            ).rowcount
+            chunks_deleted = conn.execute(
+                "DELETE FROM chunks WHERE agent = ?", (self.agent,)
+            ).rowcount
+            conn.commit()
+            return {"facts_deleted": facts_deleted, "chunks_deleted": chunks_deleted}
+        finally:
+            conn.close()
+
     def stats(self) -> dict:
         """Get memory stats for this agent."""
         conn = self._connect()

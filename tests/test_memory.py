@@ -82,6 +82,107 @@ class TestMemoryChunks:
         assert len(results) == 2
 
 
+class TestMemoryListFacts:
+    def test_list_facts_returns_all(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        mem.add_fact("Fact A", category="tech")
+        mem.add_fact("Fact B", category="personal")
+        mem.add_fact("Fact C", category="tech")
+
+        facts = mem.list_facts()
+        assert len(facts) == 3
+
+    def test_list_facts_with_category_filter(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        mem.add_fact("Python is great", category="tech")
+        mem.add_fact("Likes coffee", category="personal")
+        mem.add_fact("Uses Linux", category="tech")
+
+        tech_facts = mem.list_facts(category="tech")
+        assert len(tech_facts) == 2
+        assert all(f["category"] == "tech" for f in tech_facts)
+
+    def test_list_facts_with_limit(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        for i in range(10):
+            mem.add_fact(f"Fact {i}")
+
+        facts = mem.list_facts(limit=3)
+        assert len(facts) == 3
+
+    def test_list_facts_agent_isolation(self, tmp_path: Path):
+        db = tmp_path / "shared.db"
+        tars = Memory(db, agent="tars")
+        coach = Memory(db, agent="coach")
+
+        tars.add_fact("TARS fact")
+        coach.add_fact("Coach fact")
+
+        assert len(tars.list_facts()) == 1
+        assert len(coach.list_facts()) == 1
+
+    def test_list_facts_empty(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        assert mem.list_facts() == []
+
+
+class TestMemoryDeleteFact:
+    def test_delete_existing_fact(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        fact_id = mem.add_fact("Delete me")
+        assert mem.delete_fact(fact_id) is True
+        assert mem.list_facts() == []
+
+    def test_delete_nonexistent_fact(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        assert mem.delete_fact(9999) is False
+
+    def test_delete_fact_agent_isolation(self, tmp_path: Path):
+        db = tmp_path / "shared.db"
+        tars = Memory(db, agent="tars")
+        coach = Memory(db, agent="coach")
+
+        fact_id = tars.add_fact("TARS only")
+        # Coach can't delete TARS's fact
+        assert coach.delete_fact(fact_id) is False
+        # TARS can delete its own
+        assert tars.delete_fact(fact_id) is True
+
+
+class TestMemoryClear:
+    def test_clear_removes_all(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        mem.add_fact("Fact 1")
+        mem.add_fact("Fact 2")
+        mem.add_chunk("Q1", "A1")
+        mem.add_chunk("Q2", "A2")
+
+        result = mem.clear()
+        assert result["facts_deleted"] == 2
+        assert result["chunks_deleted"] == 2
+        assert mem.stats()["facts"] == 0
+        assert mem.stats()["chunks"] == 0
+
+    def test_clear_agent_isolation(self, tmp_path: Path):
+        db = tmp_path / "shared.db"
+        tars = Memory(db, agent="tars")
+        coach = Memory(db, agent="coach")
+
+        tars.add_fact("TARS fact")
+        coach.add_fact("Coach fact")
+
+        tars.clear()
+        # TARS should be empty, coach should be untouched
+        assert tars.stats()["facts"] == 0
+        assert coach.stats()["facts"] == 1
+
+    def test_clear_empty_memory(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        result = mem.clear()
+        assert result["facts_deleted"] == 0
+        assert result["chunks_deleted"] == 0
+
+
 class TestMemoryStats:
     def test_stats(self, tmp_path: Path):
         db = tmp_path / "test.db"

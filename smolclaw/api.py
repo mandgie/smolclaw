@@ -43,6 +43,13 @@ class AddJobRequest(BaseModel):
     session_mode: str = Field("isolated", description="Session mode: 'isolated' or 'shared'")
 
 
+class ClearMemoryResponse(BaseModel):
+    """Response from clearing an agent's memory."""
+
+    facts_deleted: int
+    chunks_deleted: int
+
+
 class StatusResponse(BaseModel):
     """Generic status response."""
 
@@ -53,6 +60,7 @@ class HealthResponse(BaseModel):
     """Health check response."""
 
     status: str
+    version: str
     agents: int
     channels: int
     jobs: int
@@ -123,6 +131,44 @@ def create_app(gateway: Gateway) -> FastAPI:
         await agent.new_session()
         return {"status": "ok"}
 
+    # --- Memory endpoints ---
+
+    @app.get("/api/agents/{name}/memory/facts")
+    async def list_facts(
+        name: str, limit: int = 100, category: str | None = None
+    ) -> dict[str, Any]:
+        """List facts stored in an agent's memory."""
+        agent = gateway.router.get_agent(name)
+        if not agent:
+            raise HTTPException(404, f"Agent '{name}' not found")
+        if not agent.memory:
+            raise HTTPException(400, f"Agent '{name}' has no memory enabled")
+        return {"facts": agent.memory.list_facts(limit=limit, category=category)}
+
+    @app.delete("/api/agents/{name}/memory/facts/{fact_id}")
+    async def delete_fact(name: str, fact_id: int) -> dict[str, str]:
+        """Delete a specific fact from an agent's memory."""
+        agent = gateway.router.get_agent(name)
+        if not agent:
+            raise HTTPException(404, f"Agent '{name}' not found")
+        if not agent.memory:
+            raise HTTPException(400, f"Agent '{name}' has no memory enabled")
+        deleted = agent.memory.delete_fact(fact_id)
+        if not deleted:
+            raise HTTPException(404, f"Fact {fact_id} not found")
+        return {"status": "deleted"}
+
+    @app.delete("/api/agents/{name}/memory", response_model=ClearMemoryResponse)
+    async def clear_memory(name: str) -> dict[str, int]:
+        """Clear all facts and chunks from an agent's memory."""
+        agent = gateway.router.get_agent(name)
+        if not agent:
+            raise HTTPException(404, f"Agent '{name}' not found")
+        if not agent.memory:
+            raise HTTPException(400, f"Agent '{name}' has no memory enabled")
+        result = agent.memory.clear()
+        return result
+
     # --- Cron endpoints ---
 
     @app.get("/api/cron/jobs")
@@ -155,8 +201,11 @@ def create_app(gateway: Gateway) -> FastAPI:
     @app.get("/api/health", response_model=HealthResponse)
     async def health() -> dict[str, Any]:
         """Health check endpoint with system status."""
+        from . import __version__
+
         return {
             "status": "ok",
+            "version": __version__,
             "agents": len(gateway.agents),
             "channels": len(gateway.channels),
             "jobs": len(gateway.scheduler.jobs) if gateway.scheduler else 0,
