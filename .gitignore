@@ -15,6 +15,7 @@ venv/
 .pytest_cache/
 htmlcov/
 .coverage
+coverage.xml
 .mypy_cache/
 *.log
 *.pid

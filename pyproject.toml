@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 authors = [
     { name = "Magnus Friberg", email = "magnus.uno.friberg@gmail.com" },
 ]
-keywords = ["ai", "agent", "assistant", "multi-agent", "telegram"]
+keywords = ["ai", "agent", "assistant", "multi-agent", "telegram", "claude", "llm", "chatbot", "framework", "personal-assistant"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -21,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 
 dependencies = [
