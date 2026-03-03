@@ -88,6 +88,7 @@ class Agent:
             cwd=str(self.info.path),
             permission_mode="bypassPermissions",
             system_prompt=self.build_system_prompt(),
+            setting_sources=["user", "project"],
         )
         if resume_id:
             opts.resume = resume_id

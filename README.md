@@ -5,8 +5,7 @@
 
 <p align="center">
   <a href="https://github.com/mandgie/smolclaw/actions/workflows/ci.yml"><img src="https://github.com/mandgie/smolclaw/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://codecov.io/gh/mandgie/smolclaw"><img src="https://codecov.io/gh/mandgie/smolclaw/graph/badge.svg" alt="Coverage"></a>
-  <a href="https://pypi.org/project/smolclaw/"><img src="https://img.shields.io/pypi/v/smolclaw" alt="PyPI"></a>
+<a href="https://pypi.org/project/smolclaw/"><img src="https://img.shields.io/pypi/v/smolclaw" alt="PyPI"></a>
   <a href="https://pypi.org/project/smolclaw/"><img src="https://img.shields.io/pypi/pyversions/smolclaw" alt="Python"></a>
   <a href="https://github.com/mandgie/smolclaw/blob/main/LICENSE"><img src="https://img.shields.io/github/license/mandgie/smolclaw" alt="License"></a>
 </p>
