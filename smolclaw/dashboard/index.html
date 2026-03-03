@@ -13,7 +13,15 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: var(--font); background: var(--bg); color: var(--text); padding: 24px; }
   h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
-  .subtitle { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+  .header-right { display: flex; gap: 12px; align-items: center; font-size: 11px; }
+  .header-right a {
+    color: var(--accent); text-decoration: none; padding: 4px 10px;
+    border: 1px solid var(--border); border-radius: 4px; transition: border-color 0.2s;
+  }
+  .header-right a:hover { border-color: var(--accent); }
+  .header-version { color: var(--muted); }
+  .subtitle { color: var(--muted); font-size: 12px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 32px; }
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
@@ -41,8 +49,16 @@
 </head>
 <body>
 
-<h1>smolclaw</h1>
-<p class="subtitle">multi-agent gateway</p>
+<div class="header">
+  <div>
+    <h1>smolclaw</h1>
+    <p class="subtitle">multi-agent gateway</p>
+  </div>
+  <div class="header-right">
+    <span class="header-version" id="version"></span>
+    <a href="/docs" target="_blank">API Docs</a>
+  </div>
+</div>
 
 <div class="section-title">Agents</div>
 <div class="grid" id="agents"><div class="empty">Loading...</div></div>
@@ -74,7 +90,7 @@ async function fetchAgents() {
           <span>${a.model}</span><br>
           ${a.channels.map(c => `<span>${c}</span>`).join('')}
           <span>${a.skills} skills</span>
-          ${a.memory ? `<span>${a.memory.facts} facts</span>` : ''}
+          ${a.memory ? `<span>${a.memory.facts} facts · ${a.memory.chunks} chunks</span>` : ''}
         </div>
       </div>
     `).join('');
@@ -106,6 +122,9 @@ async function fetchHealth() {
     const data = await res.json();
     document.getElementById('health').textContent =
       `${data.agents} agents · ${data.channels} channels · ${data.jobs} jobs`;
+    if (data.version) {
+      document.getElementById('version').textContent = `v${data.version}`;
+    }
   } catch(e) { document.getElementById('health').textContent = 'disconnected'; }
 }
 

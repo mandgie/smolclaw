@@ -114,6 +114,14 @@ def _scaffold(base: Path, agent_name: str = "myagent", model: str = "claude-sonn
 
 
 @cli.command()
+def version():
+    """Show the smolclaw version."""
+    from . import __version__
+
+    click.echo(f"smolclaw {__version__}")
+
+
+@cli.command()
 @click.option("--no-api", is_flag=True, help="Disable the API server")
 @click.pass_context
 def up(ctx, no_api):

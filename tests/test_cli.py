@@ -82,6 +82,14 @@ class TestCli:
         assert user_md.read_text() == "Custom content"
 
 
+class TestVersion:
+    def test_version_output(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["version"])
+        assert result.exit_code == 0
+        assert "smolclaw 0.1.0" in result.output
+
+
 class TestGetBaseDir:
     def test_explicit_path(self, tmp_path: Path):
         result = get_base_dir(str(tmp_path))
