@@ -122,6 +122,110 @@ def version():
 
 
 @cli.command()
+@click.option("--agent", default="myagent", help="Name of the first agent to create")
+@click.option("--model", default="claude-sonnet-4-6", help="Default model for the agent")
+@click.pass_context
+def init(ctx, agent, model):
+    """Initialize a new smolclaw project directory."""
+    base = ctx.obj["base"]
+
+    if (base / "agents").exists() and any(
+        d.is_dir() and (d / "agent.yaml").exists() for d in (base / "agents").iterdir()
+    ):
+        click.echo(f"smolclaw is already initialized at {base}")
+        click.echo("Use 'smolclaw add <name>' to create additional agents.")
+        return
+
+    _scaffold(base, agent_name=agent, model=model)
+
+    click.echo("Next steps:")
+    click.echo(f"  1. Edit {base / 'agents' / agent / 'soul.md'} — define personality")
+    click.echo(f"  2. Edit {base / 'shared' / 'USER.md'} — describe yourself")
+    click.echo("  3. Run: smolclaw up")
+
+
+@cli.command()
+@click.pass_context
+def status(ctx):
+    """Show the current smolclaw setup and validate configuration."""
+    from .config import discover_all_agents, load_gateway_config
+
+    base = ctx.obj["base"]
+
+    if not base.exists():
+        click.echo(f"No smolclaw home at {base}")
+        click.echo("Run 'smolclaw init' to set up.")
+        return
+
+    config = load_gateway_config(base)
+
+    # Header
+    click.echo(f"\nsmolclaw — {base}\n")
+
+    # Agents
+    agents = discover_all_agents(base)
+    if not agents:
+        click.echo("  Agents: (none)")
+        click.echo("  Run 'smolclaw init' or 'smolclaw add <name>' to create an agent.\n")
+        return
+
+    click.echo(f"  {'AGENT':<15} {'MODEL':<25} {'CHANNELS':<15} {'SKILLS':<8} {'MEMORY'}")
+    click.echo(f"  {'─' * 73}")
+    issues: list[str] = []
+    for name, info in agents.items():
+        channels = ", ".join(info.config.channels.keys()) or "—"
+        skill_count = len(info.skills)
+        mem = "on" if info.config.memory.enabled else "off"
+        click.echo(f"  {name:<15} {info.config.model:<25} {channels:<15} {skill_count:<8} {mem}")
+
+        # Collect issues
+        if not info.soul:
+            issues.append(f"Agent '{name}' has no soul.md — add a personality file")
+        if not info.config.channels:
+            issues.append(f"Agent '{name}' has no channels — add a channel config to agent.yaml")
+
+    # Cron jobs
+    jobs_path = base / config.shared_dir / "cron" / "jobs.json"
+    click.echo("")
+    if jobs_path.exists():
+        try:
+            jobs = json.loads(jobs_path.read_text())
+            click.echo(f"  Jobs: {len(jobs)} scheduled")
+            for job in jobs[:5]:
+                status_icon = "✓" if job.get("status") == "ok" else "·"
+                click.echo(f"    {status_icon} {job['id']} ({job['schedule']}) → {job['agent']}")
+            if len(jobs) > 5:
+                click.echo(f"    ... and {len(jobs) - 5} more")
+        except (json.JSONDecodeError, OSError):
+            click.echo("  Jobs: (error reading jobs.json)")
+    else:
+        click.echo("  Jobs: (none)")
+
+    # Memory
+    memory_db = base / config.shared_dir / "memory.db"
+    if memory_db.exists():
+        size_kb = memory_db.stat().st_size / 1024
+        if size_kb > 1024:
+            size_str = f"{size_kb / 1024:.1f} MB"
+        else:
+            size_str = f"{size_kb:.0f} KB"
+        click.echo(f"  Memory: {memory_db} ({size_str})")
+    else:
+        click.echo("  Memory: (no database yet — created on first gateway start)")
+
+    # API
+    click.echo(f"  API: http://{config.host}:{config.port}")
+
+    # Issues
+    if issues:
+        click.echo("\n  Issues:")
+        for issue in issues:
+            click.echo(f"    ! {issue}")
+
+    click.echo("")
+
+
+@cli.command()
 @click.option("--no-api", is_flag=True, help="Disable the API server")
 @click.pass_context
 def up(ctx, no_api):

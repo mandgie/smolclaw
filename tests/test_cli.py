@@ -490,6 +490,130 @@ class TestSendCommand:
 # ---------------------------------------------------------------------------
 
 
+class TestInitCommand:
+    def test_init_creates_structure(self, tmp_path: Path):
+        """init should create full smolclaw directory structure."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "init"])
+        assert result.exit_code == 0
+        assert "First run" in result.output
+        assert "Next steps" in result.output
+
+        # Verify structure
+        assert (tmp_path / "agents" / "myagent" / "agent.yaml").exists()
+        assert (tmp_path / "agents" / "myagent" / "soul.md").exists()
+        assert (tmp_path / "agents" / "myagent" / "agents.md").exists()
+        assert (tmp_path / "shared" / "USER.md").exists()
+        assert (tmp_path / "config.yaml").exists()
+
+    def test_init_custom_agent_name(self, tmp_path: Path):
+        """init --agent sets the agent name."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "init", "--agent", "tars"])
+        assert result.exit_code == 0
+        assert (tmp_path / "agents" / "tars" / "agent.yaml").exists()
+        assert "tars" in result.output
+
+    def test_init_custom_model(self, tmp_path: Path):
+        """init --model sets the model in agent.yaml."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--home", str(tmp_path), "init", "--model", "claude-opus-4-6"]
+        )
+        assert result.exit_code == 0
+        yaml_content = (tmp_path / "agents" / "myagent" / "agent.yaml").read_text()
+        assert "claude-opus-4-6" in yaml_content
+
+    def test_init_already_initialized(self, tmp_base: Path, agent_dir: Path):
+        """init on an existing project should warn and not overwrite."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "init"])
+        assert result.exit_code == 0
+        assert "already initialized" in result.output
+
+
+class TestStatusCommand:
+    def test_status_no_home(self, tmp_path: Path):
+        """status with no home directory should suggest init."""
+        nonexistent = tmp_path / "nope"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(nonexistent), "status"])
+        assert result.exit_code == 0
+        assert "No smolclaw home" in result.output
+
+    def test_status_no_agents(self, tmp_base: Path):
+        """status with no agents should suggest creating one."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "Agents: (none)" in result.output
+
+    def test_status_with_agent(self, tmp_base: Path, agent_dir: Path):
+        """status shows agent info in a table."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "testagent" in result.output
+        assert "claude-sonnet-4-6" in result.output
+        assert "on" in result.output  # memory enabled
+
+    def test_status_shows_jobs(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """status shows scheduled jobs."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "1 scheduled" in result.output
+        assert "test-job" in result.output
+
+    def test_status_no_channels_issue(self, tmp_base: Path, agent_dir: Path):
+        """status flags agents with no channels configured."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "no channels" in result.output
+
+    def test_status_no_soul_issue(self, tmp_base: Path):
+        """status flags agents with no soul.md."""
+        # Create agent without soul.md
+        agent = tmp_base / "agents" / "nosoul"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: nosoul\nmodel: claude-sonnet-4-6\nchannels: {}\nmemory:\n  enabled: true\n"
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "no soul.md" in result.output
+
+    def test_status_memory_db(self, tmp_base: Path, agent_dir: Path):
+        """status shows memory database info when it exists."""
+        # Create a memory.db file
+        db_path = tmp_base / "shared" / "memory.db"
+        db_path.write_bytes(b"x" * 2048)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "Memory:" in result.output
+        assert "KB" in result.output
+
+    def test_status_no_memory_db(self, tmp_base: Path, agent_dir: Path):
+        """status shows message when no memory.db exists."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "no database yet" in result.output
+
+    def test_status_shows_api(self, tmp_base: Path, agent_dir: Path):
+        """status shows the API endpoint."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "http://127.0.0.1:7890" in result.output
+
+
 class TestMain:
     def test_main_invokes_cli(self):
         """main() should invoke the cli group."""
