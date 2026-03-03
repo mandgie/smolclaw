@@ -39,6 +39,11 @@ class TestModels:
         assert cfg.model == "claude-sonnet-4-6"
         assert cfg.channels == {}
         assert cfg.memory.enabled is True
+        assert cfg.max_turns is None
+
+    def test_agent_config_max_turns(self):
+        cfg = AgentConfig(name="test", max_turns=25)
+        assert cfg.max_turns == 25
 
     def test_gateway_config_defaults(self):
         cfg = GatewayConfig()

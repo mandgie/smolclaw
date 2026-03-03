@@ -30,11 +30,12 @@ Run multiple AI agents — each with its own personality, skills, and channels �
 
 ```bash
 pip install smolclaw
-smolclaw add myagent
+smolclaw init --agent tars
+# Edit ~/.smolclaw/agents/tars/soul.md — give your agent a personality
 smolclaw up
 ```
 
-This scaffolds a new agent at `~/.smolclaw/agents/myagent/` and starts the gateway. Edit the generated `soul.md` to give your agent a personality.
+This creates a full project at `~/.smolclaw/` with your first agent and starts the gateway. The API + dashboard will be at `http://localhost:7890`.
 
 ## How Agents Work
 
@@ -80,6 +81,23 @@ You are TARS, a personal virtual assistant. Inspired by Interstellar.
 - Dry humor when appropriate.
 ```
 
+## Why smolclaw?
+
+| | smolclaw | CrewAI | LangGraph | OpenAI Agents SDK |
+|---|---|---|---|---|
+| **Setup** | `pip install` + folder | `pip install` + code | `pip install` + code | `pip install` + code |
+| **Config** | Markdown files | Python classes | Python code | Python decorators |
+| **Agents defined as** | Folders with `.md` files | Python code | Graph nodes | Python classes |
+| **Multi-model** | Per-agent model selection | Per-agent | Per-node | OpenAI only |
+| **Channels** | Telegram built-in, API | No built-in | No built-in | No built-in |
+| **Scheduler** | Built-in cron | No built-in | No built-in | No built-in |
+| **Dashboard** | Built-in | Studio (paid) | LangSmith (paid) | No built-in |
+| **Memory** | Built-in SQLite | External | External | External |
+| **Code size** | ~1200 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
+| **Focus** | Personal assistant | Enterprise teams | Workflows | General agents |
+
+**smolclaw is opinionated:** one process, filesystem-as-config, batteries-included. If you want a personal AI assistant that just works — start here.
+
 ## Architecture
 
 ```
@@ -96,7 +114,9 @@ All messages — whether from Telegram, the API, the CLI, or the scheduler — f
 ## CLI
 
 ```bash
+smolclaw init                        # Initialize project (first run)
 smolclaw up                          # Start gateway (all agents + API)
+smolclaw status                      # Show agents, jobs, config, issues
 smolclaw add <name>                  # Scaffold a new agent
 smolclaw list                        # List discovered agents
 smolclaw send <agent> "message"      # Send a one-shot message
@@ -106,6 +126,7 @@ smolclaw cron add \
   --schedule "0 8 * * 1-5" \
   --prompt "morning briefing"        # Add a cron job
 smolclaw add-skill <agent> <skill>   # Symlink shared skill to agent
+smolclaw version                     # Show version
 ```
 
 ## Dashboard

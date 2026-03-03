@@ -90,6 +90,8 @@ class Agent:
             system_prompt=self.build_system_prompt(),
             setting_sources=["user", "project"],
         )
+        if self.info.config.max_turns is not None:
+            opts.max_turns = self.info.config.max_turns
         if resume_id:
             opts.resume = resume_id
         return opts

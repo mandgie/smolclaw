@@ -32,6 +32,7 @@ class AgentConfig(BaseModel):
 
     name: str
     model: str = "claude-sonnet-4-6"
+    max_turns: int | None = Field(None, description="Max agent turns per query (prevents runaway)")
     channels: dict[str, ChannelConfig] = Field(default_factory=dict)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
 

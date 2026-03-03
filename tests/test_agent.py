@@ -440,6 +440,22 @@ class TestMakeOptions:
         opts = agent._make_options(resume_id=None)
         assert not hasattr(opts, "resume") or opts.resume is None
 
+    def test_options_with_max_turns(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info()
+        info.config.max_turns = 10
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.max_turns == 10
+
+    def test_options_without_max_turns(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        opts = agent._make_options()
+        assert not hasattr(opts, "max_turns") or opts.max_turns is None
+
 
 # ---------------------------------------------------------------------------
 # Tests: _disconnect_stale
