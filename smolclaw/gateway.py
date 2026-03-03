@@ -8,6 +8,7 @@ import os
 import signal
 from pathlib import Path
 
+from . import __version__
 from .agent import Agent
 from .channel import Channel, create_channel
 from .config import (
@@ -192,9 +193,11 @@ async def run_gateway(base_dir: Path, with_api: bool = True) -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, handle_signal)
 
+    version_line = f"smolclaw gateway v{__version__}"
+    padded = version_line.center(40)
     print(
         "╔══════════════════════════════════════════╗\n"
-        "║         smolclaw gateway v0.1.0          ║\n"
+        f"║ {padded} ║\n"
         "╠══════════════════════════════════════════╣\n"
         f"║  Agents:  {len(gw.agents):<29}║\n"
         f"║  Channels: {len(gw.channels):<28}║\n"

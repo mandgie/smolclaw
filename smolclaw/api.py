@@ -68,9 +68,11 @@ class HealthResponse(BaseModel):
 
 def create_app(gateway: Gateway) -> FastAPI:
     """Create the FastAPI application with all smolclaw endpoints."""
+    from . import __version__
+
     app = FastAPI(
         title="smolclaw",
-        version="0.1.0",
+        version=__version__,
         description="Lightweight multi-agent framework for personal AI assistants",
     )
 
