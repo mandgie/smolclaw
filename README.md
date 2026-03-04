@@ -8,6 +8,7 @@
 <a href="https://pypi.org/project/smolclaw/"><img src="https://img.shields.io/pypi/v/smolclaw" alt="PyPI"></a>
   <a href="https://pypi.org/project/smolclaw/"><img src="https://img.shields.io/pypi/pyversions/smolclaw" alt="Python"></a>
   <a href="https://github.com/mandgie/smolclaw/blob/main/LICENSE"><img src="https://img.shields.io/github/license/mandgie/smolclaw" alt="License"></a>
+  <a href="https://mandgie.github.io/smolclaw"><img src="https://img.shields.io/badge/docs-mkdocs-blue" alt="Docs"></a>
 </p>
 
 ---

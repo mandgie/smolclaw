@@ -45,6 +45,10 @@ dev = [
     "pytest-cov>=6.0",
     "ruff>=0.8.0",
 ]
+docs = [
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.27",
+]
 
 [project.scripts]
 smolclaw = "smolclaw.cli:main"
@@ -53,6 +57,7 @@ smolclaw = "smolclaw.cli:main"
 Homepage = "https://github.com/mandgie/smolclaw"
 Repository = "https://github.com/mandgie/smolclaw"
 "Bug Tracker" = "https://github.com/mandgie/smolclaw/issues"
+Documentation = "https://mandgie.github.io/smolclaw"
 
 [tool.ruff]
 target-version = "py311"

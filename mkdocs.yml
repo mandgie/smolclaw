@@ -1,0 +1,86 @@
+site_name: smolclaw
+site_url: https://mandgie.github.io/smolclaw
+site_description: Lightweight multi-agent framework for personal AI assistants
+site_author: Magnus Friberg
+
+repo_name: mandgie/smolclaw
+repo_url: https://github.com/mandgie/smolclaw
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guides:
+      - Agents: guides/agents.md
+      - Channels: guides/channels.md
+      - Memory: guides/memory.md
+      - Scheduler: guides/scheduler.md
+  - Reference:
+      - CLI: reference/cli.md
+      - REST API: reference/api.md
+      - Python API: reference/python-api.md
+  - Architecture: architecture.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
+            show_root_heading: true
+            heading_level: 3
+            members_order: source
+            docstring_style: google
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets
+  - toc:
+      permalink: true
+  - attr_list
+  - def_list
+  - tables
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/mandgie/smolclaw
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/smolclaw/
