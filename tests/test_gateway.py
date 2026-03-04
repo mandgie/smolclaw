@@ -347,6 +347,81 @@ def _make_mock_gateway(**overrides):
     return gw
 
 
+class TestLogging:
+    def test_get_log_path(self, tmp_path: Path):
+        from smolclaw.gateway import get_log_path
+
+        assert get_log_path(tmp_path) == tmp_path / "smolclaw.log"
+
+    def test_setup_logging_creates_file(self, tmp_path: Path):
+        import logging
+
+        from smolclaw.gateway import setup_logging
+
+        # Clear any existing handlers on the smolclaw logger
+        logger = logging.getLogger("smolclaw")
+        original_handlers = logger.handlers[:]
+        logger.handlers.clear()
+
+        try:
+            setup_logging(tmp_path)
+            log_path = tmp_path / "smolclaw.log"
+
+            # Logger should have 2 handlers (console + file)
+            assert len(logger.handlers) == 2
+
+            # Log something and verify it appears in the file
+            logger.info("test log message")
+            # Flush handlers
+            for h in logger.handlers:
+                h.flush()
+            content = log_path.read_text(encoding="utf-8")
+            assert "test log message" in content
+        finally:
+            # Restore original handlers
+            for h in logger.handlers[:]:
+                h.close()
+            logger.handlers.clear()
+            logger.handlers.extend(original_handlers)
+
+    def test_setup_logging_creates_parent_dirs(self, tmp_path: Path):
+        import logging
+
+        from smolclaw.gateway import setup_logging
+
+        logger = logging.getLogger("smolclaw")
+        original_handlers = logger.handlers[:]
+        logger.handlers.clear()
+
+        nested = tmp_path / "deep" / "nested"
+        try:
+            setup_logging(nested)
+            assert (nested / "smolclaw.log").exists()
+        finally:
+            for h in logger.handlers[:]:
+                h.close()
+            logger.handlers.clear()
+            logger.handlers.extend(original_handlers)
+
+    def test_setup_logging_respects_level(self, tmp_path: Path):
+        import logging
+
+        from smolclaw.gateway import setup_logging
+
+        logger = logging.getLogger("smolclaw")
+        original_handlers = logger.handlers[:]
+        logger.handlers.clear()
+
+        try:
+            setup_logging(tmp_path, level="DEBUG")
+            assert logger.level == logging.DEBUG
+        finally:
+            for h in logger.handlers[:]:
+                h.close()
+            logger.handlers.clear()
+            logger.handlers.extend(original_handlers)
+
+
 class TestRunGateway:
     @pytest.mark.asyncio
     async def test_start_failure_raises(self, gw_base: Path):

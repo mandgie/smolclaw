@@ -717,6 +717,56 @@ class TestDoctorCommand:
         assert "missing soul.md" in result.output
 
 
+class TestLogsCommand:
+    def test_logs_no_file(self, tmp_path: Path):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "logs"])
+        assert result.exit_code == 0
+        assert "No log file found" in result.output
+        assert "smolclaw up" in result.output
+
+    def test_logs_shows_last_lines(self, tmp_path: Path):
+        log_file = tmp_path / "smolclaw.log"
+        lines = [f"line {i}" for i in range(100)]
+        log_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "logs", "-n", "5"])
+        assert result.exit_code == 0
+        assert "line 95" in result.output
+        assert "line 99" in result.output
+        assert "line 50" not in result.output
+
+    def test_logs_default_50_lines(self, tmp_path: Path):
+        log_file = tmp_path / "smolclaw.log"
+        lines = [f"line {i}" for i in range(100)]
+        log_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "logs"])
+        assert result.exit_code == 0
+        assert "line 50" in result.output
+        assert "line 99" in result.output
+        assert "line 49" not in result.output
+
+    def test_logs_small_file(self, tmp_path: Path):
+        log_file = tmp_path / "smolclaw.log"
+        log_file.write_text("only one line\n", encoding="utf-8")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "logs"])
+        assert result.exit_code == 0
+        assert "only one line" in result.output
+
+    def test_logs_empty_file(self, tmp_path: Path):
+        log_file = tmp_path / "smolclaw.log"
+        log_file.write_text("", encoding="utf-8")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "logs"])
+        assert result.exit_code == 0
+
+
 class TestMain:
     def test_main_invokes_cli(self):
         """main() should invoke the cli group."""

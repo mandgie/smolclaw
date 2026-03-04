@@ -147,13 +147,41 @@ class Gateway:
         return outbound.text
 
 
+def get_log_path(base_dir: Path) -> Path:
+    """Return the default log file path for a smolclaw instance."""
+    return base_dir / "smolclaw.log"
+
+
+def setup_logging(base_dir: Path, level: str = "INFO") -> None:
+    """Configure logging to both stdout and a log file."""
+    log_fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    date_fmt = "%Y-%m-%d %H:%M:%S"
+    log_level = getattr(logging, level.upper(), logging.INFO)
+
+    root = logging.getLogger("smolclaw")
+    root.setLevel(log_level)
+
+    # Console handler
+    console = logging.StreamHandler()
+    console.setFormatter(logging.Formatter(log_fmt, datefmt=date_fmt))
+    root.addHandler(console)
+
+    # File handler (rotating at 5 MB, keep 3 backups)
+    from logging.handlers import RotatingFileHandler
+
+    log_file = get_log_path(base_dir)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
+    file_handler.setFormatter(logging.Formatter(log_fmt, datefmt=date_fmt))
+    root.addHandler(file_handler)
+
+
 async def run_gateway(base_dir: Path, with_api: bool = True) -> None:
     """Main entry point — run the gateway with optional API server."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    config = load_gateway_config(base_dir)
+    setup_logging(base_dir, level=config.log_level)
 
     gw = Gateway(base_dir)
     try:

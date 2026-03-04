@@ -117,9 +117,12 @@ All messages — whether from Telegram, the API, the CLI, or the scheduler — f
 smolclaw init                        # Initialize project (first run)
 smolclaw up                          # Start gateway (all agents + API)
 smolclaw status                      # Show agents, jobs, config, issues
+smolclaw doctor                      # Check system health and dependencies
 smolclaw add <name>                  # Scaffold a new agent
+smolclaw remove <name>               # Remove an agent (with confirmation)
 smolclaw list                        # List discovered agents
 smolclaw send <agent> "message"      # Send a one-shot message
+smolclaw logs                        # Tail the gateway log file
 smolclaw cron list                   # List scheduled jobs
 smolclaw cron add \
   --agent tars \
@@ -169,11 +172,16 @@ smolclaw/              # Python package
 
 ## Roadmap
 
-- [ ] Vector search in memory (sqlite-vec embeddings)
+- [x] MCP server support (stdio/SSE/HTTP — Claude SDK managed)
+- [x] Extended thinking & effort config
+- [x] REST API + dark-mode dashboard
+- [x] Cron scheduler with validation
+- [x] CLI: init, status, doctor, add, remove, add-skill, logs
 - [ ] Session persistence (save/resume per agent per chat)
+- [ ] CLI interactive REPL (`smolclaw chat`)
+- [ ] Vector search in memory (sqlite-vec embeddings)
 - [ ] Hot-reload on config changes (no restart needed)
 - [ ] Multiple Telegram bots (one per agent)
-- [ ] CLI interactive REPL mode
 - [ ] Cross-agent messaging
 - [ ] Discord / Slack channel adapters
 - [ ] PyPI publish

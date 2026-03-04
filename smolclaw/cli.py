@@ -488,6 +488,58 @@ def remove(ctx, name, yes):
 
 
 @cli.command()
+@click.option("-n", "--lines", default=50, help="Number of lines to show")
+@click.option("-f", "--follow", is_flag=True, help="Follow the log in real time (like tail -f)")
+@click.pass_context
+def logs(ctx, lines, follow):
+    """Show gateway log output."""
+    from .gateway import get_log_path
+
+    base = ctx.obj["base"]
+    log_path = get_log_path(base)
+
+    if not log_path.exists():
+        click.echo(f"No log file found at {log_path}")
+        click.echo("Start the gateway first: smolclaw up")
+        return
+
+    # Read last N lines
+    try:
+        all_lines = log_path.read_text(encoding="utf-8").splitlines()
+    except OSError as e:
+        click.echo(f"Error reading log file: {e}")
+        return
+
+    for line in all_lines[-lines:]:
+        click.echo(line)
+
+    if not follow:
+        return
+
+    # Follow mode: watch for new lines
+    import time
+
+    click.echo("--- following (Ctrl+C to stop) ---")
+    try:
+        offset = log_path.stat().st_size
+        while True:
+            time.sleep(0.5)
+            current_size = log_path.stat().st_size
+            if current_size > offset:
+                with open(log_path, encoding="utf-8") as f:
+                    f.seek(offset)
+                    new_text = f.read()
+                    if new_text:
+                        click.echo(new_text, nl=False)
+                offset = current_size
+            elif current_size < offset:
+                # File was rotated
+                offset = 0
+    except KeyboardInterrupt:
+        pass
+
+
+@cli.command()
 @click.pass_context
 def doctor(ctx):
     """Check system health and diagnose common issues."""
