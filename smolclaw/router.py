@@ -66,7 +66,7 @@ class Router:
             )
 
         try:
-            response_text = await agent.send(message.text, session_key=message.session_key)
+            response_text = await agent.send(message.text)
         except Exception as e:
             log.error(f"Router: agent '{message.agent}' error: {e}")
             response_text = f"Error: {e}"

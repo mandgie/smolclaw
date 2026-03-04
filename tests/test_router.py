@@ -41,7 +41,7 @@ class TestRouter:
         assert result.text == "Hello back!"
         assert result.agent == "testagent"
         assert result.source == "cli"
-        mock_agent.send.assert_awaited_once_with("Hello", session_key="")
+        mock_agent.send.assert_awaited_once_with("Hello")
 
     async def test_route_unknown_agent(self, router):
         msg = InboundMessage(agent="ghost", text="Hello", source="cli")

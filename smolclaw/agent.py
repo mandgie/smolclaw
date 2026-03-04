@@ -131,7 +131,7 @@ class Agent:
             self._client = None
             self._connected = False
 
-    async def send(self, text: str, session_key: str | None = None) -> str:
+    async def send(self, text: str) -> str:
         """Send a message and return the response. Thread-safe per agent."""
         async with self._lock:
             return await self._send_internal(text)
