@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("smolclaw")
 
+__all__ = ["InboundMessage", "OutboundMessage", "Router"]
+
 
 @dataclass
 class InboundMessage:

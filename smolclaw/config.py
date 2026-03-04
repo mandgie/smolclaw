@@ -10,6 +10,17 @@ from pydantic import BaseModel, Field, field_validator
 
 log = logging.getLogger("smolclaw")
 
+__all__ = [
+    "AgentConfig",
+    "AgentInfo",
+    "ChannelConfig",
+    "GatewayConfig",
+    "MemoryConfig",
+    "discover_agent",
+    "discover_all_agents",
+    "load_gateway_config",
+]
+
 # --- Agent Config (agent.yaml) ---
 
 

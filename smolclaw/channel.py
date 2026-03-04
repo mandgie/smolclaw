@@ -14,6 +14,8 @@ from .router import InboundMessage, Router
 
 log = logging.getLogger("smolclaw")
 
+__all__ = ["Channel", "TelegramChannel", "create_channel"]
+
 
 class Channel(ABC):
     """Base class for messaging channel adapters."""

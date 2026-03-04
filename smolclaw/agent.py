@@ -25,6 +25,8 @@ from .memory import Memory
 
 log = logging.getLogger("smolclaw")
 
+__all__ = ["Agent"]
+
 
 class Agent:
     """A named AI agent with its own identity, skills, and Claude SDK session."""
@@ -126,8 +128,8 @@ class Agent:
         if self._client:
             try:
                 await self._client.disconnect()
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"[{self.name}] Disconnect error (ignored): {e}")
             self._client = None
             self._connected = False
 

@@ -9,6 +9,8 @@ from pathlib import Path
 
 log = logging.getLogger("smolclaw")
 
+__all__ = ["Memory"]
+
 
 class Memory:
     """Agent-namespaced memory backed by SQLite.

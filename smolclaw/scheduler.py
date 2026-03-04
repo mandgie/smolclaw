@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("smolclaw")
 
+__all__ = ["InvalidScheduleError", "Job", "Scheduler"]
+
 
 class InvalidScheduleError(ValueError):
     """Raised when a cron schedule expression is invalid."""

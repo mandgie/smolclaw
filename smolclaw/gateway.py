@@ -8,6 +8,8 @@ import os
 import signal
 from pathlib import Path
 
+__all__ = ["Gateway", "get_log_path", "run_gateway", "setup_logging"]
+
 from . import __version__
 from .agent import Agent
 from .channel import Channel, create_channel
