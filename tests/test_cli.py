@@ -614,6 +614,109 @@ class TestStatusCommand:
         assert "http://127.0.0.1:7890" in result.output
 
 
+class TestRemoveCommand:
+    def test_remove_agent(self, tmp_base: Path, agent_dir: Path):
+        """remove should delete the agent directory."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "remove", "testagent", "-y"])
+        assert result.exit_code == 0
+        assert "Removed agent 'testagent'" in result.output
+        assert not agent_dir.exists()
+
+    def test_remove_agent_not_found(self, tmp_base: Path):
+        """remove a non-existent agent gives an error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "remove", "ghost", "-y"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+    def test_remove_agent_confirms(self, tmp_base: Path, agent_dir: Path):
+        """remove without -y should prompt for confirmation."""
+        runner = CliRunner()
+        # Abort confirmation
+        result = runner.invoke(cli, ["--home", str(tmp_base), "remove", "testagent"], input="n\n")
+        assert agent_dir.exists()  # Should not be deleted
+
+    def test_remove_agent_confirm_yes(self, tmp_base: Path, agent_dir: Path):
+        """remove with confirmation 'y' should delete."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "remove", "testagent"], input="y\n")
+        assert result.exit_code == 0
+        assert not agent_dir.exists()
+
+
+class TestDoctorCommand:
+    def test_doctor_basic(self, tmp_base: Path, agent_dir: Path):
+        """doctor should run checks and report results."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "smolclaw doctor" in result.output
+        assert "[ok] Python" in result.output
+        assert "checks passed" in result.output
+
+    def test_doctor_no_home(self, tmp_path: Path):
+        """doctor with missing home shows an issue."""
+        nonexistent = tmp_path / "nope"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(nonexistent), "doctor"])
+        assert result.exit_code == 0
+        assert "[!!] Home directory not found" in result.output
+
+    def test_doctor_checks_deps(self, tmp_base: Path, agent_dir: Path):
+        """doctor should check key dependencies."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "pyyaml" in result.output
+        assert "croniter" in result.output
+        assert "pydantic" in result.output
+
+    def test_doctor_no_agents(self, tmp_base: Path):
+        """doctor flags when no agents are configured."""
+        # Create agents dir but with no agent subdirs
+        (tmp_base / "agents").mkdir(parents=True, exist_ok=True)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "No agents configured" in result.output
+
+    def test_doctor_memory_db(self, tmp_base: Path, agent_dir: Path):
+        """doctor checks memory DB when it exists."""
+        from smolclaw.memory import Memory
+
+        db_path = tmp_base / "shared" / "memory.db"
+        Memory(db_path, agent="test")  # Creates the DB with schema
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "[ok] Memory DB" in result.output
+
+    def test_doctor_port_available(self, tmp_base: Path, agent_dir: Path):
+        """doctor checks port availability."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "Port" in result.output
+
+    def test_doctor_missing_soul(self, tmp_base: Path):
+        """doctor flags agents missing soul.md."""
+        # Create agent without soul.md
+        agent = tmp_base / "agents" / "nosoul"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: nosoul\nmodel: claude-sonnet-4-6\nchannels: {}\n"
+            "memory:\n  enabled: true\n"
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "missing soul.md" in result.output
+
+
 class TestMain:
     def test_main_invokes_cli(self):
         """main() should invoke the cli group."""

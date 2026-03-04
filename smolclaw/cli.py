@@ -465,6 +465,165 @@ def add_skill(ctx, agent_name, skill_name):
     click.echo(f"Linked {skill_name} → {agent_name}")
 
 
+@cli.command()
+@click.argument("name")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+@click.pass_context
+def remove(ctx, name, yes):
+    """Remove an agent and its directory."""
+    import shutil
+
+    base = ctx.obj["base"]
+    agent_dir = base / "agents" / name
+
+    if not agent_dir.exists():
+        click.echo(f"Agent '{name}' not found at {agent_dir}")
+        sys.exit(1)
+
+    if not yes:
+        click.confirm(f"Remove agent '{name}' at {agent_dir}?", abort=True)
+
+    shutil.rmtree(agent_dir)
+    click.echo(f"Removed agent '{name}'")
+
+
+@cli.command()
+@click.pass_context
+def doctor(ctx):
+    """Check system health and diagnose common issues."""
+    import shutil
+    import sqlite3
+
+    base = ctx.obj["base"]
+    issues: list[str] = []
+    ok_count = 0
+
+    click.echo("\nsmolclaw doctor\n")
+
+    # 1. Python version
+    py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    if sys.version_info >= (3, 11):
+        click.echo(f"  [ok] Python {py_ver}")
+        ok_count += 1
+    else:
+        click.echo(f"  [!!] Python {py_ver} — requires 3.11+")
+        issues.append("Python 3.11+ required")
+
+    # 2. Claude CLI
+    claude_path = shutil.which("claude")
+    if claude_path:
+        click.echo(f"  [ok] Claude CLI found: {claude_path}")
+        ok_count += 1
+    else:
+        click.echo("  [!!] Claude CLI not found in PATH")
+        issues.append("Install Claude CLI: npm install -g @anthropic-ai/claude-code")
+
+    # 3. Key dependencies
+    for pkg_name, import_name in [
+        ("claude-agent-sdk", "claude_agent_sdk"),
+        ("pyyaml", "yaml"),
+        ("croniter", "croniter"),
+        ("click", "click"),
+        ("pydantic", "pydantic"),
+    ]:
+        try:
+            __import__(import_name)
+            click.echo(f"  [ok] {pkg_name}")
+            ok_count += 1
+        except ImportError:
+            click.echo(f"  [!!] {pkg_name} not installed")
+            issues.append(f"pip install {pkg_name}")
+
+    # 4. Optional dependencies
+    for pkg_name, import_name in [("fastapi", "fastapi"), ("uvicorn", "uvicorn")]:
+        try:
+            __import__(import_name)
+            click.echo(f"  [ok] {pkg_name} (optional)")
+            ok_count += 1
+        except ImportError:
+            click.echo(f"  [--] {pkg_name} not installed (optional — needed for API server)")
+
+    # 5. Home directory
+    if base.exists():
+        click.echo(f"  [ok] Home directory: {base}")
+        ok_count += 1
+    else:
+        click.echo(f"  [!!] Home directory not found: {base}")
+        issues.append("Run 'smolclaw init' to set up")
+
+    # 6. Agents
+    agents_dir = base / "agents"
+    if agents_dir.exists():
+        agent_dirs = [d for d in agents_dir.iterdir() if d.is_dir() and (d / "agent.yaml").exists()]
+        if agent_dirs:
+            click.echo(f"  [ok] {len(agent_dirs)} agent(s) configured")
+            ok_count += 1
+            for agent_dir in agent_dirs:
+                agent_issues = []
+                if not (agent_dir / "soul.md").exists():
+                    agent_issues.append("missing soul.md")
+                if not (agent_dir / "agents.md").exists():
+                    agent_issues.append("missing agents.md")
+                if agent_issues:
+                    click.echo(f"       {agent_dir.name}: {', '.join(agent_issues)}")
+                    issues.extend(f"Agent '{agent_dir.name}': {issue}" for issue in agent_issues)
+        else:
+            click.echo("  [!!] No agents configured")
+            issues.append("Run 'smolclaw add <name>' to create an agent")
+    else:
+        click.echo("  [--] No agents directory")
+
+    # 7. Memory DB
+    memory_db = base / "shared" / "memory.db"
+    if memory_db.exists():
+        try:
+            conn = sqlite3.connect(str(memory_db), timeout=2.0)
+            conn.execute("SELECT COUNT(*) FROM facts")
+            conn.close()
+            size_kb = memory_db.stat().st_size / 1024
+            click.echo(f"  [ok] Memory DB: {size_kb:.0f} KB")
+            ok_count += 1
+        except Exception as e:
+            click.echo(f"  [!!] Memory DB error: {e}")
+            issues.append(f"Memory DB issue: {e}")
+    else:
+        click.echo("  [--] Memory DB not created yet (created on first gateway start)")
+
+    # 8. Port availability
+    from .config import load_gateway_config
+
+    if base.exists():
+        config = load_gateway_config(base)
+        import socket
+
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            result = sock.connect_ex((config.host, config.port))
+            sock.close()
+            if result == 0:
+                click.echo(f"  [!!] Port {config.port} already in use")
+                issues.append(
+                    f"Port {config.port} in use — change in config.yaml or stop the process"
+                )
+            else:
+                click.echo(f"  [ok] Port {config.port} available")
+                ok_count += 1
+        except Exception:
+            click.echo(f"  [ok] Port {config.port} (could not check)")
+            ok_count += 1
+
+    # Summary
+    click.echo(f"\n  {ok_count} checks passed", nl=False)
+    if issues:
+        click.echo(f", {len(issues)} issue(s):\n")
+        for issue in issues:
+            click.echo(f"    ! {issue}")
+    else:
+        click.echo(" — all good!")
+    click.echo("")
+
+
 def main() -> None:
     cli()
 
