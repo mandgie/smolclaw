@@ -241,3 +241,12 @@ class TestMemoryRobustness:
 
         # Cross-agent still works
         assert len(tars.search_facts("data", cross_agent=True)) == 2
+
+
+class TestMemoryRepr:
+    def test_repr(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        r = repr(mem)
+        assert "Memory" in r
+        assert "tars" in r
+        assert "test.db" in r

@@ -15,6 +15,7 @@ DEFAULT_BASE = Path.home() / ".smolclaw"
 
 
 def get_base_dir(base: str | None = None) -> Path:
+    """Resolve the smolclaw home directory from explicit path, env var, or default."""
     if base:
         return Path(base)
     env = os.environ.get("SMOLCLAW_HOME")
@@ -756,6 +757,7 @@ def doctor(ctx):
 
 
 def main() -> None:
+    """CLI entry point invoked by the ``smolclaw`` console script."""
     cli()
 
 

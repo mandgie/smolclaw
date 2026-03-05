@@ -42,10 +42,16 @@ class Router:
     """Routes messages to agents and collects responses."""
 
     def __init__(self) -> None:
+        """Initialize the router with empty agent and handler registries."""
         self._agents: dict[str, Agent] = {}
         self._handlers: dict[str, list[Callable[[OutboundMessage], Awaitable[None]]]] = {}
 
+    def __repr__(self) -> str:
+        names = list(self._agents.keys())
+        return f"Router(agents={names})"
+
     def register_agent(self, agent: Agent) -> None:
+        """Register an agent so it can receive routed messages."""
         self._agents[agent.name] = agent
         log.info(f"Router: registered agent '{agent.name}'")
 
@@ -90,8 +96,10 @@ class Router:
         return outbound
 
     def get_agent(self, name: str) -> Agent | None:
+        """Look up a registered agent by name, or None if not found."""
         return self._agents.get(name)
 
     @property
     def agents(self) -> dict[str, Agent]:
+        """Return a copy of the registered agents dict."""
         return dict(self._agents)

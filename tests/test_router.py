@@ -74,6 +74,15 @@ class TestRouter:
         assert result.text == "Hello back!"
 
 
+class TestRouterRepr:
+    def test_empty_router(self):
+        r = Router()
+        assert repr(r) == "Router(agents=[])"
+
+    def test_with_agents(self, router):
+        assert "testagent" in repr(router)
+
+
 class TestInboundMessage:
     def test_defaults(self):
         msg = InboundMessage(agent="a", text="t", source="cli")

@@ -20,9 +20,18 @@ class Memory:
     """
 
     def __init__(self, db_path: Path, agent: str = "shared"):
+        """Initialize memory for an agent, creating tables if needed.
+
+        Args:
+            db_path: Path to the shared SQLite database file.
+            agent: Agent name used to namespace all stored data.
+        """
         self.db_path = db_path
         self.agent = agent
         self._ensure_schema()
+
+    def __repr__(self) -> str:
+        return f"Memory(agent={self.agent!r}, db={self.db_path})"
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path), timeout=5.0)
@@ -191,7 +200,7 @@ class Memory:
             conn.close()
 
     def stats(self) -> dict:
-        """Get memory stats for this agent."""
+        """Return memory statistics: fact/chunk counts for this agent and globally."""
         conn = self._connect()
         try:
             facts_count = conn.execute(

@@ -79,6 +79,7 @@ class GatewayConfig(BaseModel):
     @field_validator("port")
     @classmethod
     def port_in_range(cls, v: int) -> int:
+        """Validate that the port number is within the valid TCP range (1–65535)."""
         if not 1 <= v <= 65535:
             raise ValueError(f"port must be 1–65535, got {v}")
         return v

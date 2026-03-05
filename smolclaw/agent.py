@@ -32,6 +32,12 @@ class Agent:
     """A named AI agent with its own identity, skills, and Claude SDK session."""
 
     def __init__(self, info: AgentInfo, user_md: str = ""):
+        """Initialize an agent from its discovered filesystem info.
+
+        Args:
+            info: Agent identity, config, skills, and context loaded from disk.
+            user_md: Shared USER.md content injected into the system prompt.
+        """
         self.info = info
         self.name = info.config.name
         self.model = info.config.model
@@ -44,8 +50,12 @@ class Agent:
         self._session_id: str | None = None
         self._lock = asyncio.Lock()
 
+    def __repr__(self) -> str:
+        return f"Agent(name={self.name!r}, model={self.model!r}, connected={self._connected})"
+
     @property
     def is_connected(self) -> bool:
+        """Whether this agent has an active Claude SDK connection."""
         return self._connected
 
     def build_system_prompt(self) -> str:

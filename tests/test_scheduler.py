@@ -499,3 +499,18 @@ class TestSchedulerLoop:
             pass
 
         router.route.assert_not_called()
+
+
+class TestRepr:
+    def test_job_repr(self):
+        job = Job({"id": "j1", "agent": "tars", "schedule": "0 8 * * *"})
+        r = repr(job)
+        assert "Job" in r
+        assert "j1" in r
+        assert "tars" in r
+
+    def test_scheduler_repr(self, tmp_base: Path, jobs_file: Path):
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        assert "Scheduler" in repr(scheduler)
+        assert "running=False" in repr(scheduler)

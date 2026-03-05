@@ -36,6 +36,13 @@ class TestGatewayInit:
         assert gw.channels == []
         assert gw.scheduler is None
 
+    def test_repr(self, gw_base: Path):
+        gw = Gateway(gw_base)
+        r = repr(gw)
+        assert "Gateway" in r
+        assert "agents=0" in r
+        assert "channels=0" in r
+
 
 # ---------------------------------------------------------------------------
 # Tests: start

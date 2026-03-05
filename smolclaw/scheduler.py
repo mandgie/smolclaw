@@ -28,6 +28,12 @@ class Job:
     """A scheduled job definition."""
 
     def __init__(self, data: dict[str, Any], prompts_base: Path | None = None):
+        """Initialize a job from its JSON data dict.
+
+        Args:
+            data: Job definition with id, agent, schedule, and optional prompt/delivery fields.
+            prompts_base: Directory to resolve prompt_file paths against.
+        """
         self.id: str = data["id"]
         self.agent: str = data["agent"]
         self.schedule: str = data["schedule"]
@@ -60,6 +66,9 @@ class Job:
         self.status: str = data.get("status", "pending")
         self.failures: int = data.get("failures", 0)
 
+    def __repr__(self) -> str:
+        return f"Job(id={self.id!r}, agent={self.agent!r}, schedule={self.schedule!r})"
+
     def compute_next_run(self, after: datetime | None = None) -> datetime:
         """Compute the next run time from the cron expression."""
         base = after or datetime.now()
@@ -67,6 +76,7 @@ class Job:
         return cron.get_next(datetime)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the job back to a JSON-compatible dict."""
         return {
             "id": self.id,
             "agent": self.agent,
@@ -93,6 +103,14 @@ class Scheduler:
         router: Router,
         deliver_callback: Callable[[Job, str], Awaitable[None]] | None = None,
     ):
+        """Initialize the scheduler.
+
+        Args:
+            jobs_path: Path to the jobs.json file.
+            agents_dir: Base directory containing agent folders (for prompt file resolution).
+            router: The message router used to dispatch job triggers.
+            deliver_callback: Optional async callback for delivering job output to channels.
+        """
         self.jobs_path = jobs_path
         self.agents_dir = agents_dir
         self.router = router
@@ -100,6 +118,9 @@ class Scheduler:
         self.jobs: list[Job] = []
         self._task: asyncio.Task | None = None
         self._running = False
+
+    def __repr__(self) -> str:
+        return f"Scheduler(jobs={len(self.jobs)}, running={self._running})"
 
     def load_jobs(self) -> None:
         """Load jobs from jobs.json."""

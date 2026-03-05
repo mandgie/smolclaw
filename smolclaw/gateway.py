@@ -30,6 +30,11 @@ class Gateway:
     """The smolclaw gateway — single process running everything."""
 
     def __init__(self, base_dir: Path):
+        """Initialize the gateway from a smolclaw home directory.
+
+        Args:
+            base_dir: Path to the smolclaw home (e.g. ~/.smolclaw).
+        """
         self.base_dir = base_dir
         self.config: GatewayConfig = load_gateway_config(base_dir)
         self.router = Router()
@@ -37,6 +42,12 @@ class Gateway:
         self.channels: list[Channel] = []
         self.scheduler: Scheduler | None = None
         self._user_md = ""
+
+    def __repr__(self) -> str:
+        return (
+            f"Gateway(base={self.base_dir}, agents={len(self.agents)},"
+            f" channels={len(self.channels)})"
+        )
 
     async def start(self) -> None:
         """Boot everything: agents, channels, scheduler."""

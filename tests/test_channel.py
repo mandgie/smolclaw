@@ -585,3 +585,11 @@ class TestCreateChannel:
     def test_channel_types_registry(self):
         assert "telegram" in CHANNEL_TYPES
         assert CHANNEL_TYPES["telegram"] is TelegramChannel
+
+
+class TestChannelRepr:
+    def test_telegram_channel_repr(self):
+        ch = _make_channel()
+        r = repr(ch)
+        assert "TelegramChannel" in r
+        assert "testagent" in r

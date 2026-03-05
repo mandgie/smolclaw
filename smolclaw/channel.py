@@ -23,9 +23,19 @@ class Channel(ABC):
     channel_type: str = "base"
 
     def __init__(self, agent_name: str, config: ChannelConfig, router: Router):
+        """Initialize the channel adapter.
+
+        Args:
+            agent_name: Name of the agent this channel serves.
+            config: Channel-specific configuration (token env var, auth users).
+            router: The message router for dispatching inbound messages.
+        """
         self.agent_name = agent_name
         self.config = config
         self.router = router
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(agent={self.agent_name!r})"
 
     @abstractmethod
     async def start(self) -> None:
@@ -137,6 +147,7 @@ class TelegramChannel(Channel):
     channel_type = "telegram"
 
     def __init__(self, agent_name: str, config: ChannelConfig, router: Router):
+        """Initialize the Telegram channel with token and authorization config."""
         super().__init__(agent_name, config, router)
         self._app = None
         self._token = os.environ.get(config.token_env, "")
@@ -148,6 +159,7 @@ class TelegramChannel(Channel):
         return user_id in self._authorized
 
     async def start(self) -> None:
+        """Start polling Telegram for messages and register command handlers."""
         from telegram import Update
         from telegram.constants import ChatAction, ParseMode
         from telegram.ext import (
@@ -256,6 +268,7 @@ class TelegramChannel(Channel):
         await app.updater.start_polling(drop_pending_updates=True)
 
     async def stop(self) -> None:
+        """Stop the Telegram polling loop and shut down the application."""
         if self._app:
             log.info(f"[{self.agent_name}] Telegram channel stopping")
             await self._app.updater.stop()

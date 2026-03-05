@@ -500,3 +500,20 @@ class TestDisconnectStale:
         # Should be a no-op
         await agent._disconnect_stale()
         assert agent._client is None
+
+
+# ---------------------------------------------------------------------------
+# Tests: __repr__
+# ---------------------------------------------------------------------------
+
+
+class TestAgentRepr:
+    def test_repr(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info(name="tars", model="claude-opus-4-6"))
+        r = repr(agent)
+        assert "Agent" in r
+        assert "tars" in r
+        assert "claude-opus-4-6" in r
+        assert "connected=False" in r
