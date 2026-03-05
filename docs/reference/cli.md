@@ -148,6 +148,37 @@ smolclaw logs [-n LINES] [-f]
 
 ---
 
+### `config`
+
+View or modify gateway configuration.
+
+```bash
+smolclaw config                      # Show current config
+smolclaw config get <key>            # Get a specific value
+smolclaw config set <key> <value>    # Set a value (validates before writing)
+```
+
+**Subcommands:**
+
+| Subcommand | Description |
+|---|---|
+| *(none)* | Display full `config.yaml` contents |
+| `get <key>` | Get a single configuration value |
+| `set <key> <value>` | Set a value with validation |
+
+`config set` validates the new value against the `GatewayConfig` schema before writing. For example, setting `port` to a value outside 1–65535 will be rejected.
+
+```bash
+# Examples
+smolclaw config                      # Show all config
+smolclaw config get port             # → 7890
+smolclaw config set port 8080        # Updates config.yaml
+smolclaw config set host 0.0.0.0     # Bind to all interfaces
+smolclaw config set log_level DEBUG  # More verbose logging
+```
+
+---
+
 ### `add-skill`
 
 Link a shared skill to an agent.

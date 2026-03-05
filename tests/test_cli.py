@@ -273,7 +273,6 @@ class TestCronAdd:
         jobs = json.loads((tmp_path / "shared" / "cron" / "jobs.json").read_text())
         assert len(jobs) == 2
 
-
     def test_cron_add_invalid_schedule(self, tmp_path: Path):
         """Invalid cron expression should fail with a clear error."""
         runner = CliRunner()
@@ -517,9 +516,7 @@ class TestInitCommand:
     def test_init_custom_model(self, tmp_path: Path):
         """init --model sets the model in agent.yaml."""
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["--home", str(tmp_path), "init", "--model", "claude-opus-4-6"]
-        )
+        result = runner.invoke(cli, ["--home", str(tmp_path), "init", "--model", "claude-opus-4-6"])
         assert result.exit_code == 0
         yaml_content = (tmp_path / "agents" / "myagent" / "agent.yaml").read_text()
         assert "claude-opus-4-6" in yaml_content
@@ -634,7 +631,7 @@ class TestRemoveCommand:
         """remove without -y should prompt for confirmation."""
         runner = CliRunner()
         # Abort confirmation
-        result = runner.invoke(cli, ["--home", str(tmp_base), "remove", "testagent"], input="n\n")
+        runner.invoke(cli, ["--home", str(tmp_base), "remove", "testagent"], input="n\n")
         assert agent_dir.exists()  # Should not be deleted
 
     def test_remove_agent_confirm_yes(self, tmp_base: Path, agent_dir: Path):
@@ -707,8 +704,7 @@ class TestDoctorCommand:
         for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
             (agent / subdir).mkdir(parents=True)
         (agent / "agent.yaml").write_text(
-            "name: nosoul\nmodel: claude-sonnet-4-6\nchannels: {}\n"
-            "memory:\n  enabled: true\n"
+            "name: nosoul\nmodel: claude-sonnet-4-6\nchannels: {}\nmemory:\n  enabled: true\n"
         )
 
         runner = CliRunner()
@@ -765,6 +761,135 @@ class TestLogsCommand:
         runner = CliRunner()
         result = runner.invoke(cli, ["--home", str(tmp_path), "logs"])
         assert result.exit_code == 0
+
+
+class TestConfigCommand:
+    def test_config_show(self, tmp_base: Path):
+        """config without subcommand shows config.yaml contents."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "config"])
+        assert result.exit_code == 0
+        assert "host:" in result.output
+        assert "127.0.0.1" in result.output
+        assert "port:" in result.output
+        assert "7890" in result.output
+
+    def test_config_show_no_file(self, tmp_path: Path):
+        """config with no config.yaml shows helpful message."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "config"])
+        assert result.exit_code == 0
+        assert "No config.yaml" in result.output
+        assert "smolclaw init" in result.output
+
+    def test_config_get(self, tmp_base: Path):
+        """config get retrieves a specific value."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "config", "get", "port"])
+        assert result.exit_code == 0
+        assert "7890" in result.output
+
+    def test_config_get_string(self, tmp_base: Path):
+        """config get retrieves a string value."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "config", "get", "host"])
+        assert result.exit_code == 0
+        assert "127.0.0.1" in result.output
+
+    def test_config_get_missing_key(self, tmp_base: Path):
+        """config get with unknown key shows available keys."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "config", "get", "nonexistent"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+        assert "Available keys" in result.output
+
+    def test_config_get_no_file(self, tmp_path: Path):
+        """config get with no config.yaml fails."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "config", "get", "port"])
+        assert result.exit_code != 0
+        assert "No config.yaml" in result.output
+
+    def test_config_set(self, tmp_base: Path):
+        """config set writes a value to config.yaml."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "config", "set", "port", "8080"])
+        assert result.exit_code == 0
+        assert "Set port = 8080" in result.output
+
+        # Verify it was written
+        import yaml
+
+        with open(tmp_base / "config.yaml") as f:
+            data = yaml.safe_load(f)
+        assert data["port"] == 8080
+
+    def test_config_set_string(self, tmp_base: Path):
+        """config set writes a string value."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "config", "set", "host", "0.0.0.0"])
+        assert result.exit_code == 0
+        assert "Set host = 0.0.0.0" in result.output
+
+    def test_config_set_invalid_port(self, tmp_base: Path):
+        """config set rejects invalid port values."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "config", "set", "port", "99999"])
+        assert result.exit_code != 0
+        assert "Invalid config" in result.output
+
+    def test_config_set_creates_file(self, tmp_path: Path):
+        """config set creates config.yaml if it doesn't exist."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "config", "set", "port", "9000"])
+        assert result.exit_code == 0
+        assert (tmp_path / "config.yaml").exists()
+
+    def test_config_set_log_level(self, tmp_base: Path):
+        """config set works for log_level."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--home", str(tmp_base), "config", "set", "log_level", "DEBUG"]
+        )
+        assert result.exit_code == 0
+        assert "Set log_level = DEBUG" in result.output
+
+
+class TestStatusEdgeCases:
+    def test_status_jobs_json_error(self, tmp_base: Path, agent_dir: Path):
+        """status handles corrupt jobs.json gracefully."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.write_text("not valid json{{{")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "error reading jobs.json" in result.output
+
+    def test_status_many_jobs(self, tmp_base: Path, agent_dir: Path):
+        """status truncates job list when more than 5 jobs."""
+        jobs = [
+            {"id": f"job-{i}", "agent": "testagent", "schedule": f"0 {i} * * *", "status": "ok"}
+            for i in range(8)
+        ]
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.write_text(json.dumps(jobs))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "and 3 more" in result.output
+
+    def test_status_large_memory_db(self, tmp_base: Path, agent_dir: Path):
+        """status shows MB for large memory databases."""
+        db_path = tmp_base / "shared" / "memory.db"
+        db_path.write_bytes(b"x" * (2 * 1024 * 1024))  # 2 MB
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "MB" in result.output
 
 
 class TestMain:

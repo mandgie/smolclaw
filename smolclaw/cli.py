@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import click
+import yaml
 
 DEFAULT_BASE = Path.home() / ".smolclaw"
 
@@ -223,6 +224,84 @@ def status(ctx):
             click.echo(f"    ! {issue}")
 
     click.echo("")
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def config(ctx):
+    """View or modify gateway configuration."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    base = ctx.obj["base"]
+    config_path = base / "config.yaml"
+
+    if not config_path.exists():
+        click.echo(f"No config.yaml at {config_path}")
+        click.echo("Run 'smolclaw init' to set up.")
+        return
+
+    click.echo(config_path.read_text().rstrip())
+
+
+@config.command("get")
+@click.argument("key")
+@click.pass_context
+def config_get(ctx, key):
+    """Get a configuration value."""
+    base = ctx.obj["base"]
+    config_path = base / "config.yaml"
+
+    if not config_path.exists():
+        click.echo(f"No config.yaml at {config_path}")
+        sys.exit(1)
+
+    with open(config_path) as f:
+        data = yaml.safe_load(f) or {}
+
+    if key not in data:
+        click.echo(f"Key '{key}' not found in config.yaml")
+        click.echo(f"Available keys: {', '.join(data.keys())}")
+        sys.exit(1)
+
+    click.echo(data[key])
+
+
+@config.command("set")
+@click.argument("key")
+@click.argument("value")
+@click.pass_context
+def config_set(ctx, key, value):
+    """Set a configuration value."""
+    from .config import GatewayConfig
+
+    base = ctx.obj["base"]
+    config_path = base / "config.yaml"
+
+    if not config_path.exists():
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        data: dict = {}
+    else:
+        with open(config_path) as f:
+            data = yaml.safe_load(f) or {}
+
+    # Coerce value to int if possible (for port)
+    try:
+        value = int(value)
+    except ValueError:
+        pass
+
+    # Validate by creating a config with the new value
+    test_data = {**data, key: value}
+    try:
+        GatewayConfig(**test_data)
+    except Exception as e:
+        click.echo(f"Invalid config: {e}")
+        sys.exit(1)
+
+    data[key] = value
+    config_path.write_text(yaml.dump(data, default_flow_style=False))
+    click.echo(f"Set {key} = {value}")
 
 
 @cli.command()

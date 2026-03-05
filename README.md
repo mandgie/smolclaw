@@ -124,6 +124,9 @@ smolclaw remove <name>               # Remove an agent (with confirmation)
 smolclaw list                        # List discovered agents
 smolclaw send <agent> "message"      # Send a one-shot message
 smolclaw logs                        # Tail the gateway log file
+smolclaw config                      # View gateway config
+smolclaw config get <key>            # Get a config value
+smolclaw config set <key> <value>    # Set a config value
 smolclaw cron list                   # List scheduled jobs
 smolclaw cron add \
   --agent tars \
