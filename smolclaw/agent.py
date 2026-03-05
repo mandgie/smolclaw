@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
 from datetime import datetime
+from typing import Any
 
 # Strip nested session detection so SDK works from inside Claude Code / cron / etc.
 os.environ.pop("CLAUDECODE", None)
@@ -49,6 +51,11 @@ class Agent:
         self._connected = False
         self._session_id: str | None = None
         self._lock = asyncio.Lock()
+
+        # Last query metadata (updated after each send)
+        self.last_cost_usd: float | None = None
+        self.last_usage: dict[str, Any] | None = None
+        self.last_structured_output: Any = None
 
     def __repr__(self) -> str:
         return f"Agent(name={self.name!r}, model={self.model!r}, connected={self._connected})"
@@ -164,6 +171,7 @@ class Agent:
         log.info(f"[{self.name}] Query: {text[:80]}{'...' if len(text) > 80 else ''}")
         start = time.time()
         response_parts: list[str] = []
+        self.last_structured_output = None
 
         try:
             await self._client.query(text)
@@ -174,6 +182,10 @@ class Agent:
                             response_parts.append(block.text)
                 elif isinstance(message, ResultMessage):
                     self._session_id = message.session_id
+                    self.last_cost_usd = message.total_cost_usd
+                    self.last_usage = message.usage
+                    if message.structured_output is not None:
+                        self.last_structured_output = message.structured_output
                     if message.is_error and message.result:
                         response_parts.append(f"[Error: {message.result}]")
         except Exception as e:
@@ -181,8 +193,15 @@ class Agent:
             self._connected = False
             raise
 
-        response = "\n".join(response_parts) if response_parts else "(No response)"
-        log.info(f"[{self.name}] Response ({time.time() - start:.1f}s, {len(response)} chars)")
+        # If structured output was returned, serialize it as the response
+        if self.last_structured_output is not None:
+            response = json.dumps(self.last_structured_output, indent=2)
+        else:
+            response = "\n".join(response_parts) if response_parts else "(No response)"
+
+        elapsed = time.time() - start
+        cost_str = f", ${self.last_cost_usd:.4f}" if self.last_cost_usd else ""
+        log.info(f"[{self.name}] Response ({elapsed:.1f}s, {len(response)} chars{cost_str})")
         return response
 
     async def new_session(self) -> None:

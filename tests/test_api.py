@@ -31,6 +31,9 @@ def mock_gateway(tmp_path: Path):
     agent.info.context_files = {"notes": "some notes"}
     agent.memory = Memory(tmp_path / "memory.db", agent="testagent")
     agent.new_session = AsyncMock()
+    agent.last_cost_usd = None
+    agent.last_usage = None
+    agent.last_structured_output = None
 
     gw.agents = {"testagent": agent}
 
@@ -98,8 +101,25 @@ class TestSendMessage:
     def test_sends_and_returns_response(self, client, mock_gateway):
         resp = client.post("/api/agents/testagent/send", json={"text": "Hello"})
         assert resp.status_code == 200
-        assert resp.json()["response"] == "Hello from the agent!"
+        data = resp.json()
+        assert data["response"] == "Hello from the agent!"
+        assert data["cost_usd"] is None
+        assert data["usage"] is None
+        assert data["structured_output"] is None
         mock_gateway.send.assert_awaited_once_with("testagent", "Hello")
+
+    def test_send_returns_cost_and_usage(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        agent.last_cost_usd = 0.015
+        agent.last_usage = {"input_tokens": 200, "output_tokens": 100}
+        agent.last_structured_output = {"answer": "42"}
+
+        resp = client.post("/api/agents/testagent/send", json={"text": "Hi"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["cost_usd"] == 0.015
+        assert data["usage"]["input_tokens"] == 200
+        assert data["structured_output"]["answer"] == "42"
 
     def test_422_missing_text(self, client):
         resp = client.post("/api/agents/testagent/send", json={})

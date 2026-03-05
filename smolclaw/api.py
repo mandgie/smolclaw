@@ -29,6 +29,9 @@ class SendMessageResponse(BaseModel):
     """Response from sending a message to an agent."""
 
     response: str
+    cost_usd: float | None = None
+    usage: dict[str, Any] | None = None
+    structured_output: Any = None
 
 
 class AddJobRequest(BaseModel):
@@ -118,11 +121,17 @@ def create_app(gateway: Gateway) -> FastAPI:
         }
 
     @app.post("/api/agents/{name}/send", response_model=SendMessageResponse)
-    async def send_message(name: str, body: SendMessageRequest) -> dict[str, str]:
+    async def send_message(name: str, body: SendMessageRequest) -> dict[str, Any]:
         """Send a message to an agent and get the response."""
         try:
             response = await gateway.send(name, body.text)
-            return {"response": response}
+            agent = gateway.router.get_agent(name)
+            result: dict[str, Any] = {"response": response}
+            if agent:
+                result["cost_usd"] = agent.last_cost_usd
+                result["usage"] = agent.last_usage
+                result["structured_output"] = agent.last_structured_output
+            return result
         except Exception as e:
             raise HTTPException(500, str(e))
 

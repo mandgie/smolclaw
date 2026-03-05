@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -46,6 +47,9 @@ def _mock_sdk_client(
     session_id: str = "sess-001",
     is_error: bool = False,
     error_result: str = "",
+    cost_usd: float | None = None,
+    usage: dict | None = None,
+    structured_output: Any = None,
 ):
     """Create a mock ClaudeSDKClient that yields a realistic message stream."""
     from smolclaw.agent import AssistantMessage, ResultMessage, TextBlock
@@ -66,6 +70,9 @@ def _mock_sdk_client(
     result_msg.session_id = session_id
     result_msg.is_error = is_error
     result_msg.result = error_result
+    result_msg.total_cost_usd = cost_usd
+    result_msg.usage = usage
+    result_msg.structured_output = structured_output
     messages.append(result_msg)
 
     async def receive_response():
@@ -361,6 +368,72 @@ class TestSend:
         # First send should finish before second starts (serialized)
         assert execution_order[0] == "start-A"
         assert execution_order[1] == "end-A"
+
+
+# ---------------------------------------------------------------------------
+# Tests: structured output, cost, and usage tracking
+# ---------------------------------------------------------------------------
+
+
+class TestResultMetadata:
+    @pytest.mark.asyncio
+    async def test_cost_and_usage_tracked(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(
+            response_text="Hello",
+            cost_usd=0.0042,
+            usage={"input_tokens": 100, "output_tokens": 50},
+        )
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            await agent.send("Hi")
+
+        assert agent.last_cost_usd == 0.0042
+        assert agent.last_usage == {"input_tokens": 100, "output_tokens": 50}
+
+    @pytest.mark.asyncio
+    async def test_structured_output_returned_as_json(self):
+        import json
+
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(
+            response_text="text response",
+            structured_output={"name": "test", "value": 42},
+        )
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            response = await agent.send("Get data")
+
+        assert agent.last_structured_output == {"name": "test", "value": 42}
+        parsed = json.loads(response)
+        assert parsed["name"] == "test"
+        assert parsed["value"] == 42
+
+    @pytest.mark.asyncio
+    async def test_no_structured_output_returns_text(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(response_text="Plain text")
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            response = await agent.send("Hi")
+
+        assert response == "Plain text"
+        assert agent.last_structured_output is None
+
+    @pytest.mark.asyncio
+    async def test_cost_none_by_default(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        assert agent.last_cost_usd is None
+        assert agent.last_usage is None
+        assert agent.last_structured_output is None
 
 
 # ---------------------------------------------------------------------------
