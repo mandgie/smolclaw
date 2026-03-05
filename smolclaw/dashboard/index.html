@@ -104,6 +104,12 @@
   .msg-thinking .dots span:nth-child(2) { animation-delay: 0.2s; }
   .msg-thinking .dots span:nth-child(3) { animation-delay: 0.4s; }
   @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+  .msg-meta {
+    font-size: 10px; color: var(--muted); margin-top: 4px; display: flex; gap: 8px;
+    align-items: center; opacity: 0.7;
+  }
+  .msg-meta span { display: inline-flex; align-items: center; gap: 3px; }
+  .chat-session-cost { font-size: 10px; color: var(--muted); }
   .chat-input-area {
     display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); flex-shrink: 0;
   }
@@ -155,6 +161,7 @@
         <span class="status on" id="chat-status"></span>
         <span class="chat-header-name" id="chat-name"></span>
         <span class="chat-header-model" id="chat-model"></span>
+        <span class="chat-session-cost" id="chat-cost"></span>
       </div>
       <div class="chat-header-actions">
         <button class="chat-btn" id="chat-new" title="New session">⟳ New</button>
@@ -230,9 +237,12 @@ async function fetchHealth() {
 
 // --- Chat panel ---
 let chatAgent = null;
+let sessionCost = 0;
 
 function openChat(name, model, connected) {
   chatAgent = name;
+  sessionCost = 0;
+  document.getElementById('chat-cost').textContent = '';
   document.getElementById('chat-name').textContent = name;
   document.getElementById('chat-model').textContent = model;
   const dot = document.getElementById('chat-status');
@@ -251,7 +261,7 @@ function clearMessages() {
     '<div class="chat-empty">Send a message to start chatting</div>';
 }
 
-function addMessage(role, text) {
+function addMessage(role, text, meta) {
   const container = document.getElementById('chat-messages');
   // Remove empty state
   const empty = container.querySelector('.chat-empty');
@@ -264,6 +274,25 @@ function addMessage(role, text) {
   div.className = `msg msg-${role}`;
   if (role === 'agent') {
     div.innerHTML = renderMarkdown(text);
+    // Show cost/usage metadata if available
+    if (meta && (meta.cost_usd || meta.usage)) {
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'msg-meta';
+      const parts = [];
+      if (meta.cost_usd != null) parts.push(`<span>$${meta.cost_usd.toFixed(4)}</span>`);
+      if (meta.usage) {
+        const inp = meta.usage.input_tokens || 0;
+        const out = meta.usage.output_tokens || 0;
+        parts.push(`<span>${inp + out} tokens</span>`);
+      }
+      metaDiv.innerHTML = parts.join('');
+      div.appendChild(metaDiv);
+      // Update session total
+      if (meta.cost_usd) {
+        sessionCost += meta.cost_usd;
+        document.getElementById('chat-cost').textContent = `$${sessionCost.toFixed(4)}`;
+      }
+    }
   } else {
     div.textContent = text;
   }
@@ -313,7 +342,7 @@ async function sendMessage() {
     });
     const data = await res.json();
     if (res.ok) {
-      addMessage('agent', data.response);
+      addMessage('agent', data.response, { cost_usd: data.cost_usd, usage: data.usage });
     } else {
       addMessage('agent', `⚠️ Error: ${data.detail || 'Unknown error'}`);
     }
@@ -330,6 +359,8 @@ async function newSession() {
     await fetch(`${API}/api/agents/${encodeURIComponent(chatAgent)}/new-session`, { method: 'POST' });
   } catch(e) {}
   clearMessages();
+  sessionCost = 0;
+  document.getElementById('chat-cost').textContent = '';
   document.getElementById('chat-input').focus();
 }
 
