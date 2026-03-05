@@ -55,7 +55,7 @@ Show system overview — agents, jobs, memory, API config.
 smolclaw status
 ```
 
-Displays each agent's model, channels, skills, memory status, MCP servers, thinking config, and max_turns. Flags issues like missing `soul.md`.
+Displays each agent's model, channels, skills, and memory status. When configured, also shows budget limits, fallback model, structured output, and file checkpointing. Flags issues like missing `soul.md`.
 
 ---
 

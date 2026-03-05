@@ -27,8 +27,21 @@ An agent in smolclaw is a folder. Drop a folder in `~/.smolclaw/agents/`, add a 
 name: tars
 model: claude-opus-4-6
 
-# Optional: limit agent turns per query
-max_turns: 25
+# Limits and safety
+max_turns: 25                    # Cap agent turns per query
+max_budget_usd: 5.0             # Per-run spending limit in USD
+
+# Fallback and recovery
+fallback_model: claude-sonnet-4-6  # Used if primary model unavailable
+enable_file_checkpointing: true # Crash recovery via file checkpoints
+
+# Structured output (optional)
+# output_format:
+#   type: json
+#   schema:
+#     type: object
+#     properties:
+#       answer: { type: string }
 
 channels:
   telegram:
@@ -46,7 +59,11 @@ memory:
 |---|---|---|---|
 | `name` | string | required | Agent identifier |
 | `model` | string | `claude-sonnet-4-6` | Claude model to use |
-| `max_turns` | int | none | Max agent turns per query |
+| `max_turns` | int | none | Max agent turns per query (prevents runaway) |
+| `max_budget_usd` | float | none | Per-run spending limit in USD |
+| `fallback_model` | string | none | Fallback model if primary unavailable |
+| `output_format` | dict | none | Structured JSON output schema |
+| `enable_file_checkpointing` | bool | `false` | Enable crash recovery checkpoints |
 | `channels` | dict | `{}` | Channel configurations |
 | `memory.enabled` | bool | `true` | Enable persistent memory |
 | `memory.cross_agent` | bool | `false` | Search across agent boundaries |
