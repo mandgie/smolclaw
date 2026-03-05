@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -44,6 +45,15 @@ class AgentConfig(BaseModel):
     name: str
     model: str = "claude-sonnet-4-6"
     max_turns: int | None = Field(None, description="Max agent turns per query (prevents runaway)")
+    max_budget_usd: float | None = Field(None, description="Per-run spending limit in USD")
+    fallback_model: str | None = Field(None, description="Fallback model if primary is unavailable")
+    output_format: dict[str, Any] | None = Field(
+        None,
+        description="Structured output schema — validated JSON output matching a schema",
+    )
+    enable_file_checkpointing: bool = Field(
+        False, description="Enable file checkpointing for crash recovery"
+    )
     channels: dict[str, ChannelConfig] = Field(default_factory=dict)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
 

@@ -610,6 +610,25 @@ class TestStatusCommand:
         assert result.exit_code == 0
         assert "http://127.0.0.1:7890" in result.output
 
+    def test_status_shows_sdk_extras(self, tmp_base: Path):
+        """status shows extra SDK config (budget, fallback, etc.) when set."""
+        agent = tmp_base / "agents" / "fancy"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: fancy\nmodel: claude-opus-4-6\n"
+            "max_budget_usd: 5.0\nfallback_model: claude-sonnet-4-6\n"
+            "enable_file_checkpointing: true\n"
+        )
+        (agent / "soul.md").write_text("Fancy agent")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "budget=$5.0" in result.output
+        assert "fallback=claude-sonnet-4-6" in result.output
+        assert "checkpointing" in result.output
+
 
 class TestRemoveCommand:
     def test_remove_agent(self, tmp_base: Path, agent_dir: Path):

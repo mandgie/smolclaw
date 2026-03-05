@@ -45,6 +45,39 @@ class TestModels:
         cfg = AgentConfig(name="test", max_turns=25)
         assert cfg.max_turns == 25
 
+    def test_agent_config_max_budget_usd(self):
+        cfg = AgentConfig(name="test", max_budget_usd=5.0)
+        assert cfg.max_budget_usd == 5.0
+
+    def test_agent_config_max_budget_usd_default_none(self):
+        cfg = AgentConfig(name="test")
+        assert cfg.max_budget_usd is None
+
+    def test_agent_config_fallback_model(self):
+        cfg = AgentConfig(name="test", fallback_model="claude-haiku-4-5")
+        assert cfg.fallback_model == "claude-haiku-4-5"
+
+    def test_agent_config_fallback_model_default_none(self):
+        cfg = AgentConfig(name="test")
+        assert cfg.fallback_model is None
+
+    def test_agent_config_output_format(self):
+        schema = {"type": "json", "schema": {"type": "object"}}
+        cfg = AgentConfig(name="test", output_format=schema)
+        assert cfg.output_format == schema
+
+    def test_agent_config_output_format_default_none(self):
+        cfg = AgentConfig(name="test")
+        assert cfg.output_format is None
+
+    def test_agent_config_enable_file_checkpointing(self):
+        cfg = AgentConfig(name="test", enable_file_checkpointing=True)
+        assert cfg.enable_file_checkpointing is True
+
+    def test_agent_config_enable_file_checkpointing_default_false(self):
+        cfg = AgentConfig(name="test")
+        assert cfg.enable_file_checkpointing is False
+
     def test_gateway_config_defaults(self):
         cfg = GatewayConfig()
         assert cfg.host == "127.0.0.1"

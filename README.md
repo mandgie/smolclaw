@@ -60,6 +60,9 @@ The system prompt is assembled automatically from these files. Change a file, re
 ```yaml
 name: tars
 model: claude-opus-4-6
+max_budget_usd: 5.0             # Per-run spending limit
+fallback_model: claude-sonnet-4-6  # Used if primary model unavailable
+enable_file_checkpointing: true # Crash recovery
 channels:
   telegram:
     token_env: TARS_TELEGRAM_TOKEN
@@ -178,6 +181,7 @@ smolclaw/              # Python package
 
 - [x] MCP server support (stdio/SSE/HTTP — Claude SDK managed)
 - [x] Extended thinking & effort config
+- [x] Budget limits, fallback models, structured output, file checkpointing
 - [x] REST API + dark-mode dashboard
 - [x] Cron scheduler with validation
 - [x] CLI: init, status, doctor, add, remove, add-skill, logs

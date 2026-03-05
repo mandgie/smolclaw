@@ -180,6 +180,21 @@ def status(ctx):
         mem = "on" if info.config.memory.enabled else "off"
         click.echo(f"  {name:<15} {info.config.model:<25} {channels:<15} {skill_count:<8} {mem}")
 
+        # Show optional SDK settings when configured
+        extras = []
+        if info.config.max_turns is not None:
+            extras.append(f"max_turns={info.config.max_turns}")
+        if info.config.max_budget_usd is not None:
+            extras.append(f"budget=${info.config.max_budget_usd}")
+        if info.config.fallback_model:
+            extras.append(f"fallback={info.config.fallback_model}")
+        if info.config.output_format:
+            extras.append("structured_output")
+        if info.config.enable_file_checkpointing:
+            extras.append("checkpointing")
+        if extras:
+            click.echo(f"  {'':15} {', '.join(extras)}")
+
         # Collect issues
         if not info.soul:
             issues.append(f"Agent '{name}' has no soul.md — add a personality file")

@@ -456,6 +456,70 @@ class TestMakeOptions:
         opts = agent._make_options()
         assert not hasattr(opts, "max_turns") or opts.max_turns is None
 
+    def test_options_with_max_budget_usd(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info()
+        info.config.max_budget_usd = 5.0
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.max_budget_usd == 5.0
+
+    def test_options_without_max_budget_usd(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        opts = agent._make_options()
+        assert opts.max_budget_usd is None
+
+    def test_options_with_fallback_model(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info()
+        info.config.fallback_model = "claude-haiku-4-5"
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.fallback_model == "claude-haiku-4-5"
+
+    def test_options_without_fallback_model(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        opts = agent._make_options()
+        assert opts.fallback_model is None
+
+    def test_options_with_output_format(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info()
+        info.config.output_format = {"type": "json", "schema": {"type": "object"}}
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.output_format == {"type": "json", "schema": {"type": "object"}}
+
+    def test_options_without_output_format(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        opts = agent._make_options()
+        assert opts.output_format is None
+
+    def test_options_with_file_checkpointing(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info()
+        info.config.enable_file_checkpointing = True
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.enable_file_checkpointing is True
+
+    def test_options_without_file_checkpointing(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        opts = agent._make_options()
+        assert opts.enable_file_checkpointing is False
+
 
 # ---------------------------------------------------------------------------
 # Tests: _disconnect_stale

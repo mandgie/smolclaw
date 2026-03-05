@@ -102,8 +102,17 @@ class Agent:
             system_prompt=self.build_system_prompt(),
             setting_sources=["user", "project"],
         )
-        if self.info.config.max_turns is not None:
-            opts.max_turns = self.info.config.max_turns
+        cfg = self.info.config
+        if cfg.max_turns is not None:
+            opts.max_turns = cfg.max_turns
+        if cfg.max_budget_usd is not None:
+            opts.max_budget_usd = cfg.max_budget_usd
+        if cfg.fallback_model is not None:
+            opts.fallback_model = cfg.fallback_model
+        if cfg.output_format is not None:
+            opts.output_format = cfg.output_format
+        if cfg.enable_file_checkpointing:
+            opts.enable_file_checkpointing = True
         if resume_id:
             opts.resume = resume_id
         return opts
