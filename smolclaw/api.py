@@ -169,6 +169,8 @@ class SendMessageResponse(BaseModel):
     cost_usd: float | None = None
     usage: dict[str, Any] | None = None
     structured_output: Any = None
+    num_turns: int | None = None
+    duration_ms: int | None = None
 
 
 class AddJobRequest(BaseModel):
@@ -268,6 +270,8 @@ def create_app(gateway: Gateway) -> FastAPI:
                 result["cost_usd"] = agent.last_cost_usd
                 result["usage"] = agent.last_usage
                 result["structured_output"] = agent.last_structured_output
+                result["num_turns"] = agent.last_num_turns
+                result["duration_ms"] = agent.last_duration_ms
             return result
         except Exception as e:
             raise HTTPException(500, str(e))

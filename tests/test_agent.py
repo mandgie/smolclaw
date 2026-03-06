@@ -73,6 +73,9 @@ def _mock_sdk_client(
     result_msg.total_cost_usd = cost_usd
     result_msg.usage = usage
     result_msg.structured_output = structured_output
+    result_msg.num_turns = 2
+    result_msg.duration_ms = 3500
+    result_msg.duration_api_ms = 3000
     messages.append(result_msg)
 
     async def receive_response():
@@ -392,6 +395,9 @@ class TestResultMetadata:
 
         assert agent.last_cost_usd == 0.0042
         assert agent.last_usage == {"input_tokens": 100, "output_tokens": 50}
+        assert agent.last_num_turns == 2
+        assert agent.last_duration_ms == 3500
+        assert agent.last_duration_api_ms == 3000
 
     @pytest.mark.asyncio
     async def test_structured_output_returned_as_json(self):
@@ -434,6 +440,9 @@ class TestResultMetadata:
         assert agent.last_cost_usd is None
         assert agent.last_usage is None
         assert agent.last_structured_output is None
+        assert agent.last_num_turns is None
+        assert agent.last_duration_ms is None
+        assert agent.last_duration_api_ms is None
 
 
 # ---------------------------------------------------------------------------

@@ -42,6 +42,8 @@ def mock_gateway(tmp_path: Path):
     agent.last_cost_usd = None
     agent.last_usage = None
     agent.last_structured_output = None
+    agent.last_num_turns = None
+    agent.last_duration_ms = None
 
     gw.agents = {"testagent": agent}
 
@@ -114,6 +116,8 @@ class TestSendMessage:
         assert data["cost_usd"] is None
         assert data["usage"] is None
         assert data["structured_output"] is None
+        assert data["num_turns"] is None
+        assert data["duration_ms"] is None
         mock_gateway.send.assert_awaited_once_with("testagent", "Hello")
 
     def test_send_returns_cost_and_usage(self, client, mock_gateway):
@@ -121,6 +125,8 @@ class TestSendMessage:
         agent.last_cost_usd = 0.015
         agent.last_usage = {"input_tokens": 200, "output_tokens": 100}
         agent.last_structured_output = {"answer": "42"}
+        agent.last_num_turns = 3
+        agent.last_duration_ms = 5200
 
         resp = client.post("/api/agents/testagent/send", json={"text": "Hi"})
         assert resp.status_code == 200
@@ -128,6 +134,8 @@ class TestSendMessage:
         assert data["cost_usd"] == 0.015
         assert data["usage"]["input_tokens"] == 200
         assert data["structured_output"]["answer"] == "42"
+        assert data["num_turns"] == 3
+        assert data["duration_ms"] == 5200
 
     def test_422_missing_text(self, client):
         resp = client.post("/api/agents/testagent/send", json={})

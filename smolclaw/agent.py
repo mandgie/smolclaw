@@ -56,6 +56,9 @@ class Agent:
         self.last_cost_usd: float | None = None
         self.last_usage: dict[str, Any] | None = None
         self.last_structured_output: Any = None
+        self.last_num_turns: int | None = None
+        self.last_duration_ms: int | None = None
+        self.last_duration_api_ms: int | None = None
 
     def __repr__(self) -> str:
         return f"Agent(name={self.name!r}, model={self.model!r}, connected={self._connected})"
@@ -184,6 +187,9 @@ class Agent:
                     self._session_id = message.session_id
                     self.last_cost_usd = message.total_cost_usd
                     self.last_usage = message.usage
+                    self.last_num_turns = message.num_turns
+                    self.last_duration_ms = message.duration_ms
+                    self.last_duration_api_ms = message.duration_api_ms
                     if message.structured_output is not None:
                         self.last_structured_output = message.structured_output
                     if message.is_error and message.result:
