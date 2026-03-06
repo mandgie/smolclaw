@@ -630,6 +630,31 @@ class TestStatusCommand:
         assert "checkpointing" in result.output
 
 
+    def test_status_shows_mcp_thinking_effort(self, tmp_base: Path):
+        """status shows MCP, thinking, effort config when set."""
+        agent = tmp_base / "agents" / "smart"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: smart\nmodel: claude-opus-4-6\n"
+            "effort: high\n"
+            "mcp_servers:\n  sqlite:\n    type: stdio\n    command: mcp-sqlite\n"
+            "thinking:\n  type: enabled\n  budget_tokens: 16000\n"
+            "betas:\n  - context-1m-2025-08-07\n"
+            "add_dirs:\n  - ../shared\n"
+        )
+        (agent / "soul.md").write_text("Smart agent")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "mcp=[sqlite]" in result.output
+        assert "thinking=enabled" in result.output
+        assert "effort=high" in result.output
+        assert "betas=" in result.output
+        assert "add_dirs=1" in result.output
+
+
 class TestRemoveCommand:
     def test_remove_agent(self, tmp_base: Path, agent_dir: Path):
         """remove should delete the agent directory."""

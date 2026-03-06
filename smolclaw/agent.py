@@ -24,6 +24,12 @@ from claude_agent_sdk import (
     TaskStartedMessage,
     TextBlock,
 )
+from claude_agent_sdk.types import (
+    StreamEvent,
+    ThinkingConfigAdaptive,
+    ThinkingConfigDisabled,
+    ThinkingConfigEnabled,
+)
 
 from .config import AgentInfo
 from .memory import Memory
@@ -108,6 +114,18 @@ class Agent:
 
         return "\n\n".join(parts)
 
+    @staticmethod
+    def _build_thinking_config(
+        cfg: dict[str, Any],
+    ) -> ThinkingConfigAdaptive | ThinkingConfigEnabled | ThinkingConfigDisabled | None:
+        """Convert a thinking config dict to the appropriate SDK type."""
+        thinking_type = cfg.get("type", "adaptive")
+        if thinking_type == "enabled":
+            return ThinkingConfigEnabled(type="enabled", budget_tokens=cfg.get("budget_tokens", 0))
+        if thinking_type == "disabled":
+            return ThinkingConfigDisabled(type="disabled")
+        return ThinkingConfigAdaptive(type="adaptive")
+
     def _make_options(self, resume_id: str | None = None) -> ClaudeAgentOptions:
         opts = ClaudeAgentOptions(
             model=self.model,
@@ -127,6 +145,21 @@ class Agent:
             opts.output_format = cfg.output_format
         if cfg.enable_file_checkpointing:
             opts.enable_file_checkpointing = True
+        if cfg.mcp_servers is not None:
+            if isinstance(cfg.mcp_servers, str):
+                # Path to mcp.json — resolve relative to agent dir
+                mcp_path = self.info.path / cfg.mcp_servers
+                opts.mcp_servers = str(mcp_path) if mcp_path.exists() else cfg.mcp_servers
+            else:
+                opts.mcp_servers = cfg.mcp_servers
+        if cfg.thinking is not None:
+            opts.thinking = self._build_thinking_config(cfg.thinking)
+        if cfg.effort is not None:
+            opts.effort = cfg.effort
+        if cfg.betas:
+            opts.betas = cfg.betas
+        if cfg.add_dirs:
+            opts.add_dirs = [str(self.info.path / d) for d in cfg.add_dirs]
         if resume_id:
             opts.resume = resume_id
         return opts
@@ -208,6 +241,8 @@ class Agent:
                     )
                 elif isinstance(message, TaskNotificationMessage):
                     log.debug(f"[{self.name}] Task {message.status}: {message.summary}")
+                elif isinstance(message, StreamEvent):
+                    log.debug(f"[{self.name}] Stream event: {message.event}")
         except Exception as e:
             log.error(f"[{self.name}] Query failed ({time.time() - start:.1f}s): {e}")
             self._connected = False
@@ -222,6 +257,12 @@ class Agent:
         elapsed = time.time() - start
         cost_str = f", ${self.last_cost_usd:.4f}" if self.last_cost_usd else ""
         log.info(f"[{self.name}] Response ({elapsed:.1f}s, {len(response)} chars{cost_str})")
+
+        if self.last_stop_reason == "max_tokens":
+            log.warning(
+                f"[{self.name}] Response truncated (stop_reason=max_tokens)."
+                " Consider increasing max_turns or simplifying the query."
+            )
         return response
 
     async def new_session(self) -> None:

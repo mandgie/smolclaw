@@ -498,6 +498,67 @@ class TestResultMetadata:
         assert "Task progress: Searching files (tokens=500)" in caplog.text
 
     @pytest.mark.asyncio
+    async def test_max_tokens_warning_logged(self, caplog):
+        """A max_tokens stop_reason should trigger a warning log."""
+        import logging
+
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(stop_reason="max_tokens")
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            with caplog.at_level(logging.WARNING, logger="smolclaw"):
+                await agent.send("Hi")
+
+        assert "Response truncated (stop_reason=max_tokens)" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_end_turn_no_warning(self, caplog):
+        """Normal end_turn stop_reason should NOT trigger a warning."""
+        import logging
+
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(stop_reason="end_turn")
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            with caplog.at_level(logging.WARNING, logger="smolclaw"):
+                await agent.send("Hi")
+
+        assert "truncated" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_stream_event_logged(self, caplog):
+        """StreamEvent messages should be logged at debug level."""
+        import logging
+
+        from smolclaw.agent import Agent, StreamEvent
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(response_text="Done")
+
+        stream_event = MagicMock(spec=StreamEvent)
+        stream_event.event = {"type": "rate_limit", "retry_after": 5}
+
+        original_receive = mock_client.receive_response
+
+        async def receive_with_event():
+            yield stream_event
+            async for msg in original_receive():
+                yield msg
+
+        mock_client.receive_response = receive_with_event
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            with caplog.at_level(logging.DEBUG, logger="smolclaw"):
+                response = await agent.send("Do something")
+
+        assert response == "Done"
+        assert "Stream event:" in caplog.text
+
+    @pytest.mark.asyncio
     async def test_cost_none_by_default(self):
         from smolclaw.agent import Agent
 
@@ -667,6 +728,167 @@ class TestMakeOptions:
         agent = Agent(_make_info())
         opts = agent._make_options()
         assert opts.enable_file_checkpointing is False
+
+    def test_options_with_mcp_servers_dict(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info()
+        info.config.mcp_servers = {"sqlite": {"type": "stdio", "command": "mcp-sqlite"}}
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.mcp_servers == {"sqlite": {"type": "stdio", "command": "mcp-sqlite"}}
+
+    def test_options_with_mcp_servers_path(self, tmp_path):
+        from smolclaw.agent import Agent
+
+        info = _make_info(tmp_path=tmp_path)
+        mcp_json = tmp_path / "mcp.json"
+        mcp_json.write_text('{"servers": {}}')
+        info.config.mcp_servers = "mcp.json"
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.mcp_servers == str(tmp_path / "mcp.json")
+
+    def test_options_with_mcp_servers_path_missing(self, tmp_path):
+        from smolclaw.agent import Agent
+
+        info = _make_info(tmp_path=tmp_path)
+        info.config.mcp_servers = "mcp.json"
+        agent = Agent(info)
+        opts = agent._make_options()
+        # Falls back to the raw string when file doesn't exist
+        assert opts.mcp_servers == "mcp.json"
+
+    def test_options_without_mcp_servers(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        opts = agent._make_options()
+        # Default is an empty dict from the factory
+        assert opts.mcp_servers == {} or opts.mcp_servers is None
+
+    def test_options_with_thinking_adaptive(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info()
+        info.config.thinking = {"type": "adaptive"}
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.thinking["type"] == "adaptive"
+
+    def test_options_with_thinking_enabled(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info()
+        info.config.thinking = {"type": "enabled", "budget_tokens": 16000}
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.thinking["type"] == "enabled"
+        assert opts.thinking["budget_tokens"] == 16000
+
+    def test_options_with_thinking_disabled(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info()
+        info.config.thinking = {"type": "disabled"}
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.thinking["type"] == "disabled"
+
+    def test_options_without_thinking(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        opts = agent._make_options()
+        assert opts.thinking is None
+
+    def test_options_with_effort(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info()
+        info.config.effort = "high"
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.effort == "high"
+
+    def test_options_without_effort(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        opts = agent._make_options()
+        assert opts.effort is None
+
+    def test_options_with_betas(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info()
+        info.config.betas = ["context-1m-2025-08-07"]
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert opts.betas == ["context-1m-2025-08-07"]
+
+    def test_options_without_betas(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        opts = agent._make_options()
+        assert opts.betas == []
+
+    def test_options_with_add_dirs(self, tmp_path):
+        from smolclaw.agent import Agent
+
+        info = _make_info(tmp_path=tmp_path)
+        info.config.add_dirs = ["../shared", "extra"]
+        agent = Agent(info)
+        opts = agent._make_options()
+        assert len(opts.add_dirs) == 2
+        assert str(tmp_path / "../shared") in opts.add_dirs[0]
+
+    def test_options_without_add_dirs(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        opts = agent._make_options()
+        assert opts.add_dirs == []
+
+
+# ---------------------------------------------------------------------------
+# Tests: _build_thinking_config
+# ---------------------------------------------------------------------------
+
+
+class TestBuildThinkingConfig:
+    def test_thinking_adaptive(self):
+        from smolclaw.agent import Agent
+
+        result = Agent._build_thinking_config({"type": "adaptive"})
+        assert result["type"] == "adaptive"
+
+    def test_thinking_enabled_with_budget(self):
+        from smolclaw.agent import Agent
+
+        result = Agent._build_thinking_config({"type": "enabled", "budget_tokens": 32000})
+        assert result["type"] == "enabled"
+        assert result["budget_tokens"] == 32000
+
+    def test_thinking_enabled_default_budget(self):
+        from smolclaw.agent import Agent
+
+        result = Agent._build_thinking_config({"type": "enabled"})
+        assert result["type"] == "enabled"
+        assert result["budget_tokens"] == 0
+
+    def test_thinking_disabled(self):
+        from smolclaw.agent import Agent
+
+        result = Agent._build_thinking_config({"type": "disabled"})
+        assert result["type"] == "disabled"
+
+    def test_thinking_default_is_adaptive(self):
+        from smolclaw.agent import Agent
+
+        result = Agent._build_thinking_config({})
+        assert result["type"] == "adaptive"
 
 
 # ---------------------------------------------------------------------------

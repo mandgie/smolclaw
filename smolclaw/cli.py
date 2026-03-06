@@ -192,6 +192,21 @@ def status(ctx):
             extras.append("structured_output")
         if info.config.enable_file_checkpointing:
             extras.append("checkpointing")
+        if info.config.mcp_servers:
+            if isinstance(info.config.mcp_servers, str):
+                extras.append(f"mcp={info.config.mcp_servers}")
+            else:
+                names = ", ".join(info.config.mcp_servers.keys())
+                extras.append(f"mcp=[{names}]")
+        if info.config.thinking:
+            t_type = info.config.thinking.get("type", "adaptive")
+            extras.append(f"thinking={t_type}")
+        if info.config.effort:
+            extras.append(f"effort={info.config.effort}")
+        if info.config.betas:
+            extras.append(f"betas={info.config.betas}")
+        if info.config.add_dirs:
+            extras.append(f"add_dirs={len(info.config.add_dirs)}")
         if extras:
             click.echo(f"  {'':15} {', '.join(extras)}")
 

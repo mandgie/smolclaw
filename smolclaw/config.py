@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -53,6 +53,23 @@ class AgentConfig(BaseModel):
     )
     enable_file_checkpointing: bool = Field(
         False, description="Enable file checkpointing for crash recovery"
+    )
+    mcp_servers: dict[str, dict[str, Any]] | str | None = Field(
+        None,
+        description="MCP server configs (dict of server defs) or path to mcp.json file",
+    )
+    thinking: dict[str, Any] | None = Field(
+        None,
+        description="Thinking config: {type: adaptive|enabled|disabled, budget_tokens: int}",
+    )
+    effort: Literal["low", "medium", "high", "max"] | None = Field(
+        None, description="Reasoning effort level"
+    )
+    betas: list[str] = Field(
+        default_factory=list, description="Beta features to enable (e.g. context-1m-2025-08-07)"
+    )
+    add_dirs: list[str] = Field(
+        default_factory=list, description="Additional directories the agent can access"
     )
     channels: dict[str, ChannelConfig] = Field(default_factory=dict)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)

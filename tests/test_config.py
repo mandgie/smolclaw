@@ -78,6 +78,63 @@ class TestModels:
         cfg = AgentConfig(name="test")
         assert cfg.enable_file_checkpointing is False
 
+    def test_agent_config_mcp_servers_dict(self):
+        servers = {"sqlite": {"type": "stdio", "command": "mcp-sqlite"}}
+        cfg = AgentConfig(name="test", mcp_servers=servers)
+        assert cfg.mcp_servers == servers
+
+    def test_agent_config_mcp_servers_path(self):
+        cfg = AgentConfig(name="test", mcp_servers="mcp.json")
+        assert cfg.mcp_servers == "mcp.json"
+
+    def test_agent_config_mcp_servers_default_none(self):
+        cfg = AgentConfig(name="test")
+        assert cfg.mcp_servers is None
+
+    def test_agent_config_thinking_adaptive(self):
+        cfg = AgentConfig(name="test", thinking={"type": "adaptive"})
+        assert cfg.thinking == {"type": "adaptive"}
+
+    def test_agent_config_thinking_enabled(self):
+        cfg = AgentConfig(name="test", thinking={"type": "enabled", "budget_tokens": 32000})
+        assert cfg.thinking["budget_tokens"] == 32000
+
+    def test_agent_config_thinking_disabled(self):
+        cfg = AgentConfig(name="test", thinking={"type": "disabled"})
+        assert cfg.thinking["type"] == "disabled"
+
+    def test_agent_config_thinking_default_none(self):
+        cfg = AgentConfig(name="test")
+        assert cfg.thinking is None
+
+    def test_agent_config_effort(self):
+        cfg = AgentConfig(name="test", effort="high")
+        assert cfg.effort == "high"
+
+    def test_agent_config_effort_default_none(self):
+        cfg = AgentConfig(name="test")
+        assert cfg.effort is None
+
+    def test_agent_config_effort_invalid(self):
+        with pytest.raises(ValueError):
+            AgentConfig(name="test", effort="ultra")
+
+    def test_agent_config_betas(self):
+        cfg = AgentConfig(name="test", betas=["context-1m-2025-08-07"])
+        assert cfg.betas == ["context-1m-2025-08-07"]
+
+    def test_agent_config_betas_default_empty(self):
+        cfg = AgentConfig(name="test")
+        assert cfg.betas == []
+
+    def test_agent_config_add_dirs(self):
+        cfg = AgentConfig(name="test", add_dirs=["../shared", "/tmp/data"])
+        assert cfg.add_dirs == ["../shared", "/tmp/data"]
+
+    def test_agent_config_add_dirs_default_empty(self):
+        cfg = AgentConfig(name="test")
+        assert cfg.add_dirs == []
+
     def test_gateway_config_defaults(self):
         cfg = GatewayConfig()
         assert cfg.host == "127.0.0.1"
