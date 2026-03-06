@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from smolclaw.api import create_app
+from smolclaw.api import (
+    _extract_assistant_text,
+    _extract_user_text,
+    _parse_session_messages,
+    _parse_session_meta,
+    _sessions_dir_for_agent,
+    create_app,
+)
 from smolclaw.memory import Memory
 
 # --- Fixtures ---
@@ -299,3 +307,211 @@ class TestDashboard:
         resp = client.get("/")
         assert resp.status_code == 200
         assert "smolclaw" in resp.text.lower()
+
+
+# --- Session helper tests ---
+
+
+class TestExtractUserText:
+    def test_string_content(self):
+        assert _extract_user_text("Hello world") == "Hello world"
+
+    def test_list_with_text_blocks(self):
+        content = [{"type": "text", "text": "Hello"}, {"type": "text", "text": "world"}]
+        assert _extract_user_text(content) == "Hello world"
+
+    def test_list_with_string_items(self):
+        content = ["Hello", "world"]
+        assert _extract_user_text(content) == "Hello world"
+
+    def test_skips_tool_result_blocks(self):
+        content = [
+            {"type": "text", "text": "Query"},
+            {"type": "tool_result", "content": "result data"},
+        ]
+        assert _extract_user_text(content) == "Query"
+
+    def test_non_string_non_list(self):
+        assert _extract_user_text(42) == ""
+        assert _extract_user_text(None) == ""
+
+
+class TestExtractAssistantText:
+    def test_string_content(self):
+        assert _extract_assistant_text("Response") == "Response"
+
+    def test_text_blocks(self):
+        content = [{"type": "text", "text": "Hello"}]
+        assert _extract_assistant_text(content) == "Hello"
+
+    def test_tool_use_blocks(self):
+        content = [
+            {"type": "text", "text": "Let me check."},
+            {"type": "tool_use", "name": "Read"},
+        ]
+        assert _extract_assistant_text(content) == "Let me check.\n[Tool: Read]"
+
+    def test_tool_use_missing_name(self):
+        content = [{"type": "tool_use"}]
+        assert _extract_assistant_text(content) == "[Tool: unknown]"
+
+    def test_non_string_non_list(self):
+        assert _extract_assistant_text(42) == ""
+
+
+class TestSessionsDir:
+    def test_computes_correct_path(self):
+        agent = MagicMock()
+        agent.info.path.resolve.return_value = Path("/Users/test/.smolclaw/agents/tars")
+        result = _sessions_dir_for_agent(agent)
+        assert result == Path.home() / ".claude" / "projects" / "-Users-test--smolclaw-agents-tars"
+
+
+class TestParseSessionMeta:
+    def test_parses_valid_session(self, tmp_path):
+        session = tmp_path / "abc123.jsonl"
+        lines = [
+            json.dumps({"type": "user", "timestamp": "2026-03-06T10:00:00Z", "message": {"content": "Hello agent"}}),
+            json.dumps({"type": "assistant", "timestamp": "2026-03-06T10:00:01Z", "message": {"content": [{"type": "text", "text": "Hi!"}]}}),
+        ]
+        session.write_text("\n".join(lines))
+
+        meta = _parse_session_meta(session)
+        assert meta is not None
+        assert meta["id"] == "abc123"
+        assert meta["messages"] == 2
+        assert meta["created"] == "2026-03-06T10:00:00Z"
+        assert meta["updated"] == "2026-03-06T10:00:01Z"
+        assert meta["preview"] == "Hello agent"
+
+    def test_empty_session_returns_none(self, tmp_path):
+        session = tmp_path / "empty.jsonl"
+        session.write_text("")
+        assert _parse_session_meta(session) is None
+
+    def test_only_system_messages_returns_none(self, tmp_path):
+        session = tmp_path / "sys.jsonl"
+        lines = [json.dumps({"type": "system", "message": {"content": "init"}})]
+        session.write_text("\n".join(lines))
+        assert _parse_session_meta(session) is None
+
+    def test_handles_malformed_json(self, tmp_path):
+        session = tmp_path / "bad.jsonl"
+        session.write_text("not json\n" + json.dumps({"type": "user", "timestamp": "2026-03-06T10:00:00Z", "message": {"content": "Valid"}}))
+        meta = _parse_session_meta(session)
+        assert meta is not None
+        assert meta["messages"] == 1
+
+    def test_truncates_long_preview(self, tmp_path):
+        session = tmp_path / "long.jsonl"
+        long_msg = "A" * 200
+        lines = [json.dumps({"type": "user", "timestamp": "2026-03-06T10:00:00Z", "message": {"content": long_msg}})]
+        session.write_text("\n".join(lines))
+        meta = _parse_session_meta(session)
+        assert len(meta["preview"]) == 120
+
+
+class TestParseSessionMessages:
+    def test_parses_user_and_assistant(self, tmp_path):
+        session = tmp_path / "conv.jsonl"
+        lines = [
+            json.dumps({"type": "user", "timestamp": "2026-03-06T10:00:00Z", "message": {"content": "What's 2+2?"}}),
+            json.dumps({"type": "assistant", "timestamp": "2026-03-06T10:00:01Z", "message": {"content": [{"type": "text", "text": "4"}], "model": "claude-sonnet-4-6"}}),
+        ]
+        session.write_text("\n".join(lines))
+
+        messages = _parse_session_messages(session)
+        assert len(messages) == 2
+        assert messages[0]["role"] == "user"
+        assert messages[0]["text"] == "What's 2+2?"
+        assert messages[1]["role"] == "assistant"
+        assert messages[1]["text"] == "4"
+        assert messages[1]["model"] == "claude-sonnet-4-6"
+
+    def test_skips_system_entries(self, tmp_path):
+        session = tmp_path / "sys.jsonl"
+        lines = [
+            json.dumps({"type": "system", "message": {"content": "init"}}),
+            json.dumps({"type": "user", "message": {"content": "Hi"}}),
+        ]
+        session.write_text("\n".join(lines))
+        messages = _parse_session_messages(session)
+        assert len(messages) == 1
+        assert messages[0]["role"] == "user"
+
+    def test_skips_empty_text(self, tmp_path):
+        session = tmp_path / "empty.jsonl"
+        lines = [json.dumps({"type": "user", "message": {"content": ""}})]
+        session.write_text("\n".join(lines))
+        messages = _parse_session_messages(session)
+        assert len(messages) == 0
+
+
+# --- Session API endpoint tests ---
+
+
+class TestListSessions:
+    def test_returns_sessions(self, client, mock_gateway, tmp_path):
+        agent = mock_gateway.agents["testagent"]
+        # Create a fake sessions directory
+        sessions_dir = tmp_path / "sessions"
+        sessions_dir.mkdir()
+        session_file = sessions_dir / "abc-123.jsonl"
+        session_file.write_text(
+            json.dumps({"type": "user", "timestamp": "2026-03-06T10:00:00Z", "message": {"content": "Hello"}})
+        )
+
+        with patch("smolclaw.api._sessions_dir_for_agent", return_value=sessions_dir):
+            resp = client.get("/api/agents/testagent/sessions")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["sessions"]) == 1
+        assert data["sessions"][0]["id"] == "abc-123"
+        assert data["sessions"][0]["preview"] == "Hello"
+
+    def test_returns_empty_when_no_dir(self, client, mock_gateway, tmp_path):
+        nonexistent = tmp_path / "no-such-dir"
+        with patch("smolclaw.api._sessions_dir_for_agent", return_value=nonexistent):
+            resp = client.get("/api/agents/testagent/sessions")
+        assert resp.status_code == 200
+        assert resp.json()["sessions"] == []
+
+    def test_404_unknown_agent(self, client):
+        resp = client.get("/api/agents/nobody/sessions")
+        assert resp.status_code == 404
+
+
+class TestGetSession:
+    def test_returns_session_messages(self, client, mock_gateway, tmp_path):
+        sessions_dir = tmp_path / "sessions"
+        sessions_dir.mkdir()
+        session_file = sessions_dir / "abc-def-123.jsonl"
+        lines = [
+            json.dumps({"type": "user", "message": {"content": "Hi"}}),
+            json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "Hello!"}]}}),
+        ]
+        session_file.write_text("\n".join(lines))
+
+        with patch("smolclaw.api._sessions_dir_for_agent", return_value=sessions_dir):
+            resp = client.get("/api/agents/testagent/sessions/abc-def-123")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["session_id"] == "abc-def-123"
+        assert len(data["messages"]) == 2
+
+    def test_400_invalid_session_id(self, client):
+        resp = client.get("/api/agents/testagent/sessions/DROP_TABLE;--")
+        assert resp.status_code == 400
+
+    def test_404_unknown_agent(self, client):
+        resp = client.get("/api/agents/nobody/sessions/abc-123")
+        assert resp.status_code == 404
+
+    def test_404_missing_session(self, client, mock_gateway, tmp_path):
+        sessions_dir = tmp_path / "sessions"
+        sessions_dir.mkdir()
+        with patch("smolclaw.api._sessions_dir_for_agent", return_value=sessions_dir):
+            resp = client.get("/api/agents/testagent/sessions/abc-123")
+        assert resp.status_code == 404

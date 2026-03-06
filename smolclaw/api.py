@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -12,7 +14,142 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
+    from .agent import Agent
     from .gateway import Gateway
+
+_SESSION_ID_RE = re.compile(r"^[a-f0-9\-]+$")
+
+
+def _sessions_dir_for_agent(agent: Agent) -> Path:
+    """Compute the Claude Code sessions directory for an agent.
+
+    Claude Code stores sessions in ~/.claude/projects/{encoded_cwd}/
+    where the cwd path has / and . replaced with -.
+    """
+    cwd = str(agent.info.path.resolve())
+    encoded = cwd.replace("/", "-").replace(".", "-")
+    return Path.home() / ".claude" / "projects" / encoded
+
+
+def _extract_user_text(content: Any) -> str:
+    """Extract readable text from a user message content field."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                if block.get("type") == "text":
+                    parts.append(block.get("text", ""))
+                # Skip tool_result blocks
+        return " ".join(parts)
+    return ""
+
+
+def _extract_assistant_text(content: Any) -> str:
+    """Extract readable text from an assistant message content field."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                if block.get("type") == "text":
+                    parts.append(block.get("text", ""))
+                elif block.get("type") == "tool_use":
+                    name = block.get("name", "unknown")
+                    parts.append(f"[Tool: {name}]")
+        return "\n".join(parts)
+    return ""
+
+
+def _parse_session_meta(path: Path) -> dict[str, Any] | None:
+    """Extract metadata from a session JSONL file without full parsing."""
+    session_id = path.stem
+    stat = path.stat()
+    first_user_msg = None
+    msg_count = 0
+    first_ts = None
+    last_ts = None
+
+    with open(path) as f:
+        for line in f:
+            try:
+                entry = json.loads(line)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue
+
+            entry_type = entry.get("type")
+            if entry_type not in ("user", "assistant"):
+                continue
+
+            msg_count += 1
+            ts = entry.get("timestamp")
+            if ts and not first_ts:
+                first_ts = ts
+            if ts:
+                last_ts = ts
+
+            if entry_type == "user" and not first_user_msg:
+                content = entry.get("message", {}).get("content", "")
+                text = _extract_user_text(content)
+                if text:
+                    first_user_msg = text[:120]
+
+    if msg_count == 0:
+        return None
+
+    return {
+        "id": session_id,
+        "messages": msg_count,
+        "size_bytes": stat.st_size,
+        "created": first_ts,
+        "updated": last_ts,
+        "preview": first_user_msg or "",
+    }
+
+
+def _parse_session_messages(path: Path) -> list[dict[str, Any]]:
+    """Parse a session JSONL into a list of user/assistant messages."""
+    messages = []
+
+    with open(path) as f:
+        for line in f:
+            try:
+                entry = json.loads(line)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue
+
+            entry_type = entry.get("type")
+
+            if entry_type == "user":
+                content = entry.get("message", {}).get("content", "")
+                text = _extract_user_text(content)
+                if text:
+                    messages.append(
+                        {
+                            "role": "user",
+                            "text": text,
+                            "timestamp": entry.get("timestamp"),
+                        }
+                    )
+
+            elif entry_type == "assistant":
+                content = entry.get("message", {}).get("content", [])
+                text = _extract_assistant_text(content)
+                if text:
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "text": text,
+                            "timestamp": entry.get("timestamp"),
+                            "model": entry.get("message", {}).get("model"),
+                        }
+                    )
+
+    return messages
 
 
 # --- Request / Response Models ---
@@ -143,6 +280,45 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(404, f"Agent '{name}' not found")
         await agent.new_session()
         return {"status": "ok"}
+
+    # --- Session endpoints ---
+
+    @app.get("/api/agents/{name}/sessions")
+    async def list_sessions(name: str) -> dict[str, Any]:
+        """List conversation sessions for an agent."""
+        agent = gateway.router.get_agent(name)
+        if not agent:
+            raise HTTPException(404, f"Agent '{name}' not found")
+
+        sdir = _sessions_dir_for_agent(agent)
+        if not sdir.exists():
+            return {"sessions": []}
+
+        sessions = []
+        for f in sorted(sdir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True):
+            meta = _parse_session_meta(f)
+            if meta:
+                sessions.append(meta)
+
+        return {"sessions": sessions}
+
+    @app.get("/api/agents/{name}/sessions/{session_id}")
+    async def get_session(name: str, session_id: str) -> dict[str, Any]:
+        """Read messages from a specific session."""
+        if not _SESSION_ID_RE.match(session_id):
+            raise HTTPException(400, "Invalid session ID format")
+
+        agent = gateway.router.get_agent(name)
+        if not agent:
+            raise HTTPException(404, f"Agent '{name}' not found")
+
+        sdir = _sessions_dir_for_agent(agent)
+        session_file = sdir / f"{session_id}.jsonl"
+        if not session_file.exists():
+            raise HTTPException(404, f"Session '{session_id}' not found")
+
+        messages = _parse_session_messages(session_file)
+        return {"session_id": session_id, "messages": messages}
 
     # --- Memory endpoints ---
 

@@ -46,7 +46,7 @@
   .health { position: fixed; bottom: 16px; right: 16px; font-size: 11px; color: var(--muted); }
   .empty { color: var(--muted); font-size: 13px; padding: 32px; text-align: center; }
 
-  /* Chat panel */
+  /* Chat / Session panel overlay */
   .chat-overlay {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
     z-index: 100; backdrop-filter: blur(4px);
@@ -54,7 +54,7 @@
   .chat-overlay.open { display: flex; justify-content: center; align-items: center; }
   .chat-panel {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    width: min(640px, 90vw); height: min(600px, 85vh); display: flex; flex-direction: column;
+    width: min(720px, 92vw); height: min(700px, 88vh); display: flex; flex-direction: column;
     overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,0.5);
   }
   .chat-header {
@@ -64,13 +64,14 @@
   .chat-header-left { display: flex; align-items: center; gap: 10px; }
   .chat-header-name { font-size: 14px; font-weight: 600; }
   .chat-header-model { font-size: 11px; color: var(--muted); }
-  .chat-header-actions { display: flex; gap: 8px; }
+  .chat-header-actions { display: flex; gap: 6px; }
   .chat-btn {
     background: none; border: 1px solid var(--border); color: var(--muted);
     font-family: var(--font); font-size: 11px; padding: 4px 10px; border-radius: 4px;
     cursor: pointer; transition: all 0.2s;
   }
   .chat-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .chat-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
   .chat-btn-close { font-size: 16px; padding: 2px 8px; line-height: 1; }
   .chat-messages {
     flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;
@@ -109,10 +110,12 @@
     align-items: center; opacity: 0.7;
   }
   .msg-meta span { display: inline-flex; align-items: center; gap: 3px; }
+  .msg-ts { font-size: 10px; color: var(--muted); margin-top: 2px; opacity: 0.5; }
   .chat-session-cost { font-size: 10px; color: var(--muted); }
   .chat-input-area {
     display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); flex-shrink: 0;
   }
+  .chat-input-area.hidden { display: none; }
   .chat-input {
     flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text);
     font-family: var(--font); font-size: 13px; padding: 10px 14px; border-radius: 8px;
@@ -127,6 +130,31 @@
   }
   .chat-send:hover { opacity: 0.85; }
   .chat-send:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* Session list */
+  .session-item {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; cursor: pointer; transition: border-color 0.2s; width: 100%;
+  }
+  .session-item:hover { border-color: var(--accent); }
+  .session-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .session-item-date { font-size: 12px; font-weight: 500; }
+  .session-item-meta { font-size: 10px; color: var(--muted); }
+  .session-item-preview { font-size: 12px; color: var(--muted); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Session detail header bar */
+  .session-bar {
+    display: flex; align-items: center; gap: 10px; padding: 8px 18px;
+    border-bottom: 1px solid var(--border); background: var(--bg); flex-shrink: 0;
+    font-size: 11px; color: var(--muted);
+  }
+  .session-bar.hidden { display: none; }
+  .session-bar-back {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    font-family: var(--font); font-size: 11px; padding: 3px 8px; border-radius: 4px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .session-bar-back:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -153,7 +181,7 @@
 
 <div class="health" id="health"></div>
 
-<!-- Chat Panel -->
+<!-- Chat / Session Panel -->
 <div class="chat-overlay" id="chat-overlay">
   <div class="chat-panel">
     <div class="chat-header">
@@ -164,14 +192,20 @@
         <span class="chat-session-cost" id="chat-cost"></span>
       </div>
       <div class="chat-header-actions">
-        <button class="chat-btn" id="chat-new" title="New session">⟳ New</button>
-        <button class="chat-btn chat-btn-close" id="chat-close" title="Close">✕</button>
+        <button class="chat-btn active" id="btn-chat" title="Live chat">Chat</button>
+        <button class="chat-btn" id="btn-history" title="Session history">History</button>
+        <button class="chat-btn" id="chat-new" title="New session">New</button>
+        <button class="chat-btn chat-btn-close" id="chat-close" title="Close">&#x2715;</button>
       </div>
+    </div>
+    <div class="session-bar hidden" id="session-bar">
+      <button class="session-bar-back" id="session-back">&#x2190; Back</button>
+      <span id="session-bar-info"></span>
     </div>
     <div class="chat-messages" id="chat-messages">
       <div class="chat-empty">Send a message to start chatting</div>
     </div>
-    <div class="chat-input-area">
+    <div class="chat-input-area" id="chat-input-area">
       <textarea class="chat-input" id="chat-input" placeholder="Message..." rows="1"></textarea>
       <button class="chat-send" id="chat-send">Send</button>
     </div>
@@ -181,6 +215,7 @@
 <script>
 const API = '';
 
+// --- Data fetching ---
 async function fetchAgents() {
   try {
     const res = await fetch(`${API}/api/agents`);
@@ -197,7 +232,7 @@ async function fetchAgents() {
           <span>${a.model}</span><br>
           ${a.channels.map(c => `<span>${c}</span>`).join('')}
           <span>${a.skills} skills</span>
-          ${a.memory ? `<span>${a.memory.facts} facts · ${a.memory.chunks} chunks</span>` : ''}
+          ${a.memory ? `<span>${a.memory.facts} facts</span>` : ''}
         </div>
       </div>
     `).join('');
@@ -235,19 +270,21 @@ async function fetchHealth() {
   } catch(e) { document.getElementById('health').textContent = 'disconnected'; }
 }
 
-// --- Chat panel ---
+// --- Chat panel state ---
 let chatAgent = null;
 let sessionCost = 0;
+let panelView = 'chat'; // 'chat' | 'sessions' | 'session-detail'
 
 function openChat(name, model, connected) {
   chatAgent = name;
   sessionCost = 0;
+  panelView = 'chat';
   document.getElementById('chat-cost').textContent = '';
   document.getElementById('chat-name').textContent = name;
   document.getElementById('chat-model').textContent = model;
-  const dot = document.getElementById('chat-status');
-  dot.className = `status ${connected ? 'on' : 'off'}`;
+  document.getElementById('chat-status').className = `status ${connected ? 'on' : 'off'}`;
   document.getElementById('chat-overlay').classList.add('open');
+  updatePanelView();
   document.getElementById('chat-input').focus();
 }
 
@@ -256,6 +293,28 @@ function closeChat() {
   document.getElementById('chat-overlay').classList.remove('open');
 }
 
+function updatePanelView() {
+  const inputArea = document.getElementById('chat-input-area');
+  const sessionBar = document.getElementById('session-bar');
+  const btnChat = document.getElementById('btn-chat');
+  const btnHistory = document.getElementById('btn-history');
+
+  btnChat.classList.toggle('active', panelView === 'chat');
+  btnHistory.classList.toggle('active', panelView !== 'chat');
+
+  if (panelView === 'chat') {
+    inputArea.classList.remove('hidden');
+    sessionBar.classList.add('hidden');
+  } else if (panelView === 'sessions') {
+    inputArea.classList.add('hidden');
+    sessionBar.classList.add('hidden');
+  } else {
+    inputArea.classList.add('hidden');
+    sessionBar.classList.remove('hidden');
+  }
+}
+
+// --- Live chat ---
 function clearMessages() {
   document.getElementById('chat-messages').innerHTML =
     '<div class="chat-empty">Send a message to start chatting</div>';
@@ -263,10 +322,8 @@ function clearMessages() {
 
 function addMessage(role, text, meta) {
   const container = document.getElementById('chat-messages');
-  // Remove empty state
   const empty = container.querySelector('.chat-empty');
   if (empty) empty.remove();
-  // Remove thinking indicator if present
   const thinking = container.querySelector('.msg-thinking');
   if (thinking) thinking.remove();
 
@@ -274,7 +331,6 @@ function addMessage(role, text, meta) {
   div.className = `msg msg-${role}`;
   if (role === 'agent') {
     div.innerHTML = renderMarkdown(text);
-    // Show cost/usage metadata if available
     if (meta && (meta.cost_usd || meta.usage)) {
       const metaDiv = document.createElement('div');
       metaDiv.className = 'msg-meta';
@@ -287,7 +343,6 @@ function addMessage(role, text, meta) {
       }
       metaDiv.innerHTML = parts.join('');
       div.appendChild(metaDiv);
-      // Update session total
       if (meta.cost_usd) {
         sessionCost += meta.cost_usd;
         document.getElementById('chat-cost').textContent = `$${sessionCost.toFixed(4)}`;
@@ -311,7 +366,6 @@ function showThinking() {
   container.scrollTop = container.scrollHeight;
 }
 
-// Simple markdown renderer (bold, code blocks, inline code, line breaks)
 function renderMarkdown(text) {
   return text
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -344,10 +398,10 @@ async function sendMessage() {
     if (res.ok) {
       addMessage('agent', data.response, { cost_usd: data.cost_usd, usage: data.usage });
     } else {
-      addMessage('agent', `⚠️ Error: ${data.detail || 'Unknown error'}`);
+      addMessage('agent', `Error: ${data.detail || 'Unknown error'}`);
     }
   } catch (e) {
-    addMessage('agent', `⚠️ Connection failed: ${e.message}`);
+    addMessage('agent', `Connection failed: ${e.message}`);
   }
   document.getElementById('chat-send').disabled = false;
   document.getElementById('chat-input').focus();
@@ -361,25 +415,141 @@ async function newSession() {
   clearMessages();
   sessionCost = 0;
   document.getElementById('chat-cost').textContent = '';
+  panelView = 'chat';
+  updatePanelView();
   document.getElementById('chat-input').focus();
 }
 
-// Event listeners
+// --- Session history ---
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = now - d;
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return 'Today ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (days === 1) return 'Yesterday ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (days < 7) return d.toLocaleDateString([], { weekday: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatTimestamp(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+async function showSessions() {
+  if (!chatAgent) return;
+  panelView = 'sessions';
+  updatePanelView();
+
+  const container = document.getElementById('chat-messages');
+  container.innerHTML = '<div class="chat-empty">Loading sessions...</div>';
+
+  try {
+    const res = await fetch(`${API}/api/agents/${encodeURIComponent(chatAgent)}/sessions`);
+    const data = await res.json();
+
+    if (!data.sessions.length) {
+      container.innerHTML = '<div class="chat-empty">No sessions found</div>';
+      return;
+    }
+
+    container.innerHTML = data.sessions.map(s => `
+      <div class="session-item" onclick="loadSession('${s.id}')">
+        <div class="session-item-header">
+          <span class="session-item-date">${formatDate(s.created)}</span>
+          <span class="session-item-meta">${s.messages} msgs &middot; ${formatBytes(s.size_bytes)}</span>
+        </div>
+        <div class="session-item-preview">${escapeHtml(s.preview || '(no preview)')}</div>
+      </div>
+    `).join('');
+  } catch(e) {
+    container.innerHTML = `<div class="chat-empty">Failed to load sessions: ${e.message}</div>`;
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function loadSession(sessionId) {
+  if (!chatAgent) return;
+  panelView = 'session-detail';
+  updatePanelView();
+
+  const container = document.getElementById('chat-messages');
+  container.innerHTML = '<div class="chat-empty">Loading conversation...</div>';
+  document.getElementById('session-bar-info').textContent = `Session ${sessionId.slice(0, 8)}...`;
+
+  try {
+    const res = await fetch(`${API}/api/agents/${encodeURIComponent(chatAgent)}/sessions/${sessionId}`);
+    const data = await res.json();
+
+    if (!data.messages.length) {
+      container.innerHTML = '<div class="chat-empty">Empty session</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    for (const msg of data.messages) {
+      const div = document.createElement('div');
+      if (msg.role === 'user') {
+        div.className = 'msg msg-user';
+        div.textContent = msg.text;
+      } else {
+        div.className = 'msg msg-agent';
+        div.innerHTML = renderMarkdown(msg.text);
+      }
+      container.appendChild(div);
+
+      if (msg.timestamp) {
+        const ts = document.createElement('div');
+        ts.className = 'msg-ts';
+        ts.style.alignSelf = msg.role === 'user' ? 'flex-end' : 'flex-start';
+        ts.textContent = formatTimestamp(msg.timestamp);
+        container.appendChild(ts);
+      }
+    }
+
+    container.scrollTop = 0;
+  } catch(e) {
+    container.innerHTML = `<div class="chat-empty">Failed to load session: ${e.message}</div>`;
+  }
+}
+
+function switchToChat() {
+  panelView = 'chat';
+  updatePanelView();
+  clearMessages();
+  document.getElementById('chat-input').focus();
+}
+
+// --- Event listeners ---
 document.getElementById('chat-close').addEventListener('click', closeChat);
 document.getElementById('chat-new').addEventListener('click', newSession);
 document.getElementById('chat-send').addEventListener('click', sendMessage);
+document.getElementById('btn-chat').addEventListener('click', switchToChat);
+document.getElementById('btn-history').addEventListener('click', showSessions);
+document.getElementById('session-back').addEventListener('click', showSessions);
 document.getElementById('chat-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 document.getElementById('chat-overlay').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeChat();
 });
-// Auto-resize textarea
 document.getElementById('chat-input').addEventListener('input', function() {
   this.style.height = 'auto';
   this.style.height = Math.min(this.scrollHeight, 120) + 'px';
 });
-// Escape to close
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeChat();
 });
