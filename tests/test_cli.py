@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -934,6 +935,213 @@ class TestStatusEdgeCases:
         result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
         assert result.exit_code == 0
         assert "MB" in result.output
+
+
+class TestInstallCommand:
+    def test_install_creates_plist(self, tmp_base: Path):
+        """install creates a LaunchAgent plist and calls launchctl load."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._plist_path") as mock_plist_path,
+            patch("smolclaw.cli.platform.system", return_value="Darwin"),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            plist_file = tmp_base / "test.plist"
+            mock_plist_path.return_value = plist_file
+            mock_run.return_value = MagicMock(returncode=0)
+
+            result = runner.invoke(cli, ["--home", str(tmp_base), "install"])
+
+        assert result.exit_code == 0
+        assert plist_file.exists()
+        content = plist_file.read_text()
+        assert "com.smolclaw.gateway" in content
+        assert "RunAtLoad" in content
+        assert "KeepAlive" in content
+        assert str(tmp_base) in content
+        mock_run.assert_called_once()
+
+    def test_install_already_exists(self, tmp_base: Path):
+        """install refuses if plist already exists."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._plist_path") as mock_plist_path,
+            patch("smolclaw.cli.platform.system", return_value="Darwin"),
+        ):
+            plist_file = tmp_base / "test.plist"
+            plist_file.write_text("existing")
+            mock_plist_path.return_value = plist_file
+
+            result = runner.invoke(cli, ["--home", str(tmp_base), "install"])
+
+        assert result.exit_code == 0
+        assert "already installed" in result.output
+
+    def test_install_not_macos(self, tmp_base: Path):
+        """install fails on non-macOS platforms."""
+        runner = CliRunner()
+        with patch("smolclaw.cli.platform.system", return_value="Linux"):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "install"])
+
+        assert result.exit_code != 0
+        assert "macOS only" in result.output
+
+    def test_install_launchctl_failure(self, tmp_base: Path):
+        """install warns if launchctl load fails."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._plist_path") as mock_plist_path,
+            patch("smolclaw.cli.platform.system", return_value="Darwin"),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            plist_file = tmp_base / "test.plist"
+            mock_plist_path.return_value = plist_file
+            mock_run.return_value = MagicMock(returncode=1, stderr="some error")
+
+            result = runner.invoke(cli, ["--home", str(tmp_base), "install"])
+
+        assert result.exit_code == 0
+        assert "Warning" in result.output
+        assert plist_file.exists()  # plist still created
+
+    def test_install_creates_logs_dir(self, tmp_base: Path):
+        """install creates the logs directory."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._plist_path") as mock_plist_path,
+            patch("smolclaw.cli.platform.system", return_value="Darwin"),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            plist_file = tmp_base / "test.plist"
+            mock_plist_path.return_value = plist_file
+            mock_run.return_value = MagicMock(returncode=0)
+
+            result = runner.invoke(cli, ["--home", str(tmp_base), "install"])
+
+        assert result.exit_code == 0
+        assert (tmp_base / "logs").is_dir()
+
+
+class TestUninstallCommand:
+    def test_uninstall_removes_plist(self, tmp_base: Path):
+        """uninstall unloads and removes the plist."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._plist_path") as mock_plist_path,
+            patch("smolclaw.cli.platform.system", return_value="Darwin"),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            plist_file = tmp_base / "test.plist"
+            plist_file.write_text("plist content")
+            mock_plist_path.return_value = plist_file
+            mock_run.return_value = MagicMock(returncode=0)
+
+            result = runner.invoke(cli, ["uninstall"])
+
+        assert result.exit_code == 0
+        assert not plist_file.exists()
+        assert "Unloaded and removed" in result.output
+
+    def test_uninstall_not_installed(self, tmp_base: Path):
+        """uninstall with no plist gives a friendly message."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._plist_path") as mock_plist_path,
+            patch("smolclaw.cli.platform.system", return_value="Darwin"),
+        ):
+            plist_file = tmp_base / "nonexistent.plist"
+            mock_plist_path.return_value = plist_file
+
+            result = runner.invoke(cli, ["uninstall"])
+
+        assert result.exit_code == 0
+        assert "No LaunchAgent installed" in result.output
+
+    def test_uninstall_not_macos(self):
+        """uninstall fails on non-macOS platforms."""
+        runner = CliRunner()
+        with patch("smolclaw.cli.platform.system", return_value="Linux"):
+            result = runner.invoke(cli, ["uninstall"])
+
+        assert result.exit_code != 0
+        assert "macOS only" in result.output
+
+    def test_uninstall_launchctl_failure(self, tmp_base: Path):
+        """uninstall still removes plist even if launchctl unload fails."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._plist_path") as mock_plist_path,
+            patch("smolclaw.cli.platform.system", return_value="Darwin"),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            plist_file = tmp_base / "test.plist"
+            plist_file.write_text("plist content")
+            mock_plist_path.return_value = plist_file
+            mock_run.return_value = MagicMock(returncode=1, stderr="error")
+
+            result = runner.invoke(cli, ["uninstall"])
+
+        assert result.exit_code == 0
+        assert not plist_file.exists()
+
+
+class TestGeneratePlist:
+    def test_plist_contains_required_keys(self, tmp_base: Path):
+        """Generated plist has all required LaunchAgent keys."""
+        from smolclaw.cli import _generate_plist
+
+        plist = _generate_plist(tmp_base)
+
+        assert "com.smolclaw.gateway" in plist
+        assert "<key>ProgramArguments</key>" in plist
+        assert "<key>RunAtLoad</key>" in plist
+        assert "<key>KeepAlive</key>" in plist
+        assert "<key>WorkingDirectory</key>" in plist
+        assert "<key>EnvironmentVariables</key>" in plist
+        assert "<key>StandardOutPath</key>" in plist
+        assert "<key>StandardErrorPath</key>" in plist
+        assert "<key>ThrottleInterval</key>" in plist
+        assert str(tmp_base) in plist
+
+    def test_plist_uses_smolclaw_binary(self, tmp_base: Path):
+        """When smolclaw is on PATH, plist uses the binary directly."""
+        from smolclaw.cli import _generate_plist
+
+        with patch("smolclaw.cli.shutil.which", return_value="/usr/local/bin/smolclaw"):
+            plist = _generate_plist(tmp_base)
+
+        assert "/usr/local/bin/smolclaw" in plist
+        assert "<string>-m</string>" not in plist
+
+    def test_plist_falls_back_to_python_m(self, tmp_base: Path):
+        """When smolclaw binary not found, falls back to python -m smolclaw."""
+        from smolclaw.cli import _generate_plist
+
+        with patch("smolclaw.cli.shutil.which", return_value=None):
+            plist = _generate_plist(tmp_base)
+
+        assert sys.executable in plist
+        assert "<string>-m</string>" in plist
+        assert "<string>smolclaw</string>" in plist
+
+    def test_plist_log_paths(self, tmp_base: Path):
+        """Plist log paths point to the base/logs directory."""
+        from smolclaw.cli import _generate_plist
+
+        plist = _generate_plist(tmp_base)
+
+        assert str(tmp_base / "logs" / "gateway.stdout.log") in plist
+        assert str(tmp_base / "logs" / "gateway.stderr.log") in plist
+
+
+class TestPlistPath:
+    def test_plist_path_location(self):
+        """Plist path is in ~/Library/LaunchAgents/."""
+        from smolclaw.cli import _plist_path
+
+        path = _plist_path()
+        assert path.parent == Path.home() / "Library" / "LaunchAgents"
+        assert path.name == "com.smolclaw.gateway.plist"
 
 
 class TestMain:

@@ -5,6 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import platform
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -581,8 +584,6 @@ def add_skill(ctx, agent_name, skill_name):
 @click.pass_context
 def remove(ctx, name, yes):
     """Remove an agent and its directory."""
-    import shutil
-
     base = ctx.obj["base"]
     agent_dir = base / "agents" / name
 
@@ -784,6 +785,167 @@ def doctor(ctx):
     else:
         click.echo(" — all good!")
     click.echo("")
+
+
+LAUNCHAGENT_LABEL = "com.smolclaw.gateway"
+
+
+def _plist_path() -> Path:
+    """Return the LaunchAgent plist path for smolclaw."""
+    return Path.home() / "Library" / "LaunchAgents" / f"{LAUNCHAGENT_LABEL}.plist"
+
+
+def _generate_plist(base: Path) -> str:
+    """Generate a macOS LaunchAgent plist for auto-starting the gateway."""
+    smolclaw_bin = shutil.which("smolclaw")
+    if not smolclaw_bin:
+        # Fall back to python -m smolclaw
+        smolclaw_bin = sys.executable
+        program_args = f"""\
+    <array>
+        <string>{smolclaw_bin}</string>
+        <string>-m</string>
+        <string>smolclaw</string>
+        <string>--home</string>
+        <string>{base}</string>
+        <string>up</string>
+    </array>"""
+    else:
+        program_args = f"""\
+    <array>
+        <string>{smolclaw_bin}</string>
+        <string>--home</string>
+        <string>{base}</string>
+        <string>up</string>
+    </array>"""
+
+    # Build PATH from current environment
+    env_path = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin")
+
+    log_dir = base / "logs"
+    stdout_log = log_dir / "gateway.stdout.log"
+    stderr_log = log_dir / "gateway.stderr.log"
+
+    return f"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" \
+"http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{LAUNCHAGENT_LABEL}</string>
+
+    <key>ProgramArguments</key>
+    {program_args}
+
+    <key>WorkingDirectory</key>
+    <string>{Path.home()}</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>{env_path}</string>
+        <key>HOME</key>
+        <string>{Path.home()}</string>
+        <key>LANG</key>
+        <string>en_US.UTF-8</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>{stdout_log}</string>
+
+    <key>StandardErrorPath</key>
+    <string>{stderr_log}</string>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>
+"""
+
+
+@cli.command()
+@click.pass_context
+def install(ctx):
+    """Install smolclaw as a login service (macOS LaunchAgent).
+
+    Generates a LaunchAgent plist so the gateway auto-starts on login
+    and restarts if it crashes. Use 'smolclaw uninstall' to remove.
+    """
+    if platform.system() != "Darwin":
+        click.echo("install currently supports macOS only.")
+        click.echo("For Linux, create a systemd service manually.")
+        sys.exit(1)
+
+    base = ctx.obj["base"]
+    plist = _plist_path()
+
+    if plist.exists():
+        click.echo(f"LaunchAgent already installed at {plist}")
+        click.echo("Run 'smolclaw uninstall' first to reinstall.")
+        return
+
+    # Ensure logs directory exists
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+
+    # Generate and write plist
+    plist_content = _generate_plist(base)
+    plist.parent.mkdir(parents=True, exist_ok=True)
+    plist.write_text(plist_content)
+    click.echo(f"  Created {plist}")
+
+    # Load the agent
+    result = subprocess.run(
+        ["launchctl", "load", str(plist)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        click.echo(f"  Warning: launchctl load failed: {result.stderr.strip()}")
+        click.echo("  You can load manually: launchctl load " + str(plist))
+    else:
+        click.echo("  Loaded — gateway will start now and on every login")
+
+    click.echo(f"\n  Logs: {base / 'logs' / 'gateway.stdout.log'}")
+    click.echo("  Stop: smolclaw uninstall")
+
+
+@cli.command()
+def uninstall():
+    """Remove the smolclaw login service (macOS LaunchAgent)."""
+    if platform.system() != "Darwin":
+        click.echo("uninstall currently supports macOS only.")
+        sys.exit(1)
+
+    plist = _plist_path()
+
+    if not plist.exists():
+        click.echo("No LaunchAgent installed.")
+        click.echo(f"  Expected: {plist}")
+        return
+
+    # Unload first
+    result = subprocess.run(
+        ["launchctl", "unload", str(plist)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        click.echo(f"  Warning: launchctl unload failed: {result.stderr.strip()}")
+
+    # Remove plist
+    plist.unlink()
+    click.echo("  Unloaded and removed LaunchAgent")
+    click.echo("  Gateway will no longer auto-start on login")
 
 
 def main() -> None:
