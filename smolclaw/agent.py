@@ -19,6 +19,9 @@ from claude_agent_sdk import (
     ClaudeSDKClient,
     CLIConnectionError,
     ResultMessage,
+    TaskNotificationMessage,
+    TaskProgressMessage,
+    TaskStartedMessage,
     TextBlock,
 )
 
@@ -59,6 +62,7 @@ class Agent:
         self.last_num_turns: int | None = None
         self.last_duration_ms: int | None = None
         self.last_duration_api_ms: int | None = None
+        self.last_stop_reason: str | None = None
 
     def __repr__(self) -> str:
         return f"Agent(name={self.name!r}, model={self.model!r}, connected={self._connected})"
@@ -190,10 +194,20 @@ class Agent:
                     self.last_num_turns = message.num_turns
                     self.last_duration_ms = message.duration_ms
                     self.last_duration_api_ms = message.duration_api_ms
+                    self.last_stop_reason = message.stop_reason
                     if message.structured_output is not None:
                         self.last_structured_output = message.structured_output
                     if message.is_error and message.result:
                         response_parts.append(f"[Error: {message.result}]")
+                elif isinstance(message, TaskStartedMessage):
+                    log.debug(f"[{self.name}] Task started: {message.description}")
+                elif isinstance(message, TaskProgressMessage):
+                    log.debug(
+                        f"[{self.name}] Task progress: {message.description}"
+                        f" (tokens={message.usage.total_tokens})"
+                    )
+                elif isinstance(message, TaskNotificationMessage):
+                    log.debug(f"[{self.name}] Task {message.status}: {message.summary}")
         except Exception as e:
             log.error(f"[{self.name}] Query failed ({time.time() - start:.1f}s): {e}")
             self._connected = False

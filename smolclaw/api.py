@@ -171,6 +171,7 @@ class SendMessageResponse(BaseModel):
     structured_output: Any = None
     num_turns: int | None = None
     duration_ms: int | None = None
+    stop_reason: str | None = None
 
 
 class AddJobRequest(BaseModel):
@@ -272,6 +273,7 @@ def create_app(gateway: Gateway) -> FastAPI:
                 result["structured_output"] = agent.last_structured_output
                 result["num_turns"] = agent.last_num_turns
                 result["duration_ms"] = agent.last_duration_ms
+                result["stop_reason"] = agent.last_stop_reason
             return result
         except Exception as e:
             raise HTTPException(500, str(e))

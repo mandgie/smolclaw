@@ -343,6 +343,7 @@ function addMessage(role, text, meta) {
       }
       if (meta.duration_ms) parts.push(`<span>${(meta.duration_ms / 1000).toFixed(1)}s</span>`);
       if (meta.num_turns) parts.push(`<span>${meta.num_turns} turns</span>`);
+      if (meta.stop_reason && meta.stop_reason !== 'end_turn') parts.push(`<span style="color:var(--yellow)">${meta.stop_reason}</span>`);
       metaDiv.innerHTML = parts.join('');
       div.appendChild(metaDiv);
       if (meta.cost_usd) {
@@ -398,7 +399,7 @@ async function sendMessage() {
     });
     const data = await res.json();
     if (res.ok) {
-      addMessage('agent', data.response, { cost_usd: data.cost_usd, usage: data.usage, duration_ms: data.duration_ms, num_turns: data.num_turns });
+      addMessage('agent', data.response, { cost_usd: data.cost_usd, usage: data.usage, duration_ms: data.duration_ms, num_turns: data.num_turns, stop_reason: data.stop_reason });
     } else {
       addMessage('agent', `Error: ${data.detail || 'Unknown error'}`);
     }

@@ -50,6 +50,7 @@ def _mock_sdk_client(
     cost_usd: float | None = None,
     usage: dict | None = None,
     structured_output: Any = None,
+    stop_reason: str | None = "end_turn",
 ):
     """Create a mock ClaudeSDKClient that yields a realistic message stream."""
     from smolclaw.agent import AssistantMessage, ResultMessage, TextBlock
@@ -73,6 +74,7 @@ def _mock_sdk_client(
     result_msg.total_cost_usd = cost_usd
     result_msg.usage = usage
     result_msg.structured_output = structured_output
+    result_msg.stop_reason = stop_reason
     result_msg.num_turns = 2
     result_msg.duration_ms = 3500
     result_msg.duration_api_ms = 3000
@@ -433,6 +435,69 @@ class TestResultMetadata:
         assert agent.last_structured_output is None
 
     @pytest.mark.asyncio
+    async def test_stop_reason_tracked(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(stop_reason="max_tokens")
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            await agent.send("Hi")
+
+        assert agent.last_stop_reason == "max_tokens"
+
+    @pytest.mark.asyncio
+    async def test_stop_reason_end_turn(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(stop_reason="end_turn")
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            await agent.send("Hi")
+
+        assert agent.last_stop_reason == "end_turn"
+
+    @pytest.mark.asyncio
+    async def test_task_messages_logged(self, caplog):
+        """Task lifecycle messages should be logged at debug level."""
+        from smolclaw.agent import Agent, TaskProgressMessage, TaskStartedMessage
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(response_text="Done")
+
+        # Build a task started message mock
+        task_started = MagicMock(spec=TaskStartedMessage)
+        task_started.description = "Running search"
+
+        # Build a task progress message mock
+        task_progress = MagicMock(spec=TaskProgressMessage)
+        task_progress.description = "Searching files"
+        task_progress.usage = MagicMock()
+        task_progress.usage.total_tokens = 500
+
+        # Inject task messages into the stream
+        original_receive = mock_client.receive_response
+
+        async def receive_with_tasks():
+            yield task_started
+            yield task_progress
+            async for msg in original_receive():
+                yield msg
+
+        mock_client.receive_response = receive_with_tasks
+
+        import logging
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            with caplog.at_level(logging.DEBUG, logger="smolclaw"):
+                response = await agent.send("Do something")
+
+        assert response == "Done"
+        assert "Task started: Running search" in caplog.text
+        assert "Task progress: Searching files (tokens=500)" in caplog.text
+
+    @pytest.mark.asyncio
     async def test_cost_none_by_default(self):
         from smolclaw.agent import Agent
 
@@ -443,6 +508,7 @@ class TestResultMetadata:
         assert agent.last_num_turns is None
         assert agent.last_duration_ms is None
         assert agent.last_duration_api_ms is None
+        assert agent.last_stop_reason is None
 
 
 # ---------------------------------------------------------------------------
