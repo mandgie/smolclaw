@@ -91,7 +91,7 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] Cron scheduler (croniter, fires through router)
 - [x] REST API (FastAPI, agent list/detail/send/new-session, cron CRUD, health)
 - [x] Dashboard (single HTML file, auto-refresh)
-- [x] CLI (up, add, list, send, cron list/add/remove, add-skill)
+- [x] CLI (up, add, list, send, chat, cron list/add/remove, add-skill, install/uninstall)
 - [x] Tested: two agents responding in character, Telegram bot working
 
 ## What's Next (TODO)
@@ -105,8 +105,8 @@ examples/              # Example two-agent setup (tars + coach)
 - [ ] Dashboard: agent detail view (click card → see soul, skills, logs, config editor)
 - [ ] Dashboard: WebSocket live updates instead of polling
 - [ ] Multiple Telegram bots (one per agent, each with own token)
-- [ ] CLI channel adapter (interactive REPL mode)
-- [ ] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
+- [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
+- [x] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
 - [ ] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
 - [ ] Tests (pytest, mock Claude SDK)
 - [ ] PyPI publish
