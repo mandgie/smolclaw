@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import sqlite3
+import struct
 from pathlib import Path
 
-from smolclaw.memory import Memory
+from smolclaw.memory import Memory, serialize_f32
 
 
 class TestMemoryFacts:
@@ -401,3 +402,392 @@ class TestMemoryRepr:
         assert "Memory" in r
         assert "tars" in r
         assert "test.db" in r
+
+    def test_repr_with_vec(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed)
+        r = repr(mem)
+        assert "vec" in r
+
+    def test_repr_without_vec(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        r = repr(mem)
+        assert "fts" in r
+
+
+# --- Helpers for vector search tests ---
+
+FAKE_DIM = 4
+
+
+def _fake_embed(text: str) -> list[float]:
+    """Deterministic fake embeddings based on text hash for testing."""
+    h = hash(text) & 0xFFFFFFFF
+    return [((h >> (i * 8)) & 0xFF) / 255.0 for i in range(FAKE_DIM)]
+
+
+def _similar_embed(text: str) -> list[float]:
+    """Embeddings where similar texts produce similar vectors."""
+    base = [0.5] * FAKE_DIM
+    if "python" in text.lower():
+        base[0] = 0.9
+        base[1] = 0.8
+    if "weather" in text.lower():
+        base[0] = 0.1
+        base[2] = 0.9
+    if "coding" in text.lower() or "programming" in text.lower():
+        base[0] = 0.85
+        base[1] = 0.75
+    return base
+
+
+class TestSerializeF32:
+    def test_serialize_roundtrip(self):
+        vec = [1.0, 2.0, 3.0, 4.0]
+        serialized = serialize_f32(vec)
+        assert isinstance(serialized, bytes)
+        assert len(serialized) == 4 * 4  # 4 floats * 4 bytes each
+        unpacked = struct.unpack(f"{len(vec)}f", serialized)
+        assert list(unpacked) == vec
+
+    def test_serialize_empty(self):
+        assert serialize_f32([]) == b""
+
+    def test_serialize_single(self):
+        serialized = serialize_f32([42.0])
+        assert len(serialized) == 4
+
+
+class TestVectorSearchSetup:
+    def test_vec_enabled_with_embed_fn(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        assert mem.vec_enabled is True
+
+    def test_vec_disabled_without_embed_fn(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        assert mem.vec_enabled is False
+
+    def test_vec_tables_created(self, tmp_path: Path):
+        db_path = tmp_path / "test.db"
+        Memory(db_path, agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        conn = sqlite3.connect(str(db_path))
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE name LIKE 'vec_%'"
+            ).fetchall()
+        }
+        conn.close()
+        assert "vec_facts" in tables
+        assert "vec_chunks" in tables
+
+    def test_vec_tables_not_created_without_embed_fn(self, tmp_path: Path):
+        db_path = tmp_path / "test.db"
+        Memory(db_path, agent="tars")
+        conn = sqlite3.connect(str(db_path))
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE name LIKE 'vec_%'"
+            ).fetchall()
+        }
+        conn.close()
+        assert "vec_facts" not in tables
+        assert "vec_chunks" not in tables
+
+    def test_custom_embed_dim(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        assert mem.embed_dim == FAKE_DIM
+        assert mem.vec_enabled is True
+
+
+class TestVectorSearchFacts:
+    def test_add_fact_creates_embedding(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        fact_id = mem.add_fact("Python is great")
+        stats = mem.stats()
+        assert stats["vec_facts"] == 1
+        assert fact_id > 0
+
+    def test_vector_search_finds_facts(self, tmp_path: Path):
+        mem = Memory(
+            tmp_path / "test.db", agent="tars", embed_fn=_similar_embed, embed_dim=FAKE_DIM
+        )
+        mem.add_fact("Python programming tutorial")
+        mem.add_fact("Weather forecast for Stockholm")
+        mem.add_fact("Python coding best practices")
+
+        results = mem.vector_search_facts("python")
+        assert len(results) > 0
+        # Results should have distance field
+        assert "distance" in results[0]
+
+    def test_vector_search_returns_empty_without_vec(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        mem.add_fact("Some fact")
+        results = mem.vector_search_facts("fact")
+        assert results == []
+
+    def test_vector_search_agent_isolation(self, tmp_path: Path):
+        db = tmp_path / "shared.db"
+        tars = Memory(db, agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        coach = Memory(db, agent="coach", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+
+        tars.add_fact("TARS private fact")
+        coach.add_fact("Coach private fact")
+
+        tars_results = tars.vector_search_facts("private fact")
+        assert len(tars_results) == 1
+        assert tars_results[0]["agent"] == "tars"
+
+    def test_vector_search_cross_agent(self, tmp_path: Path):
+        db = tmp_path / "shared.db"
+        tars = Memory(db, agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        coach = Memory(db, agent="coach", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+
+        tars.add_fact("TARS shared info")
+        coach.add_fact("Coach shared info")
+
+        results = tars.vector_search_facts("shared info", cross_agent=True)
+        assert len(results) == 2
+
+    def test_vector_search_respects_limit(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        for i in range(10):
+            mem.add_fact(f"Fact number {i}")
+
+        results = mem.vector_search_facts("Fact", limit=3)
+        assert len(results) == 3
+
+    def test_vector_search_ordered_by_distance(self, tmp_path: Path):
+        mem = Memory(
+            tmp_path / "test.db", agent="tars", embed_fn=_similar_embed, embed_dim=FAKE_DIM
+        )
+        mem.add_fact("Weather forecast rain")
+        mem.add_fact("Python programming language")
+        mem.add_fact("Python coding tutorial")
+
+        results = mem.vector_search_facts("python development")
+        assert len(results) >= 2
+        # Results should be ordered by distance (ascending)
+        for i in range(len(results) - 1):
+            assert results[i]["distance"] <= results[i + 1]["distance"]
+
+
+class TestVectorSearchChunks:
+    def test_add_chunk_creates_embedding(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        mem.add_chunk("Hello", "Hi there!")
+        stats = mem.stats()
+        assert stats["vec_chunks"] == 1
+
+    def test_vector_search_chunks(self, tmp_path: Path):
+        mem = Memory(
+            tmp_path / "test.db", agent="tars", embed_fn=_similar_embed, embed_dim=FAKE_DIM
+        )
+        mem.add_chunk("What is Python?", "Python is a programming language")
+        mem.add_chunk("How is the weather?", "Sunny and warm")
+
+        results = mem.vector_search_chunks("python coding")
+        assert len(results) > 0
+        assert "distance" in results[0]
+
+    def test_vector_search_chunks_empty_without_vec(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        mem.add_chunk("Hello", "World")
+        results = mem.vector_search_chunks("Hello")
+        assert results == []
+
+    def test_vector_search_chunks_agent_isolation(self, tmp_path: Path):
+        db = tmp_path / "shared.db"
+        tars = Memory(db, agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        coach = Memory(db, agent="coach", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+
+        tars.add_chunk("TARS question", "TARS answer")
+        coach.add_chunk("Coach question", "Coach answer")
+
+        results = tars.vector_search_chunks("question")
+        assert len(results) == 1
+        assert results[0]["agent"] == "tars"
+
+    def test_vector_search_chunks_cross_agent(self, tmp_path: Path):
+        db = tmp_path / "shared.db"
+        tars = Memory(db, agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        coach = Memory(db, agent="coach", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+
+        tars.add_chunk("Topic", "TARS reply")
+        coach.add_chunk("Topic", "Coach reply")
+
+        results = tars.vector_search_chunks("Topic", cross_agent=True)
+        assert len(results) == 2
+
+
+class TestHybridSearch:
+    def test_hybrid_search_facts_combines_results(self, tmp_path: Path):
+        mem = Memory(
+            tmp_path / "test.db", agent="tars", embed_fn=_similar_embed, embed_dim=FAKE_DIM
+        )
+        mem.add_fact("Python programming language")
+        mem.add_fact("Python coding best practices")
+        mem.add_fact("Weather forecast sunny")
+
+        results = mem.hybrid_search_facts("Python")
+        assert len(results) >= 2
+        # Python-related facts should appear
+        contents = [r["content"] for r in results]
+        assert any("Python" in c for c in contents)
+
+    def test_hybrid_search_chunks(self, tmp_path: Path):
+        mem = Memory(
+            tmp_path / "test.db", agent="tars", embed_fn=_similar_embed, embed_dim=FAKE_DIM
+        )
+        mem.add_chunk("What is Python?", "A programming language")
+        mem.add_chunk("Weather today?", "Sunny")
+
+        results = mem.hybrid_search_chunks("Python")
+        assert len(results) >= 1
+
+    def test_hybrid_search_without_vec_falls_back(self, tmp_path: Path):
+        """Without vec, hybrid search returns FTS5/LIKE results only."""
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        mem.add_fact("Fallback search test")
+
+        results = mem.hybrid_search_facts("Fallback")
+        assert len(results) == 1
+        assert results[0]["content"] == "Fallback search test"
+
+    def test_hybrid_search_respects_limit(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        for i in range(20):
+            mem.add_fact(f"Repeated fact {i}")
+
+        results = mem.hybrid_search_facts("Repeated", limit=5)
+        assert len(results) == 5
+
+    def test_hybrid_search_deduplicates(self, tmp_path: Path):
+        """Items found by both vec and FTS5 should appear only once."""
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        mem.add_fact("Unique test content")
+
+        results = mem.hybrid_search_facts("Unique test content")
+        # Should have exactly 1, not duplicated
+        ids = [r["id"] for r in results]
+        assert len(ids) == len(set(ids))
+
+
+class TestRRFMerge:
+    def test_rrf_basic_merge(self):
+        list_a = [{"id": 1, "content": "a"}, {"id": 2, "content": "b"}]
+        list_b = [{"id": 2, "content": "b"}, {"id": 3, "content": "c"}]
+
+        merged = Memory._rrf_merge(list_a, list_b, limit=10)
+        ids = [r["id"] for r in merged]
+        # id=2 appears in both, should rank highest
+        assert ids[0] == 2
+        assert set(ids) == {1, 2, 3}
+
+    def test_rrf_respects_limit(self):
+        list_a = [{"id": i, "content": f"a{i}"} for i in range(10)]
+        list_b = [{"id": i + 10, "content": f"b{i}"} for i in range(10)]
+
+        merged = Memory._rrf_merge(list_a, list_b, limit=5)
+        assert len(merged) == 5
+
+    def test_rrf_empty_lists(self):
+        assert Memory._rrf_merge([], [], limit=10) == []
+
+    def test_rrf_one_empty_list(self):
+        items = [{"id": 1, "content": "x"}, {"id": 2, "content": "y"}]
+        merged = Memory._rrf_merge(items, [], limit=10)
+        assert len(merged) == 2
+
+    def test_rrf_identical_lists(self):
+        items = [{"id": 1, "content": "x"}, {"id": 2, "content": "y"}]
+        merged = Memory._rrf_merge(items, items, limit=10)
+        # Should deduplicate
+        assert len(merged) == 2
+
+
+class TestVectorDeleteAndClear:
+    def test_delete_fact_removes_vec_entry(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        fact_id = mem.add_fact("Vector delete test")
+        assert mem.stats()["vec_facts"] == 1
+
+        mem.delete_fact(fact_id)
+        assert mem.stats()["vec_facts"] == 0
+
+    def test_clear_removes_vec_entries(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        mem.add_fact("Fact 1")
+        mem.add_fact("Fact 2")
+        mem.add_chunk("Q1", "A1")
+        assert mem.stats()["vec_facts"] == 2
+        assert mem.stats()["vec_chunks"] == 1
+
+        mem.clear()
+        assert mem.stats()["vec_facts"] == 0
+        assert mem.stats()["vec_chunks"] == 0
+
+    def test_clear_agent_isolation_with_vec(self, tmp_path: Path):
+        db = tmp_path / "shared.db"
+        tars = Memory(db, agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        coach = Memory(db, agent="coach", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+
+        tars.add_fact("TARS fact")
+        coach.add_fact("Coach fact")
+
+        tars.clear()
+        # TARS vec entries gone, coach's remain
+        assert tars.stats()["facts"] == 0
+        assert coach.stats()["facts"] == 1
+
+
+class TestVectorEmbedFailure:
+    def test_embed_failure_graceful(self, tmp_path: Path):
+        """If embed_fn raises, the fact is still stored (just without vector)."""
+        call_count = 0
+
+        def _failing_embed(text: str) -> list[float]:
+            nonlocal call_count
+            call_count += 1
+            raise RuntimeError("Embedding service down")
+
+        mem = Memory(
+            tmp_path / "test.db", agent="tars", embed_fn=_failing_embed, embed_dim=FAKE_DIM
+        )
+        # Despite embedding failure, the fact should be stored
+        fact_id = mem.add_fact("Fact without embedding")
+        assert fact_id > 0
+        assert mem.stats()["facts"] == 1
+        # Vec table should be empty (embedding failed)
+        assert mem.stats()["vec_facts"] == 0
+
+    def test_vector_search_after_embed_failure(self, tmp_path: Path):
+        """vector_search returns empty when embed_fn fails for the query."""
+
+        def _failing_embed(text: str) -> list[float]:
+            raise RuntimeError("Embedding service down")
+
+        mem = Memory(
+            tmp_path / "test.db", agent="tars", embed_fn=_failing_embed, embed_dim=FAKE_DIM
+        )
+        results = mem.vector_search_facts("anything")
+        assert results == []
+
+
+class TestVectorStats:
+    def test_stats_include_vec_counts(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        mem.add_fact("Fact 1")
+        mem.add_chunk("Q", "A")
+
+        stats = mem.stats()
+        assert stats["vec_enabled"] is True
+        assert stats["vec_facts"] == 1
+        assert stats["vec_chunks"] == 1
+
+    def test_stats_without_vec(self, tmp_path: Path):
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        stats = mem.stats()
+        assert stats["vec_enabled"] is False
+        assert "vec_facts" not in stats

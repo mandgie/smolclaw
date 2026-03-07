@@ -87,7 +87,7 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] Claude SDK integration with session resume
 - [x] Telegram channel adapter (polling, typing indicators, markdown→HTML)
 - [x] Message routing (any source → agent → response)
-- [x] Namespaced memory (SQLite, per-agent scoping)
+- [x] Namespaced memory (SQLite, per-agent scoping, FTS5, vector search via sqlite-vec)
 - [x] Cron scheduler (croniter, fires through router)
 - [x] REST API (FastAPI, agent list/detail/send/new-session, cron CRUD, health)
 - [x] Dashboard (single HTML file, auto-refresh)
@@ -97,7 +97,7 @@ examples/              # Example two-agent setup (tars + coach)
 
 ## What's Next (TODO)
 
-- [ ] Vector search in memory (sqlite-vec embeddings, hybrid search like TARS has)
+- [x] Vector search in memory (sqlite-vec embeddings, hybrid search with RRF)
 - [x] Session persistence (save/resume session IDs per agent per chat)
 - [x] Hot-reload on config/skill file changes (watchfiles-based, no restart needed)
 - [ ] Cron delivery to Telegram (currently logs intent, needs channel lookup wiring)
