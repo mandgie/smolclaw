@@ -383,16 +383,20 @@ class TestParseSessionMeta:
     def test_parses_valid_session(self, tmp_path):
         session = tmp_path / "abc123.jsonl"
         lines = [
-            json.dumps({
-                "type": "user",
-                "timestamp": "2026-03-06T10:00:00Z",
-                "message": {"content": "Hello agent"},
-            }),
-            json.dumps({
-                "type": "assistant",
-                "timestamp": "2026-03-06T10:00:01Z",
-                "message": {"content": [{"type": "text", "text": "Hi!"}]},
-            }),
+            json.dumps(
+                {
+                    "type": "user",
+                    "timestamp": "2026-03-06T10:00:00Z",
+                    "message": {"content": "Hello agent"},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-03-06T10:00:01Z",
+                    "message": {"content": [{"type": "text", "text": "Hi!"}]},
+                }
+            ),
         ]
         session.write_text("\n".join(lines))
 
@@ -417,11 +421,13 @@ class TestParseSessionMeta:
 
     def test_handles_malformed_json(self, tmp_path):
         session = tmp_path / "bad.jsonl"
-        valid = json.dumps({
-            "type": "user",
-            "timestamp": "2026-03-06T10:00:00Z",
-            "message": {"content": "Valid"},
-        })
+        valid = json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-06T10:00:00Z",
+                "message": {"content": "Valid"},
+            }
+        )
         session.write_text("not json\n" + valid)
         meta = _parse_session_meta(session)
         assert meta is not None
@@ -446,19 +452,23 @@ class TestParseSessionMessages:
         session = tmp_path / "conv.jsonl"
         ts = "2026-03-06T10:00:0"
         lines = [
-            json.dumps({
-                "type": "user",
-                "timestamp": f"{ts}0Z",
-                "message": {"content": "What's 2+2?"},
-            }),
-            json.dumps({
-                "type": "assistant",
-                "timestamp": f"{ts}1Z",
-                "message": {
-                    "content": [{"type": "text", "text": "4"}],
-                    "model": "claude-sonnet-4-6",
-                },
-            }),
+            json.dumps(
+                {
+                    "type": "user",
+                    "timestamp": f"{ts}0Z",
+                    "message": {"content": "What's 2+2?"},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "timestamp": f"{ts}1Z",
+                    "message": {
+                        "content": [{"type": "text", "text": "4"}],
+                        "model": "claude-sonnet-4-6",
+                    },
+                }
+            ),
         ]
         session.write_text("\n".join(lines))
 
@@ -533,10 +543,12 @@ class TestGetSession:
         session_file = sessions_dir / "abc-def-123.jsonl"
         lines = [
             json.dumps({"type": "user", "message": {"content": "Hi"}}),
-            json.dumps({
-                "type": "assistant",
-                "message": {"content": [{"type": "text", "text": "Hello!"}]},
-            }),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {"content": [{"type": "text", "text": "Hello!"}]},
+                }
+            ),
         ]
         session_file.write_text("\n".join(lines))
 

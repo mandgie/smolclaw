@@ -630,7 +630,6 @@ class TestStatusCommand:
         assert "fallback=claude-sonnet-4-6" in result.output
         assert "checkpointing" in result.output
 
-
     def test_status_shows_mcp_thinking_effort(self, tmp_base: Path):
         """status shows MCP, thinking, effort config when set."""
         agent = tmp_base / "agents" / "smart"
@@ -1142,6 +1141,232 @@ class TestPlistPath:
         path = _plist_path()
         assert path.parent == Path.home() / "Library" / "LaunchAgents"
         assert path.name == "com.smolclaw.gateway.plist"
+
+
+class TestChatCommand:
+    def test_chat_agent_not_found(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat with nonexistent agent should error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "chat", "nosuchagent"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+    def test_chat_agent_not_found_shows_available(
+        self, tmp_base: Path, agent_dir: Path, jobs_file: Path
+    ):
+        """chat with nonexistent agent shows available agents."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "chat", "nosuchagent"])
+        assert "testagent" in result.output
+
+    def test_chat_quit_command(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat session exits on /quit."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_agent = MagicMock()
+        mock_agent.last_cost_usd = None
+        mock_gw.agents = {"testagent": mock_agent}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            result = runner.invoke(
+                cli, ["--home", str(tmp_base), "chat", "testagent"], input="/quit\n"
+            )
+
+        assert result.exit_code == 0
+        assert "Bye" in result.output
+
+    def test_chat_exit_command(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat session exits on /exit."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.agents = {"testagent": MagicMock(last_cost_usd=None)}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            result = runner.invoke(
+                cli, ["--home", str(tmp_base), "chat", "testagent"], input="/exit\n"
+            )
+
+        assert result.exit_code == 0
+        assert "Bye" in result.output
+
+    def test_chat_new_session_command(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat /new resets the session."""
+        mock_agent = MagicMock()
+        mock_agent.new_session = AsyncMock()
+        mock_agent.last_cost_usd = None
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.agents = {"testagent": mock_agent}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            result = runner.invoke(
+                cli, ["--home", str(tmp_base), "chat", "testagent"], input="/new\n/quit\n"
+            )
+
+        assert result.exit_code == 0
+        assert "Session reset" in result.output
+        mock_agent.new_session.assert_called_once()
+
+    def test_chat_cost_command_no_data(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat /cost shows 'no data' when nothing sent yet."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.agents = {"testagent": MagicMock(last_cost_usd=None)}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            result = runner.invoke(
+                cli, ["--home", str(tmp_base), "chat", "testagent"], input="/cost\n/quit\n"
+            )
+
+        assert "No cost data yet" in result.output
+
+    def test_chat_cost_command_with_data(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat /cost shows cost info after a message."""
+        mock_agent = MagicMock()
+        mock_agent.last_cost_usd = 0.0042
+        mock_agent.last_usage = {"total_tokens": 1500}
+        mock_agent.last_duration_ms = 3200
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.agents = {"testagent": mock_agent}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            result = runner.invoke(
+                cli, ["--home", str(tmp_base), "chat", "testagent"], input="/cost\n/quit\n"
+            )
+
+        assert "$0.0042" in result.output
+        assert "1500" in result.output
+
+    def test_chat_sends_message_and_shows_response(
+        self, tmp_base: Path, agent_dir: Path, jobs_file: Path
+    ):
+        """chat sends user input to agent and prints response."""
+        mock_agent = MagicMock()
+        mock_agent.last_cost_usd = 0.001
+        mock_agent.last_duration_ms = 500
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.send = AsyncMock(return_value="I am the test agent.")
+        mock_gw.agents = {"testagent": mock_agent}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            result = runner.invoke(
+                cli,
+                ["--home", str(tmp_base), "chat", "testagent"],
+                input="Hello there\n/quit\n",
+            )
+
+        assert "I am the test agent." in result.output
+        mock_gw.send.assert_called_once_with("testagent", "Hello there")
+
+    def test_chat_handles_send_error(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat gracefully handles agent errors and continues."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.send = AsyncMock(side_effect=RuntimeError("connection lost"))
+        mock_gw.agents = {"testagent": MagicMock(last_cost_usd=None)}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            result = runner.invoke(
+                cli,
+                ["--home", str(tmp_base), "chat", "testagent"],
+                input="Hello\n/quit\n",
+            )
+
+        assert "Error: connection lost" in result.output
+        assert "Bye" in result.output
+
+    def test_chat_header_shows_agent_info(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat header shows agent name and model."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.agents = {"testagent": MagicMock(last_cost_usd=None)}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            result = runner.invoke(
+                cli, ["--home", str(tmp_base), "chat", "testagent"], input="/quit\n"
+            )
+
+        assert "testagent" in result.output
+        assert "claude-sonnet-4-6" in result.output
+
+    def test_chat_empty_input_skipped(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat skips empty lines without sending."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.send = AsyncMock(return_value="response")
+        mock_gw.agents = {"testagent": MagicMock(last_cost_usd=None)}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            runner.invoke(
+                cli,
+                ["--home", str(tmp_base), "chat", "testagent"],
+                input="  \n/quit\n",
+            )
+
+        mock_gw.send.assert_not_called()
+
+    def test_chat_gateway_stopped_on_exit(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """Gateway.stop() is always called on exit."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.agents = {"testagent": MagicMock(last_cost_usd=None)}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            runner.invoke(cli, ["--home", str(tmp_base), "chat", "testagent"], input="/quit\n")
+
+        mock_gw.stop.assert_called_once()
 
 
 class TestMain:

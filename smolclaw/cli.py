@@ -447,6 +447,107 @@ def send(ctx, agent_name, message):
     asyncio.run(_send())
 
 
+@cli.command()
+@click.argument("agent_name")
+@click.option("--no-api", is_flag=True, default=True, help="Start API server alongside chat")
+@click.pass_context
+def chat(ctx, agent_name, no_api):
+    """Interactive chat session with an agent.
+
+    Start a REPL-style conversation. Type messages and get responses.
+    Commands: /new (reset session), /cost (show last cost), /quit (exit).
+    """
+    from .config import discover_all_agents
+    from .gateway import Gateway, setup_logging
+
+    base = ctx.obj["base"]
+
+    # Validate agent exists before starting
+    agents = discover_all_agents(base)
+    if agent_name not in agents:
+        available = ", ".join(agents.keys()) if agents else "(none)"
+        click.echo(f"Agent '{agent_name}' not found. Available: {available}")
+        sys.exit(1)
+
+    agent_info = agents[agent_name]
+
+    async def _chat():
+        setup_logging(base, level="WARNING")
+        gw = Gateway(base)
+        await gw.start()
+
+        agent = gw.agents.get(agent_name)
+        if not agent:
+            click.echo(f"Agent '{agent_name}' failed to load.")
+            await gw.stop()
+            return
+
+        click.echo(f"\nsmolclaw chat — {agent_name} ({agent_info.config.model})")
+        click.echo("Type a message, or /new /cost /quit\n")
+
+        try:
+            while True:
+                try:
+                    text = click.prompt(
+                        click.style("you", fg="green", bold=True),
+                        prompt_suffix=click.style(" > ", fg="green"),
+                    )
+                except (EOFError, click.Abort):
+                    break
+
+                text = text.strip()
+                if not text:
+                    continue
+
+                # Handle commands
+                if text.lower() in ("/quit", "/exit", "/q"):
+                    break
+                if text.lower() == "/new":
+                    await agent.new_session()
+                    click.echo(click.style("  Session reset.\n", fg="yellow"))
+                    continue
+                if text.lower() == "/cost":
+                    if agent.last_cost_usd is not None:
+                        usage = agent.last_usage or {}
+                        tokens = usage.get("total_tokens", "?")
+                        click.echo(
+                            f"  Last: ${agent.last_cost_usd:.4f}"
+                            f" ({tokens} tokens, {agent.last_duration_ms or 0}ms)"
+                        )
+                    else:
+                        click.echo("  No cost data yet.")
+                    click.echo()
+                    continue
+
+                # Send message
+                click.echo()
+                try:
+                    response = await gw.send(agent_name, text)
+                except Exception as e:
+                    click.echo(click.style(f"  Error: {e}\n", fg="red"))
+                    continue
+
+                # Print response
+                click.echo(click.style(f"{agent_name}", fg="cyan", bold=True))
+                click.echo(response)
+
+                # Show cost inline
+                if agent.last_cost_usd is not None:
+                    cost_line = f"  ${agent.last_cost_usd:.4f}"
+                    if agent.last_duration_ms:
+                        cost_line += f" · {agent.last_duration_ms / 1000:.1f}s"
+                    click.echo(click.style(cost_line, fg="bright_black"))
+                click.echo()
+
+        except KeyboardInterrupt:
+            pass
+        finally:
+            click.echo("\nBye.")
+            await gw.stop()
+
+    asyncio.run(_chat())
+
+
 @cli.group()
 def cron():
     """Manage scheduled jobs."""
