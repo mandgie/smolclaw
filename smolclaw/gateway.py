@@ -14,6 +14,7 @@ from . import __version__
 from .agent import Agent
 from .channel import Channel, create_channel
 from .config import (
+    AgentInfo,
     GatewayConfig,
     discover_all_agents,
     load_gateway_config,
@@ -22,6 +23,7 @@ from .config import (
 from .memory import Memory
 from .router import Router
 from .scheduler import Job, Scheduler
+from .watcher import FileWatcher
 
 log = logging.getLogger("smolclaw")
 
@@ -41,6 +43,7 @@ class Gateway:
         self.agents: dict[str, Agent] = {}
         self.channels: list[Channel] = []
         self.scheduler: Scheduler | None = None
+        self.watcher: FileWatcher | None = None
         self._user_md = ""
 
     def __repr__(self) -> str:
@@ -110,6 +113,10 @@ class Gateway:
 
         await self.scheduler.start()
 
+        # Start file watcher for hot-reload
+        self.watcher = FileWatcher(agents_dir, self._reload_agent)
+        await self.watcher.start()
+
         agent_count = len(self.agents)
         channel_count = len(self.channels)
         job_count = len(self.scheduler.jobs) if self.scheduler else 0
@@ -118,6 +125,17 @@ class Gateway:
             f"smolclaw gateway ready: "
             f"{agent_count} agents, {channel_count} channels, {job_count} jobs"
         )
+
+    async def _reload_agent(self, agent_name: str, new_info: AgentInfo) -> None:
+        """Hot-reload an agent with updated filesystem info."""
+        if agent_name not in self.agents:
+            log.warning(f"[reload] Agent {agent_name} not in registry, skipping")
+            return
+
+        agent = self.agents[agent_name]
+        agent.info = new_info
+        agent.model = new_info.config.model
+        log.info(f"[reload] Agent {agent_name} updated (model={new_info.config.model})")
 
     async def _deliver_cron(self, job: Job, text: str) -> None:
         """Deliver cron job output to the right channel."""
@@ -133,6 +151,9 @@ class Gateway:
     async def stop(self) -> None:
         """Graceful shutdown."""
         log.info("smolclaw gateway shutting down")
+
+        if self.watcher:
+            await self.watcher.stop()
 
         if self.scheduler:
             await self.scheduler.stop()

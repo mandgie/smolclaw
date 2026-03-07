@@ -92,13 +92,14 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] REST API (FastAPI, agent list/detail/send/new-session, cron CRUD, health)
 - [x] Dashboard (single HTML file, auto-refresh)
 - [x] CLI (up, add, list, send, chat, cron list/add/remove, add-skill, install/uninstall)
+- [x] Hot-reload (watchfiles-based file watcher, auto-reloads agent config/skills/context on change)
 - [x] Tested: two agents responding in character, Telegram bot working
 
 ## What's Next (TODO)
 
 - [ ] Vector search in memory (sqlite-vec embeddings, hybrid search like TARS has)
 - [x] Session persistence (save/resume session IDs per agent per chat)
-- [ ] Hot-reload on config/skill file changes (file watcher, no restart needed)
+- [x] Hot-reload on config/skill file changes (watchfiles-based, no restart needed)
 - [ ] Cron delivery to Telegram (currently logs intent, needs channel lookup wiring)
 - [ ] `smolclaw cron` interactive — let agents manage their own schedule conversationally
 - [ ] Cross-agent messaging (TARS tells Coach about calendar, Coach adjusts workout)

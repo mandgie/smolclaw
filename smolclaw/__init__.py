@@ -9,6 +9,7 @@ from .gateway import Gateway
 from .memory import Memory
 from .router import InboundMessage, OutboundMessage, Router
 from .scheduler import Job, Scheduler
+from .watcher import FileWatcher
 
 __all__ = [
     "Agent",
@@ -23,6 +24,7 @@ __all__ = [
     "OutboundMessage",
     "Router",
     "Scheduler",
+    "FileWatcher",
     "TelegramChannel",
     "__version__",
 ]

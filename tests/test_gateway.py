@@ -273,6 +273,62 @@ class TestDeliverCron:
 
 
 # ---------------------------------------------------------------------------
+# Tests: _reload_agent
+# ---------------------------------------------------------------------------
+
+
+class TestReloadAgent:
+    @pytest.mark.asyncio
+    async def test_reload_updates_agent_info(self, gw_base: Path):
+        gw = Gateway(gw_base)
+        with patch("smolclaw.gateway.create_channel"):
+            await gw.start()
+
+        # Create a new AgentInfo with different model
+        new_info = MagicMock()
+        new_info.config.model = "claude-opus-4-6"
+        new_info.config.name = "testagent"
+
+        await gw._reload_agent("testagent", new_info)
+
+        agent = gw.agents["testagent"]
+        assert agent.info is new_info
+        assert agent.model == "claude-opus-4-6"
+
+    @pytest.mark.asyncio
+    async def test_reload_unknown_agent_skipped(self, gw_base: Path):
+        gw = Gateway(gw_base)
+        with patch("smolclaw.gateway.create_channel"):
+            await gw.start()
+
+        new_info = MagicMock()
+        # Should not raise for unknown agent
+        await gw._reload_agent("nonexistent", new_info)
+
+    @pytest.mark.asyncio
+    async def test_watcher_started_on_gateway_start(self, gw_base: Path):
+        gw = Gateway(gw_base)
+        with patch("smolclaw.gateway.create_channel"):
+            await gw.start()
+
+        assert gw.watcher is not None
+
+    @pytest.mark.asyncio
+    async def test_watcher_stopped_on_gateway_stop(self, gw_base: Path):
+        gw = Gateway(gw_base)
+        with patch("smolclaw.gateway.create_channel"):
+            await gw.start()
+
+        # Replace watcher with a mock to verify stop is called
+        mock_watcher = MagicMock()
+        mock_watcher.stop = AsyncMock()
+        gw.watcher = mock_watcher
+
+        await gw.stop()
+        mock_watcher.stop.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
 # Tests: stop
 # ---------------------------------------------------------------------------
 

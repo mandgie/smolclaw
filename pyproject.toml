@@ -39,6 +39,9 @@ dependencies = [
 memory = [
     "sqlite-vec>=0.1.0",
 ]
+watch = [
+    "watchfiles>=1.0.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
