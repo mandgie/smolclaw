@@ -97,7 +97,7 @@ examples/              # Example two-agent setup (tars + coach)
 ## What's Next (TODO)
 
 - [ ] Vector search in memory (sqlite-vec embeddings, hybrid search like TARS has)
-- [ ] Session persistence (save/resume session IDs per agent per chat)
+- [x] Session persistence (save/resume session IDs per agent per chat)
 - [ ] Hot-reload on config/skill file changes (file watcher, no restart needed)
 - [ ] Cron delivery to Telegram (currently logs intent, needs channel lookup wiring)
 - [ ] `smolclaw cron` interactive — let agents manage their own schedule conversationally

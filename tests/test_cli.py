@@ -9,7 +9,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from click.testing import CliRunner
 
-from smolclaw.cli import cli, get_base_dir, main
+from smolclaw.cli import (
+    _clear_session_file,
+    _load_session_id,
+    _save_session_id,
+    _session_file_path,
+    cli,
+    get_base_dir,
+    main,
+)
 
 
 class TestCli:
@@ -1367,6 +1375,206 @@ class TestChatCommand:
             runner.invoke(cli, ["--home", str(tmp_base), "chat", "testagent"], input="/quit\n")
 
         mock_gw.stop.assert_called_once()
+
+    def test_chat_help_command(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat /help shows available commands."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.agents = {"testagent": MagicMock(last_cost_usd=None)}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            result = runner.invoke(
+                cli, ["--home", str(tmp_base), "chat", "testagent"], input="/help\n/quit\n"
+            )
+
+        assert "Commands:" in result.output
+        assert "/new" in result.output
+        assert "/cost" in result.output
+        assert "/quit" in result.output
+        assert "/help" in result.output
+
+    def test_chat_help_aliases(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat /h and /? also show help."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.agents = {"testagent": MagicMock(last_cost_usd=None)}
+
+        runner = CliRunner()
+        for alias in ["/h", "/?"]:
+            with (
+                patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+                patch("smolclaw.gateway.setup_logging"),
+            ):
+                result = runner.invoke(
+                    cli,
+                    ["--home", str(tmp_base), "chat", "testagent"],
+                    input=f"{alias}\n/quit\n",
+                )
+            assert "Commands:" in result.output
+
+    def test_chat_session_persisted_after_message(
+        self, tmp_base: Path, agent_dir: Path, jobs_file: Path
+    ):
+        """chat saves session_id to disk after a successful message."""
+        mock_agent = MagicMock()
+        mock_agent.last_cost_usd = 0.001
+        mock_agent.last_duration_ms = 100
+        mock_agent._session_id = "sess-abc-123"
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.send = AsyncMock(return_value="Hi there!")
+        mock_gw.agents = {"testagent": mock_agent}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            runner.invoke(
+                cli,
+                ["--home", str(tmp_base), "chat", "testagent"],
+                input="Hello\n/quit\n",
+            )
+
+        session_file = _session_file_path(tmp_base, "testagent")
+        assert session_file.exists()
+        data = json.loads(session_file.read_text())
+        assert data["session_id"] == "sess-abc-123"
+
+    def test_chat_session_resumed_on_start(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """chat loads persisted session_id on start."""
+        # Pre-save a session ID
+        session_file = _session_file_path(tmp_base, "testagent")
+        _save_session_id(session_file, "sess-saved-456")
+
+        mock_agent = MagicMock()
+        mock_agent.last_cost_usd = None
+        mock_agent._session_id = None
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.agents = {"testagent": mock_agent}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            result = runner.invoke(
+                cli, ["--home", str(tmp_base), "chat", "testagent"], input="/quit\n"
+            )
+
+        assert "Resuming previous session" in result.output
+        assert mock_agent._session_id == "sess-saved-456"
+
+    def test_chat_new_session_clears_file(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """/new removes the persisted session file."""
+        # Pre-save a session ID
+        session_file = _session_file_path(tmp_base, "testagent")
+        _save_session_id(session_file, "sess-old-789")
+
+        mock_agent = MagicMock()
+        mock_agent.new_session = AsyncMock()
+        mock_agent.last_cost_usd = None
+        mock_agent._session_id = "sess-old-789"
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.agents = {"testagent": mock_agent}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            runner.invoke(
+                cli,
+                ["--home", str(tmp_base), "chat", "testagent"],
+                input="/new\n/quit\n",
+            )
+
+        assert not session_file.exists()
+
+    def test_chat_new_session_flag(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """--new-session flag ignores saved session."""
+        # Pre-save a session ID
+        session_file = _session_file_path(tmp_base, "testagent")
+        _save_session_id(session_file, "sess-ignore-me")
+
+        mock_agent = MagicMock()
+        mock_agent.last_cost_usd = None
+        mock_agent._session_id = None
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.agents = {"testagent": mock_agent}
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+            patch("smolclaw.gateway.setup_logging"),
+        ):
+            result = runner.invoke(
+                cli,
+                ["--home", str(tmp_base), "chat", "testagent", "--new-session"],
+                input="/quit\n",
+            )
+
+        assert "Resuming previous session" not in result.output
+        # session_id should NOT have been set from saved file
+        assert mock_agent._session_id is None
+
+
+class TestSessionHelpers:
+    """Tests for session persistence helper functions."""
+
+    def test_session_file_path(self, tmp_base: Path):
+        path = _session_file_path(tmp_base, "myagent")
+        assert path == tmp_base / "agents" / "myagent" / "sessions" / "cli.json"
+
+    def test_save_and_load_session_id(self, tmp_path: Path):
+        session_file = tmp_path / "sessions" / "cli.json"
+        _save_session_id(session_file, "sess-test-1")
+        assert _load_session_id(session_file) == "sess-test-1"
+
+    def test_load_session_id_missing_file(self, tmp_path: Path):
+        session_file = tmp_path / "sessions" / "cli.json"
+        assert _load_session_id(session_file) is None
+
+    def test_load_session_id_bad_json(self, tmp_path: Path):
+        session_file = tmp_path / "cli.json"
+        session_file.write_text("not json")
+        assert _load_session_id(session_file) is None
+
+    def test_load_session_id_missing_key(self, tmp_path: Path):
+        session_file = tmp_path / "cli.json"
+        session_file.write_text("{}")
+        assert _load_session_id(session_file) is None
+
+    def test_clear_session_file(self, tmp_path: Path):
+        session_file = tmp_path / "cli.json"
+        _save_session_id(session_file, "sess-to-delete")
+        assert session_file.exists()
+        _clear_session_file(session_file)
+        assert not session_file.exists()
+
+    def test_clear_session_file_missing(self, tmp_path: Path):
+        """Clearing a nonexistent file is a no-op."""
+        session_file = tmp_path / "cli.json"
+        _clear_session_file(session_file)  # Should not raise
+
+    def test_save_creates_parent_dirs(self, tmp_path: Path):
+        session_file = tmp_path / "deep" / "nested" / "cli.json"
+        _save_session_id(session_file, "sess-nested")
+        assert session_file.exists()
+        assert _load_session_id(session_file) == "sess-nested"
 
 
 class TestMain:

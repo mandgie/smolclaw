@@ -447,15 +447,45 @@ def send(ctx, agent_name, message):
     asyncio.run(_send())
 
 
+def _session_file_path(base: Path, agent_name: str) -> Path:
+    """Return the path for persisting a CLI chat session ID."""
+    return base / "agents" / agent_name / "sessions" / "cli.json"
+
+
+def _load_session_id(session_file: Path) -> str | None:
+    """Load a persisted session ID from disk, or None if not found."""
+    if not session_file.exists():
+        return None
+    try:
+        data = json.loads(session_file.read_text())
+        return data.get("session_id")
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _save_session_id(session_file: Path, session_id: str) -> None:
+    """Persist a session ID to disk."""
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text(json.dumps({"session_id": session_id}))
+
+
+def _clear_session_file(session_file: Path) -> None:
+    """Remove the persisted session file."""
+    if session_file.exists():
+        session_file.unlink()
+
+
 @cli.command()
 @click.argument("agent_name")
 @click.option("--no-api", is_flag=True, default=True, help="Start API server alongside chat")
+@click.option("--new-session", is_flag=True, help="Start a fresh session (ignore saved)")
 @click.pass_context
-def chat(ctx, agent_name, no_api):
+def chat(ctx, agent_name, no_api, new_session):
     """Interactive chat session with an agent.
 
     Start a REPL-style conversation. Type messages and get responses.
-    Commands: /new (reset session), /cost (show last cost), /quit (exit).
+    Sessions are automatically saved and resumed between runs.
+    Commands: /new (reset session), /cost (show last cost), /help, /quit.
     """
     from .config import discover_all_agents
     from .gateway import Gateway, setup_logging
@@ -471,6 +501,8 @@ def chat(ctx, agent_name, no_api):
 
     agent_info = agents[agent_name]
 
+    session_file = _session_file_path(base, agent_name)
+
     async def _chat():
         setup_logging(base, level="WARNING")
         gw = Gateway(base)
@@ -482,8 +514,18 @@ def chat(ctx, agent_name, no_api):
             await gw.stop()
             return
 
+        # Resume previous session if available
+        resumed = False
+        if not new_session:
+            saved_id = _load_session_id(session_file)
+            if saved_id:
+                agent._session_id = saved_id
+                resumed = True
+
         click.echo(f"\nsmolclaw chat — {agent_name} ({agent_info.config.model})")
-        click.echo("Type a message, or /new /cost /quit\n")
+        if resumed:
+            click.echo(click.style("  Resuming previous session", fg="bright_black"))
+        click.echo("Type a message, or /help for commands\n")
 
         try:
             while True:
@@ -502,8 +544,17 @@ def chat(ctx, agent_name, no_api):
                 # Handle commands
                 if text.lower() in ("/quit", "/exit", "/q"):
                     break
+                if text.lower() in ("/help", "/h", "/?"):
+                    click.echo("  Commands:")
+                    click.echo("    /new     Reset session (start fresh)")
+                    click.echo("    /cost    Show last query cost and tokens")
+                    click.echo("    /quit    Exit chat (/exit, /q also work)")
+                    click.echo("    /help    Show this help (/h, /? also work)")
+                    click.echo()
+                    continue
                 if text.lower() == "/new":
                     await agent.new_session()
+                    _clear_session_file(session_file)
                     click.echo(click.style("  Session reset.\n", fg="yellow"))
                     continue
                 if text.lower() == "/cost":
@@ -530,6 +581,10 @@ def chat(ctx, agent_name, no_api):
                 # Print response
                 click.echo(click.style(f"{agent_name}", fg="cyan", bold=True))
                 click.echo(response)
+
+                # Persist session ID for next run
+                if agent._session_id:
+                    _save_session_id(session_file, agent._session_id)
 
                 # Show cost inline
                 if agent.last_cost_usd is not None:
