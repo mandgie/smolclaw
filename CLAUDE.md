@@ -93,6 +93,8 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] Dashboard (single HTML file, auto-refresh)
 - [x] CLI (up, add, list, send, chat, cron list/add/remove, add-skill, install/uninstall)
 - [x] Hot-reload (watchfiles-based file watcher, auto-reloads agent config/skills/context on change)
+- [x] Cross-agent awareness (peer info in system prompts, API-based inter-agent messaging)
+- [x] Smart send (CLI `send` uses running API when available, falls back to temporary gateway)
 - [x] Tested: two agents responding in character, Telegram bot working
 
 ## What's Next (TODO)
@@ -102,14 +104,14 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] Hot-reload on config/skill file changes (watchfiles-based, no restart needed)
 - [x] Cron delivery to Telegram (gateway wires scheduler → channel.send via deliver_callback)
 - [ ] `smolclaw cron` interactive — let agents manage their own schedule conversationally
-- [ ] Cross-agent messaging (TARS tells Coach about calendar, Coach adjusts workout)
+- [x] Cross-agent awareness (peer agents injected into system prompts, API-based messaging)
 - [ ] Dashboard: agent detail view (click card → see soul, skills, logs, config editor)
 - [ ] Dashboard: WebSocket live updates instead of polling
 - [ ] Multiple Telegram bots (one per agent, each with own token)
 - [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
 - [x] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
 - [ ] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
-- [x] Tests (519 tests, 95% coverage, pytest with mocked Claude SDK)
+- [x] Tests (539 tests, 96% coverage, pytest with mocked Claude SDK)
 - [ ] PyPI publish
 
 ## Development
