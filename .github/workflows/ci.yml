@@ -18,8 +18,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff
-      - run: ruff check smolclaw/
-      - run: ruff format --check smolclaw/
+      - run: ruff check smolclaw/ tests/
+      - run: ruff format --check smolclaw/ tests/
 
   test:
     runs-on: ubuntu-latest
