@@ -100,7 +100,7 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] Vector search in memory (sqlite-vec embeddings, hybrid search with RRF)
 - [x] Session persistence (save/resume session IDs per agent per chat)
 - [x] Hot-reload on config/skill file changes (watchfiles-based, no restart needed)
-- [ ] Cron delivery to Telegram (currently logs intent, needs channel lookup wiring)
+- [x] Cron delivery to Telegram (gateway wires scheduler → channel.send via deliver_callback)
 - [ ] `smolclaw cron` interactive — let agents manage their own schedule conversationally
 - [ ] Cross-agent messaging (TARS tells Coach about calendar, Coach adjusts workout)
 - [ ] Dashboard: agent detail view (click card → see soul, skills, logs, config editor)
@@ -109,7 +109,7 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
 - [x] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
 - [ ] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
-- [ ] Tests (pytest, mock Claude SDK)
+- [x] Tests (519 tests, 95% coverage, pytest with mocked Claude SDK)
 - [ ] PyPI publish
 
 ## Development

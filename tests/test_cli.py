@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 import sys
 from pathlib import Path
@@ -763,6 +764,78 @@ class TestDoctorCommand:
         result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
         assert result.exit_code == 0
         assert "missing soul.md" in result.output
+
+    def test_doctor_old_python(self, tmp_base: Path, agent_dir: Path):
+        """doctor flags Python < 3.11."""
+        runner = CliRunner()
+        fake_version = MagicMock()
+        fake_version.major = 3
+        fake_version.minor = 10
+        fake_version.micro = 0
+        fake_version.__ge__ = lambda self, other: (3, 10) >= other
+        with patch("smolclaw.cli.sys") as mock_sys:
+            mock_sys.version_info = fake_version
+            result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "requires 3.11+" in result.output
+
+    def test_doctor_claude_cli_missing(self, tmp_base: Path, agent_dir: Path):
+        """doctor flags when Claude CLI is not found."""
+        runner = CliRunner()
+        with patch("shutil.which", return_value=None):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "Claude CLI not found" in result.output
+
+    def test_doctor_missing_package(self, tmp_base: Path, agent_dir: Path):
+        """doctor flags when a required package is missing."""
+        runner = CliRunner()
+        original_import = builtins.__import__
+
+        def fail_croniter(name, *args, **kwargs):
+            if name == "croniter":
+                raise ImportError("no module named croniter")
+            return original_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=fail_croniter):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "croniter" in result.output
+        assert "[!!]" in result.output
+
+    def test_doctor_memory_db_error(self, tmp_base: Path, agent_dir: Path):
+        """doctor handles corrupted memory DB gracefully."""
+        db_path = tmp_base / "shared" / "memory.db"
+        db_path.write_text("this is not a sqlite database")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "Memory DB error" in result.output
+
+    def test_doctor_port_in_use(self, tmp_base: Path, agent_dir: Path):
+        """doctor flags when the configured port is already in use."""
+        import socket
+
+        # Bind and listen on a socket to simulate a service occupying a port
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        _, port = sock.getsockname()
+
+        # Write config with this port
+        (tmp_base / "config.yaml").write_text(
+            f"host: 127.0.0.1\nport: {port}\nshared_dir: shared\nagents_dir: agents\n"
+        )
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+            assert result.exit_code == 0
+            assert f"Port {port} already in use" in result.output
+        finally:
+            sock.close()
 
 
 class TestLogsCommand:

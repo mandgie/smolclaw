@@ -22,10 +22,13 @@ Run multiple AI agents — each with its own personality, skills, and channels �
 - **Filesystem-as-config** — Drop a folder, get an agent. `soul.md` for personality, `agent.yaml` for model/channels, `skills/` for capabilities.
 - **Single gateway process** — All agents, channels, scheduler, and API run in one async process. No microservices, no Docker, no infra.
 - **Telegram integration** — Each agent gets its own Telegram bot with typing indicators, markdown rendering, and user authorization.
-- **Cron scheduler** — Schedule jobs with cron expressions. Jobs route through the same message bus as everything else.
-- **Namespaced memory** — Shared SQLite database with per-agent isolation. Opt-in cross-agent memory sharing.
+- **Cron scheduler** — Schedule jobs with cron expressions, deliver results to Telegram. Jobs route through the same message bus as everything else.
+- **Semantic memory** — Shared SQLite database with per-agent isolation, FTS5 full-text search, and optional vector search via sqlite-vec with hybrid retrieval (RRF).
+- **Hot-reload** — Change a skill, soul, or config file and the agent updates live. No restart needed.
+- **Interactive REPL** — `smolclaw chat <agent>` for terminal conversations with session persistence.
+- **MCP support** — Connect agents to MCP servers (stdio/SSE/HTTP) for extended tool access.
 - **REST API + dashboard** — FastAPI on `:7890` with agent management, messaging, and a built-in dark-mode dashboard.
-- **Claude SDK powered** — Built on Anthropic's Claude Agent SDK with session management and tool support.
+- **Claude SDK powered** — Built on Anthropic's Claude Agent SDK with session management, extended thinking, and tool support.
 
 ## Quick Start
 
@@ -53,7 +56,7 @@ Each agent is a folder:
 └── prompts/         # Templates for scheduled jobs
 ```
 
-The system prompt is assembled automatically from these files. Change a file, restart, and the agent updates.
+The system prompt is assembled automatically from these files. With hot-reload enabled, changes take effect immediately — no restart needed.
 
 ### Example agent.yaml
 
@@ -97,7 +100,7 @@ You are TARS, a personal virtual assistant. Inspired by Interstellar.
 | **Scheduler** | Built-in cron | No built-in | No built-in | No built-in |
 | **Dashboard** | Built-in | Studio (paid) | LangSmith (paid) | No built-in |
 | **Memory** | Built-in SQLite | External | External | External |
-| **Code size** | ~1200 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
+| **Code size** | ~2100 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
 | **Focus** | Personal assistant | Enterprise teams | Workflows | General agents |
 
 **smolclaw is opinionated:** one process, filesystem-as-config, batteries-included. If you want a personal AI assistant that just works — start here.
@@ -120,6 +123,7 @@ All messages — whether from Telegram, the API, the CLI, or the scheduler — f
 ```bash
 smolclaw init                        # Initialize project (first run)
 smolclaw up                          # Start gateway (all agents + API)
+smolclaw chat <agent>                # Interactive REPL with session persistence
 smolclaw status                      # Show agents, jobs, config, issues
 smolclaw doctor                      # Check system health and dependencies
 smolclaw add <name>                  # Scaffold a new agent
@@ -134,8 +138,11 @@ smolclaw cron list                   # List scheduled jobs
 smolclaw cron add \
   --agent tars \
   --schedule "0 8 * * 1-5" \
-  --prompt "morning briefing"        # Add a cron job
+  --prompt "morning briefing" \
+  --delivery telegram \
+  --chat-id 123456789               # Add a cron job with delivery
 smolclaw add-skill <agent> <skill>   # Symlink shared skill to agent
+smolclaw install                     # Auto-start on login (macOS LaunchAgent)
 smolclaw version                     # Show version
 ```
 
@@ -163,13 +170,14 @@ ruff format --check smolclaw/
 ## Project Structure
 
 ```
-smolclaw/              # Python package
+smolclaw/              # Python package (~2100 lines)
 ├── gateway.py         # Single-process orchestrator
 ├── agent.py           # Agent class (loads identity, wraps Claude SDK)
 ├── router.py          # Message routing
 ├── channel.py         # Channel adapters (Telegram)
-├── memory.py          # Namespaced SQLite memory
+├── memory.py          # Namespaced SQLite memory (FTS5 + vector search)
 ├── scheduler.py       # Cron scheduler (croniter)
+├── watcher.py         # Hot-reload file watcher (watchfiles)
 ├── api.py             # FastAPI REST endpoints
 ├── config.py          # Filesystem-based agent discovery
 ├── cli.py             # Click CLI
@@ -183,12 +191,12 @@ smolclaw/              # Python package
 - [x] Extended thinking & effort config
 - [x] Budget limits, fallback models, structured output, file checkpointing
 - [x] REST API + dark-mode dashboard
-- [x] Cron scheduler with validation
-- [x] CLI: init, status, doctor, add, remove, add-skill, logs
-- [ ] Session persistence (save/resume per agent per chat)
-- [ ] CLI interactive REPL (`smolclaw chat`)
-- [ ] Vector search in memory (sqlite-vec embeddings)
-- [ ] Hot-reload on config changes (no restart needed)
+- [x] Cron scheduler with delivery to Telegram
+- [x] CLI: init, status, doctor, add, remove, add-skill, logs, install
+- [x] Session persistence (save/resume per agent per chat)
+- [x] CLI interactive REPL (`smolclaw chat <agent>`)
+- [x] Vector search in memory (sqlite-vec + FTS5 + RRF hybrid)
+- [x] Hot-reload on config/skill/context changes
 - [ ] Multiple Telegram bots (one per agent)
 - [ ] Cross-agent messaging
 - [ ] Discord / Slack channel adapters
