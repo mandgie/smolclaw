@@ -188,6 +188,13 @@ class AddJobRequest(BaseModel):
     session_mode: str = Field("isolated", description="Session mode: 'isolated' or 'shared'")
 
 
+class AddFactRequest(BaseModel):
+    """Request body for adding a fact to memory."""
+
+    content: str = Field(..., min_length=1, description="Fact content to store")
+    category: str = Field("general", description="Fact category for organization")
+
+
 class ClearMemoryResponse(BaseModel):
     """Response from clearing an agent's memory."""
 
@@ -340,6 +347,48 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(400, f"Agent '{name}' has no memory enabled")
         return {"facts": agent.memory.list_facts(limit=limit, category=category)}
 
+    @app.get("/api/agents/{name}/memory/search")
+    async def search_memory(
+        name: str,
+        q: str,
+        limit: int = 10,
+        mode: str = "auto",
+        cross_agent: bool = False,
+    ) -> dict[str, Any]:
+        """Search an agent's memory using text, vector, or hybrid search.
+
+        Query params:
+            q: Search query text.
+            limit: Max results (default 10).
+            mode: Search mode — 'auto' (FTS5 > LIKE), 'vector', or 'hybrid'.
+            cross_agent: Include facts from other agents (default false).
+        """
+        agent = gateway.router.get_agent(name)
+        if not agent:
+            raise HTTPException(404, f"Agent '{name}' not found")
+        if not agent.memory:
+            raise HTTPException(400, f"Agent '{name}' has no memory enabled")
+
+        if mode == "vector":
+            results = agent.memory.vector_search_facts(q, limit=limit, cross_agent=cross_agent)
+        elif mode == "hybrid":
+            results = agent.memory.hybrid_search_facts(q, limit=limit, cross_agent=cross_agent)
+        else:
+            results = agent.memory.search_facts(q, limit=limit, cross_agent=cross_agent)
+
+        return {"query": q, "mode": mode, "results": results}
+
+    @app.post("/api/agents/{name}/memory/facts")
+    async def add_fact(name: str, body: AddFactRequest) -> dict[str, Any]:
+        """Add a fact to an agent's memory."""
+        agent = gateway.router.get_agent(name)
+        if not agent:
+            raise HTTPException(404, f"Agent '{name}' not found")
+        if not agent.memory:
+            raise HTTPException(400, f"Agent '{name}' has no memory enabled")
+        fact_id = agent.memory.add_fact(body.content, category=body.category)
+        return {"id": fact_id, "status": "created"}
+
     @app.delete("/api/agents/{name}/memory/facts/{fact_id}")
     async def delete_fact(name: str, fact_id: int) -> dict[str, str]:
         """Delete a specific fact from an agent's memory."""
@@ -352,6 +401,16 @@ def create_app(gateway: Gateway) -> FastAPI:
         if not deleted:
             raise HTTPException(404, f"Fact {fact_id} not found")
         return {"status": "deleted"}
+
+    @app.get("/api/agents/{name}/memory/stats")
+    async def memory_stats(name: str) -> dict[str, Any]:
+        """Get memory statistics for an agent."""
+        agent = gateway.router.get_agent(name)
+        if not agent:
+            raise HTTPException(404, f"Agent '{name}' not found")
+        if not agent.memory:
+            raise HTTPException(400, f"Agent '{name}' has no memory enabled")
+        return agent.memory.stats()
 
     @app.delete("/api/agents/{name}/memory", response_model=ClearMemoryResponse)
     async def clear_memory(name: str) -> dict[str, int]:

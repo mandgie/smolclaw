@@ -196,6 +196,113 @@ class TestListFacts:
         assert resp.status_code == 400
 
 
+class TestSearchMemory:
+    def test_search_auto_mode(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        agent.memory.add_fact("Python is a programming language", category="tech")
+        agent.memory.add_fact("Stockholm weather is cold", category="weather")
+
+        resp = client.get("/api/agents/testagent/memory/search?q=Python")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["query"] == "Python"
+        assert data["mode"] == "auto"
+        assert len(data["results"]) >= 1
+        assert any("Python" in r["content"] for r in data["results"])
+
+    def test_search_with_limit(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        for i in range(5):
+            agent.memory.add_fact(f"Fact about topic {i}")
+
+        resp = client.get("/api/agents/testagent/memory/search?q=topic&limit=2")
+        assert resp.status_code == 200
+        assert len(resp.json()["results"]) <= 2
+
+    def test_search_vector_mode_without_embed(self, client, mock_gateway):
+        """Vector mode returns empty when no embed_fn is configured."""
+        agent = mock_gateway.agents["testagent"]
+        agent.memory.add_fact("Test fact")
+
+        resp = client.get("/api/agents/testagent/memory/search?q=test&mode=vector")
+        assert resp.status_code == 200
+        assert resp.json()["results"] == []
+        assert resp.json()["mode"] == "vector"
+
+    def test_search_hybrid_mode(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        agent.memory.add_fact("Hybrid search test fact")
+
+        resp = client.get("/api/agents/testagent/memory/search?q=Hybrid&mode=hybrid")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode"] == "hybrid"
+        # Hybrid falls back to FTS when no vector is available
+        assert len(data["results"]) >= 1
+
+    def test_search_404_unknown_agent(self, client):
+        resp = client.get("/api/agents/nobody/memory/search?q=test")
+        assert resp.status_code == 404
+
+    def test_search_400_no_memory(self, client, mock_gateway):
+        mock_gateway.agents["testagent"].memory = None
+        resp = client.get("/api/agents/testagent/memory/search?q=test")
+        assert resp.status_code == 400
+
+    def test_search_empty_results(self, client, mock_gateway):
+        resp = client.get("/api/agents/testagent/memory/search?q=nonexistent_xyz")
+        assert resp.status_code == 200
+        assert resp.json()["results"] == []
+
+
+class TestAddFact:
+    def test_adds_fact(self, client, mock_gateway):
+        resp = client.post(
+            "/api/agents/testagent/memory/facts",
+            json={"content": "New fact via API", "category": "test"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "created"
+        assert isinstance(data["id"], int)
+
+        # Verify fact exists
+        facts = mock_gateway.agents["testagent"].memory.list_facts()
+        assert any(f["content"] == "New fact via API" for f in facts)
+
+    def test_adds_fact_default_category(self, client, mock_gateway):
+        resp = client.post(
+            "/api/agents/testagent/memory/facts",
+            json={"content": "Fact without category"},
+        )
+        assert resp.status_code == 200
+        facts = mock_gateway.agents["testagent"].memory.list_facts()
+        fact = next(f for f in facts if f["content"] == "Fact without category")
+        assert fact["category"] == "general"
+
+    def test_422_empty_content(self, client):
+        resp = client.post(
+            "/api/agents/testagent/memory/facts",
+            json={"content": ""},
+        )
+        assert resp.status_code == 422
+
+    def test_404_unknown_agent(self, client):
+        resp = client.post(
+            "/api/agents/nobody/memory/facts",
+            json={"content": "test"},
+        )
+        assert resp.status_code == 404
+
+    def test_400_no_memory(self, client, mock_gateway):
+        mock_gateway.agents["testagent"].memory = None
+        resp = client.post(
+            "/api/agents/testagent/memory/facts",
+            json={"content": "test"},
+        )
+        assert resp.status_code == 400
+
+
 class TestDeleteFact:
     def test_deletes_fact(self, client, mock_gateway):
         agent = mock_gateway.agents["testagent"]
@@ -215,6 +322,36 @@ class TestDeleteFact:
     def test_400_no_memory(self, client, mock_gateway):
         mock_gateway.agents["testagent"].memory = None
         resp = client.delete("/api/agents/testagent/memory/facts/1")
+        assert resp.status_code == 400
+
+
+class TestMemoryStats:
+    def test_returns_stats(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        agent.memory.add_fact("A fact")
+        agent.memory.add_chunk("Q", "A")
+
+        resp = client.get("/api/agents/testagent/memory/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["facts"] >= 1
+        assert data["chunks"] >= 1
+        assert "agent" in data
+
+    def test_stats_empty_memory(self, client, mock_gateway):
+        resp = client.get("/api/agents/testagent/memory/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["facts"] == 0
+        assert data["chunks"] == 0
+
+    def test_404_unknown_agent(self, client):
+        resp = client.get("/api/agents/nobody/memory/stats")
+        assert resp.status_code == 404
+
+    def test_400_no_memory(self, client, mock_gateway):
+        mock_gateway.agents["testagent"].memory = None
+        resp = client.get("/api/agents/testagent/memory/stats")
         assert resp.status_code == 400
 
 

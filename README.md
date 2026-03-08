@@ -100,7 +100,7 @@ You are TARS, a personal virtual assistant. Inspired by Interstellar.
 | **Scheduler** | Built-in cron | No built-in | No built-in | No built-in |
 | **Dashboard** | Built-in | Studio (paid) | LangSmith (paid) | No built-in |
 | **Memory** | Built-in SQLite | External | External | External |
-| **Code size** | ~2100 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
+| **Code size** | ~2700 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
 | **Focus** | Personal assistant | Enterprise teams | Workflows | General agents |
 
 **smolclaw is opinionated:** one process, filesystem-as-config, batteries-included. If you want a personal AI assistant that just works — start here.
@@ -170,7 +170,7 @@ ruff format --check smolclaw/
 ## Project Structure
 
 ```
-smolclaw/              # Python package (~2100 lines)
+smolclaw/              # Python package (~2700 lines)
 ├── gateway.py         # Single-process orchestrator
 ├── agent.py           # Agent class (loads identity, wraps Claude SDK)
 ├── router.py          # Message routing
@@ -197,8 +197,8 @@ smolclaw/              # Python package (~2100 lines)
 - [x] CLI interactive REPL (`smolclaw chat <agent>`)
 - [x] Vector search in memory (sqlite-vec + FTS5 + RRF hybrid)
 - [x] Hot-reload on config/skill/context changes
+- [x] Cross-agent awareness (peer agents visible in prompts, API-based messaging)
 - [ ] Multiple Telegram bots (one per agent)
-- [ ] Cross-agent messaging
 - [ ] Discord / Slack channel adapters
 - [ ] PyPI publish
 
