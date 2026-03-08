@@ -55,6 +55,8 @@ class Agent:
         self.user_md = user_md
 
         self.memory: Memory | None = None
+        self.peers: list[dict[str, str]] = []  # [{name, model, description}]
+        self.gateway_url: str = "http://localhost:7890"
 
         self._client: ClaudeSDKClient | None = None
         self._connected = False
@@ -101,6 +103,24 @@ class Agent:
         # Context files
         for name, content in self.info.context_files.items():
             parts.append(f"--- {name} ---\n{content}")
+
+        # Peer agents (cross-agent awareness)
+        if self.peers:
+            peer_lines = ["--- Peer Agents ---"]
+            peer_lines.append(
+                "Other agents are running in this gateway. "
+                "You can send them messages via the local API:"
+            )
+            peer_lines.append(
+                f"  curl -s -X POST {self.gateway_url}/api/agents/<name>/send "
+                '-H "Content-Type: application/json" '
+                '-d \'{"text": "your message"}\' | jq -r .response'
+            )
+            peer_lines.append("")
+            for peer in self.peers:
+                desc = f" — {peer['description']}" if peer.get("description") else ""
+                peer_lines.append(f"- **{peer['name']}** ({peer['model']}){desc}")
+            parts.append("\n".join(peer_lines))
 
         # Runtime context
         today = datetime.now().strftime("%Y-%m-%d (%A)")

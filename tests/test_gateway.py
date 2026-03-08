@@ -632,3 +632,83 @@ class TestRunGateway:
                 loop.add_signal_handler = orig_handler
 
         assert serve_cancelled.is_set()
+
+
+# ---------------------------------------------------------------------------
+# Tests: cross-agent awareness (peer population)
+# ---------------------------------------------------------------------------
+
+
+class TestCrossAgentAwareness:
+    @pytest.fixture
+    def multi_agent_base(self, tmp_base: Path) -> Path:
+        """Create a smolclaw home with two agents."""
+        for name, model, soul in [
+            ("tars", "claude-opus-4-6", "# TARS\nPersonal assistant."),
+            ("coach", "claude-sonnet-4-6", "# Coach\nFitness coach."),
+        ]:
+            agent = tmp_base / "agents" / name
+            for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+                (agent / subdir).mkdir(parents=True, exist_ok=True)
+            (agent / "agent.yaml").write_text(
+                f"name: {name}\nmodel: {model}\nchannels: {{}}\n"
+                "memory:\n  enabled: true\n  cross_agent: false\n"
+            )
+            (agent / "soul.md").write_text(soul)
+        return tmp_base
+
+    @pytest.mark.asyncio
+    async def test_peers_populated(self, multi_agent_base: Path):
+        gw = Gateway(multi_agent_base)
+        with patch("smolclaw.gateway.create_channel"):
+            await gw.start()
+
+        tars = gw.agents["tars"]
+        coach = gw.agents["coach"]
+
+        # Each agent should see the other as a peer
+        assert len(tars.peers) == 1
+        assert tars.peers[0]["name"] == "coach"
+        assert tars.peers[0]["model"] == "claude-sonnet-4-6"
+
+        assert len(coach.peers) == 1
+        assert coach.peers[0]["name"] == "tars"
+        assert coach.peers[0]["model"] == "claude-opus-4-6"
+
+    @pytest.mark.asyncio
+    async def test_peer_description_from_soul(self, multi_agent_base: Path):
+        gw = Gateway(multi_agent_base)
+        with patch("smolclaw.gateway.create_channel"):
+            await gw.start()
+
+        tars = gw.agents["tars"]
+        # Coach's soul starts with "# Coach" — the first line stripped of # is the description
+        assert tars.peers[0]["description"] == "Coach"
+
+    @pytest.mark.asyncio
+    async def test_single_agent_no_peers(self, gw_base: Path):
+        gw = Gateway(gw_base)
+        with patch("smolclaw.gateway.create_channel"):
+            await gw.start()
+
+        agent = gw.agents["testagent"]
+        assert agent.peers == []
+
+    @pytest.mark.asyncio
+    async def test_gateway_url_set(self, multi_agent_base: Path):
+        gw = Gateway(multi_agent_base)
+        with patch("smolclaw.gateway.create_channel"):
+            await gw.start()
+
+        for agent in gw.agents.values():
+            assert agent.gateway_url == "http://127.0.0.1:7890"
+
+    @pytest.mark.asyncio
+    async def test_peers_in_system_prompt(self, multi_agent_base: Path):
+        gw = Gateway(multi_agent_base)
+        with patch("smolclaw.gateway.create_channel"):
+            await gw.start()
+
+        prompt = gw.agents["tars"].build_system_prompt()
+        assert "Peer Agents" in prompt
+        assert "coach" in prompt

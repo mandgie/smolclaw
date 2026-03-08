@@ -163,6 +163,51 @@ class TestBuildSystemPrompt:
         assert "Today:" in prompt
         assert "Workspace:" in prompt
 
+    def test_peers_included_in_prompt(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info(soul="", agents_md="")
+        agent = Agent(info)
+        agent.peers = [
+            {"name": "coach", "model": "claude-sonnet-4-6", "description": "Fitness coach"},
+            {"name": "writer", "model": "claude-haiku-4-5-20251001", "description": ""},
+        ]
+        prompt = agent.build_system_prompt()
+
+        assert "Peer Agents" in prompt
+        assert "**coach** (claude-sonnet-4-6) — Fitness coach" in prompt
+        assert "**writer** (claude-haiku-4-5-20251001)" in prompt
+        assert "curl" in prompt
+
+    def test_no_peers_section_when_empty(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info(soul="", agents_md="")
+        agent = Agent(info)
+        agent.peers = []
+        prompt = agent.build_system_prompt()
+
+        assert "Peer Agents" not in prompt
+
+    def test_gateway_url_in_peer_section(self):
+        from smolclaw.agent import Agent
+
+        info = _make_info(soul="", agents_md="")
+        agent = Agent(info)
+        agent.gateway_url = "http://10.0.0.1:9999"
+        agent.peers = [{"name": "other", "model": "sonnet", "description": ""}]
+        prompt = agent.build_system_prompt()
+
+        assert "http://10.0.0.1:9999" in prompt
+        assert "localhost:7890" not in prompt
+
+    def test_peers_default_empty(self):
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        assert agent.peers == []
+        assert agent.gateway_url == "http://localhost:7890"
+
 
 # ---------------------------------------------------------------------------
 # Tests: connect

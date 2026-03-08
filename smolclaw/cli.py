@@ -425,16 +425,47 @@ def list_agents(ctx):
         click.echo(f"{name:<15} {info.config.model:<25} {channels:<20} {skill_count} skills")
 
 
+def _try_api_send(base: Path, agent_name: str, message: str) -> str | None:
+    """Try sending a message via the running gateway API. Returns response or None."""
+    import urllib.error
+    import urllib.request
+
+    from .config import load_gateway_config
+
+    config = load_gateway_config(base)
+    url = f"http://{config.host}:{config.port}/api/agents/{agent_name}/send"
+
+    try:
+        data = json.dumps({"text": message}).encode()
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=900) as resp:
+            result = json.loads(resp.read())
+            return result.get("response", "")
+    except (urllib.error.URLError, OSError, json.JSONDecodeError):
+        return None
+
+
 @cli.command()
 @click.argument("agent_name")
 @click.argument("message")
 @click.pass_context
 def send(ctx, agent_name, message):
-    """Send a one-shot message to an agent."""
+    """Send a one-shot message to an agent.
+
+    Tries the running gateway API first (fast). Falls back to starting
+    a temporary gateway if the API isn't available.
+    """
     from .gateway import Gateway
 
     base = ctx.obj["base"]
 
+    # Fast path: use the running gateway API
+    response = _try_api_send(base, agent_name, message)
+    if response is not None:
+        click.echo(response)
+        return
+
+    # Slow path: boot a temporary gateway
     async def _send():
         gw = Gateway(base)
         await gw.start()

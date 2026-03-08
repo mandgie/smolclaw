@@ -81,6 +81,24 @@ class Gateway:
             self.router.register_agent(agent)
             log.info(f"Loaded agent: {name} (model={info.config.model})")
 
+        # Set gateway URL for cross-agent API calls
+        gateway_url = f"http://{self.config.host}:{self.config.port}"
+
+        # Populate peer agent info for cross-agent awareness
+        for name, agent in self.agents.items():
+            agent.gateway_url = gateway_url
+            agent.peers = [
+                {
+                    "name": peer_name,
+                    "model": peer.model,
+                    "description": peer.info.soul.split("\n")[0].strip("# ").strip()
+                    if peer.info.soul
+                    else "",
+                }
+                for peer_name, peer in self.agents.items()
+                if peer_name != name
+            ]
+
         # Load channel env files and start channels
         for name, agent in self.agents.items():
             # Load env files from agent's channels/ directory

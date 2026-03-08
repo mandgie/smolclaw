@@ -15,6 +15,7 @@ from smolclaw.cli import (
     _load_session_id,
     _save_session_id,
     _session_file_path,
+    _try_api_send,
     cli,
     get_base_dir,
     main,
@@ -464,7 +465,88 @@ class TestUpCommand:
 # ---------------------------------------------------------------------------
 
 
+class TestTryApiSend:
+    """Tests for _try_api_send — the fast-path API call."""
+
+    def test_api_success(self, tmp_base: Path):
+        """When the gateway API is running, _try_api_send returns the response."""
+        from smolclaw.cli import _try_api_send
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"response": "API response"}).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = _try_api_send(tmp_base, "testagent", "Hello")
+
+        assert result == "API response"
+
+    def test_api_not_running(self, tmp_base: Path):
+        """When the gateway API is not running, _try_api_send returns None."""
+        import urllib.error
+
+        from smolclaw.cli import _try_api_send
+
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError("Connection refused"),
+        ):
+            result = _try_api_send(tmp_base, "testagent", "Hello")
+
+        assert result is None
+
+    def test_api_bad_json(self, tmp_base: Path):
+        """If the API returns invalid JSON, _try_api_send returns None."""
+        from smolclaw.cli import _try_api_send
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"not json"
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = _try_api_send(tmp_base, "testagent", "Hello")
+
+        assert result is None
+
+    def test_api_connection_error(self, tmp_base: Path):
+        """OSError from urlopen should return None (not crash)."""
+        from smolclaw.cli import _try_api_send
+
+        with patch("urllib.request.urlopen", side_effect=OSError("Connection refused")):
+            result = _try_api_send(tmp_base, "testagent", "Hello")
+
+        assert result is None
+
+
 class TestSendCommand:
+    def test_send_uses_api_when_available(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """send should use API fast-path when gateway is running."""
+        runner = CliRunner()
+        with patch("smolclaw.cli._try_api_send", return_value="Fast response"):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "send", "testagent", "Hello"])
+
+        assert result.exit_code == 0
+        assert "Fast response" in result.output
+
+    def test_send_falls_back_to_gateway(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
+        """send should fall back to starting a gateway when API is not available."""
+        mock_gw = MagicMock()
+        mock_gw.start = AsyncMock()
+        mock_gw.stop = AsyncMock()
+        mock_gw.send = AsyncMock(return_value="Fallback response")
+
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._try_api_send", return_value=None),
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+        ):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "send", "testagent", "Hello"])
+
+        assert result.exit_code == 0
+        assert "Fallback response" in result.output
+
     def test_send_routes_and_prints(self, tmp_base: Path, agent_dir: Path, jobs_file: Path):
         """send command should start gateway, route message, and print response."""
         mock_gw = MagicMock()
@@ -473,7 +555,10 @@ class TestSendCommand:
         mock_gw.send = AsyncMock(return_value="Hello back!")
 
         runner = CliRunner()
-        with patch("smolclaw.gateway.Gateway", return_value=mock_gw):
+        with (
+            patch("smolclaw.cli._try_api_send", return_value=None),
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+        ):
             result = runner.invoke(cli, ["--home", str(tmp_base), "send", "testagent", "Hello"])
 
         assert result.exit_code == 0
@@ -487,7 +572,10 @@ class TestSendCommand:
         mock_gw.send = AsyncMock(side_effect=RuntimeError("agent error"))
 
         runner = CliRunner()
-        with patch("smolclaw.gateway.Gateway", return_value=mock_gw):
+        with (
+            patch("smolclaw.cli._try_api_send", return_value=None),
+            patch("smolclaw.gateway.Gateway", return_value=mock_gw),
+        ):
             result = runner.invoke(cli, ["--home", str(tmp_base), "send", "testagent", "Hello"])
 
         # Send failed but stop should still have been called
