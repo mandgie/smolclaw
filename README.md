@@ -146,6 +146,30 @@ smolclaw install                     # Auto-start on login (macOS LaunchAgent)
 smolclaw version                     # Show version
 ```
 
+## REST API
+
+The gateway exposes a full REST API on `:7890` (auto-documented at `/docs`):
+
+```bash
+# Send a message
+curl -s localhost:7890/api/agents/tars/send \
+  -H "Content-Type: application/json" \
+  -d '{"text": "What is the weather?"}' | jq .response
+
+# Search agent memory
+curl -s "localhost:7890/api/agents/tars/memory/search?q=weather&mode=hybrid"
+
+# Add a fact to memory
+curl -s localhost:7890/api/agents/tars/memory/facts \
+  -H "Content-Type: application/json" \
+  -d '{"content": "User prefers metric units", "category": "preference"}'
+
+# List agents, health, cron jobs
+curl -s localhost:7890/api/agents | jq
+curl -s localhost:7890/api/health | jq
+curl -s localhost:7890/api/cron/jobs | jq
+```
+
 ## Dashboard
 
 A built-in dark-mode dashboard runs at `http://localhost:7890` when the gateway starts. Shows agent status, config, and lets you send messages.

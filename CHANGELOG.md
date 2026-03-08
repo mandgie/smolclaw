@@ -6,11 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Cross-agent awareness** — agents see peer agents in system prompt with API-based messaging
+- **Smart send** — `smolclaw send` uses running gateway API when available, falls back to temporary gateway
+- **Memory search API** — `GET /api/agents/{name}/memory/search` with auto/vector/hybrid modes
+- **Memory add-fact API** — `POST /api/agents/{name}/memory/facts` for programmatic fact ingestion
+- **Memory stats API** — `GET /api/agents/{name}/memory/stats` for monitoring
 - Doctor edge case tests (Python version, Claude CLI, packages, memory DB, port conflicts)
+- `[all]` optional dependency extra — `pip install smolclaw[all]` for all features
 
 ### Changed
-- Updated README roadmap — marked completed features (chat, hot-reload, vector search, session persistence, cron delivery)
-- Updated CLAUDE.md TODO — marked cron delivery and tests as done
+- Updated README — REST API examples section, accurate line counts, roadmap updated
+- Updated CLAUDE.md TODO — marked cron delivery, tests, and cross-agent as done
 
 ## [0.1.0] — 2026-03-07
 
