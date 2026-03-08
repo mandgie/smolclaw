@@ -743,6 +743,134 @@ def cron_remove(ctx, job_id):
     click.echo(f"Removed job '{job_id}'")
 
 
+def _resolve_memory_db(base: Path, agent_name: str) -> Path:
+    """Validate the agent exists and return the memory DB path."""
+    from .config import discover_all_agents, load_gateway_config
+
+    agents = discover_all_agents(base)
+    if agent_name not in agents:
+        available = ", ".join(agents.keys()) if agents else "(none)"
+        click.echo(f"Agent '{agent_name}' not found. Available: {available}")
+        sys.exit(1)
+
+    config = load_gateway_config(base)
+    return base / config.shared_dir / "memory.db"
+
+
+def _open_memory(base: Path, agent_name: str):
+    """Open a Memory instance for the given agent. Validates agent exists and DB exists."""
+    from .memory import Memory
+
+    db_path = _resolve_memory_db(base, agent_name)
+    if not db_path.exists():
+        click.echo("No memory database yet (created on first gateway start).")
+        sys.exit(0)
+    return Memory(db_path, agent=agent_name)
+
+
+@cli.group()
+def memory():
+    """View and manage agent memory."""
+    pass
+
+
+@memory.command("stats")
+@click.argument("agent_name")
+@click.pass_context
+def memory_stats(ctx, agent_name):
+    """Show memory statistics for an agent."""
+    base = ctx.obj["base"]
+    mem = _open_memory(base, agent_name)
+    s = mem.stats()
+    click.echo(f"\nMemory — {agent_name}\n")
+    click.echo(f"  Facts:    {s['facts']}  (total across agents: {s['total_facts']})")
+    click.echo(f"  Chunks:   {s['chunks']}  (total across agents: {s['total_chunks']})")
+    click.echo(f"  Vector:   {'enabled' if s['vec_enabled'] else 'disabled'}")
+    if s.get("vec_facts") is not None:
+        click.echo(f"  Vec facts:  {s['vec_facts']}")
+        click.echo(f"  Vec chunks: {s['vec_chunks']}")
+    click.echo("")
+
+
+@memory.command("list")
+@click.argument("agent_name")
+@click.option("-n", "--limit", default=20, help="Max facts to show")
+@click.option("-c", "--category", default=None, help="Filter by category")
+@click.pass_context
+def memory_list(ctx, agent_name, limit, category):
+    """List facts stored in an agent's memory."""
+    base = ctx.obj["base"]
+    mem = _open_memory(base, agent_name)
+    facts = mem.list_facts(limit=limit, category=category)
+    if not facts:
+        click.echo(f"No facts found for agent '{agent_name}'.")
+        return
+
+    click.echo(f"\n{'ID':<6} {'CATEGORY':<12} {'CREATED':<20} CONTENT")
+    click.echo("─" * 80)
+    for f in facts:
+        created = f.get("created_at", "")[:19]
+        content = f["content"]
+        if len(content) > 60:
+            content = content[:57] + "..."
+        click.echo(f"{f['id']:<6} {f.get('category', ''):<12} {created:<20} {content}")
+    click.echo(f"\n{len(facts)} fact(s) shown.\n")
+
+
+@memory.command("search")
+@click.argument("agent_name")
+@click.argument("query")
+@click.option("-n", "--limit", default=10, help="Max results")
+@click.option("--cross-agent", is_flag=True, help="Search across all agents")
+@click.pass_context
+def memory_search(ctx, agent_name, query, limit, cross_agent):
+    """Search an agent's memory for facts matching a query."""
+    base = ctx.obj["base"]
+    mem = _open_memory(base, agent_name)
+    results = mem.search_facts(query, limit=limit, cross_agent=cross_agent)
+    if not results:
+        click.echo(f"No results for '{query}'.")
+        return
+
+    click.echo(f"\n{'ID':<6} {'CATEGORY':<12} CONTENT")
+    click.echo("─" * 70)
+    for r in results:
+        content = r["content"]
+        if len(content) > 60:
+            content = content[:57] + "..."
+        click.echo(f"{r['id']:<6} {r.get('category', ''):<12} {content}")
+    click.echo(f"\n{len(results)} result(s).\n")
+
+
+@memory.command("add")
+@click.argument("agent_name")
+@click.argument("content")
+@click.option("-c", "--category", default="general", help="Fact category")
+@click.pass_context
+def memory_add(ctx, agent_name, content, category):
+    """Add a fact to an agent's memory."""
+    base = ctx.obj["base"]
+    mem = _open_memory(base, agent_name)
+    fact_id = mem.add_fact(content, category=category)
+    click.echo(f"Added fact #{fact_id} to '{agent_name}' [{category}]")
+
+
+@memory.command("delete")
+@click.argument("agent_name")
+@click.argument("fact_id", type=int)
+@click.pass_context
+def memory_delete(ctx, agent_name, fact_id):
+    """Delete a fact by ID from an agent's memory."""
+    base = ctx.obj["base"]
+    mem = _open_memory(base, agent_name)
+
+    if mem.delete_fact(fact_id):
+        click.echo(f"Deleted fact #{fact_id}")
+    else:
+        click.echo(f"Fact #{fact_id} not found (or belongs to another agent).")
+        sys.exit(1)
+
+
 @cli.command("add-skill")
 @click.argument("agent_name")
 @click.argument("skill_name")

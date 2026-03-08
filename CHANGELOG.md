@@ -11,10 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Memory search API** — `GET /api/agents/{name}/memory/search` with auto/vector/hybrid modes
 - **Memory add-fact API** — `POST /api/agents/{name}/memory/facts` for programmatic fact ingestion
 - **Memory stats API** — `GET /api/agents/{name}/memory/stats` for monitoring
+- **CLI memory commands** — `smolclaw memory search/list/stats/add/delete` for managing agent memory from the terminal
 - Doctor edge case tests (Python version, Claude CLI, packages, memory DB, port conflicts)
 - `[all]` optional dependency extra — `pip install smolclaw[all]` for all features
 
 ### Changed
+- CI now tests with `[all]` extras to cover sqlite-vec and watchfiles code paths
 - Updated README — REST API examples section, accurate line counts, roadmap updated
 - Updated CLAUDE.md TODO — marked cron delivery, tests, and cross-agent as done
 

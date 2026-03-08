@@ -470,7 +470,6 @@ class TestTryApiSend:
 
     def test_api_success(self, tmp_base: Path):
         """When the gateway API is running, _try_api_send returns the response."""
-        from smolclaw.cli import _try_api_send
 
         mock_resp = MagicMock()
         mock_resp.read.return_value = json.dumps({"response": "API response"}).encode()
@@ -486,8 +485,6 @@ class TestTryApiSend:
         """When the gateway API is not running, _try_api_send returns None."""
         import urllib.error
 
-        from smolclaw.cli import _try_api_send
-
         with patch(
             "urllib.request.urlopen",
             side_effect=urllib.error.URLError("Connection refused"),
@@ -498,7 +495,6 @@ class TestTryApiSend:
 
     def test_api_bad_json(self, tmp_base: Path):
         """If the API returns invalid JSON, _try_api_send returns None."""
-        from smolclaw.cli import _try_api_send
 
         mock_resp = MagicMock()
         mock_resp.read.return_value = b"not json"
@@ -512,7 +508,6 @@ class TestTryApiSend:
 
     def test_api_connection_error(self, tmp_base: Path):
         """OSError from urlopen should return None (not crash)."""
-        from smolclaw.cli import _try_api_send
 
         with patch("urllib.request.urlopen", side_effect=OSError("Connection refused")):
             result = _try_api_send(tmp_base, "testagent", "Hello")
@@ -1736,6 +1731,167 @@ class TestSessionHelpers:
         _save_session_id(session_file, "sess-nested")
         assert session_file.exists()
         assert _load_session_id(session_file) == "sess-nested"
+
+
+def _setup_agent_with_memory(tmp_path: Path, agent_name: str = "tars") -> Path:
+    """Scaffold a minimal agent at tmp_path and create a memory DB with test data."""
+    from smolclaw.memory import Memory
+
+    # Create agent directory structure
+    agent_dir = tmp_path / "agents" / agent_name
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "agent.yaml").write_text(
+        f"name: {agent_name}\nmodel: claude-sonnet-4-6\nchannels: {{}}\n"
+        "memory:\n  enabled: true\n  cross_agent: false\n"
+    )
+    (agent_dir / "soul.md").write_text(f"# {agent_name.upper()}\nTest agent.\n")
+    for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+        (agent_dir / subdir).mkdir(exist_ok=True)
+
+    # Create shared dir + memory DB
+    shared_dir = tmp_path / "shared"
+    shared_dir.mkdir(parents=True, exist_ok=True)
+    (shared_dir / "cron").mkdir(exist_ok=True)
+    db_path = shared_dir / "memory.db"
+    mem = Memory(db_path, agent=agent_name)
+    mem.add_fact("Magnus likes coffee", category="preference")
+    mem.add_fact("Saltfish is an AI company", category="company")
+    mem.add_fact("Tove is Magnus's fiancee", category="family")
+    return tmp_path
+
+
+class TestMemoryCli:
+    def test_memory_stats(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "stats", "tars"])
+        assert result.exit_code == 0
+        assert "Facts:    3" in result.output
+        assert "tars" in result.output
+
+    def test_memory_stats_no_db(self, tmp_path: Path):
+        """Stats on non-existent DB shows helpful message."""
+        runner = CliRunner()
+        # Create a minimal agent but no memory DB
+        agent_dir = tmp_path / "agents" / "bot"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "agent.yaml").write_text(
+            "name: bot\nmodel: claude-sonnet-4-6\nchannels: {}\nmemory:\n  enabled: true\n"
+        )
+        (agent_dir / "soul.md").write_text("# BOT\n")
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent_dir / subdir).mkdir(exist_ok=True)
+        result = runner.invoke(cli, ["--home", str(tmp_path), "memory", "stats", "bot"])
+        assert result.exit_code == 0
+        assert "No memory database" in result.output
+
+    def test_memory_stats_unknown_agent(self, tmp_path: Path):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "memory", "stats", "nobody"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+    def test_memory_list(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "list", "tars"])
+        assert result.exit_code == 0
+        assert "coffee" in result.output
+        assert "3 fact(s)" in result.output
+
+    def test_memory_list_with_category(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "list", "tars", "-c", "family"])
+        assert result.exit_code == 0
+        assert "Tove" in result.output
+        assert "1 fact(s)" in result.output
+
+    def test_memory_list_with_limit(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "list", "tars", "-n", "2"])
+        assert result.exit_code == 0
+        assert "2 fact(s)" in result.output
+
+    def test_memory_list_empty(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path, agent_name="tars")
+        runner = CliRunner()
+        # Create a second agent with no facts
+        agent_dir = base / "agents" / "empty"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "agent.yaml").write_text(
+            "name: empty\nmodel: claude-sonnet-4-6\nchannels: {}\nmemory:\n  enabled: true\n"
+        )
+        (agent_dir / "soul.md").write_text("# EMPTY\n")
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent_dir / subdir).mkdir(exist_ok=True)
+        result = runner.invoke(cli, ["--home", str(base), "memory", "list", "empty"])
+        assert result.exit_code == 0
+        assert "No facts found" in result.output
+
+    def test_memory_search(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "search", "tars", "coffee"])
+        assert result.exit_code == 0
+        assert "coffee" in result.output
+        assert "1 result(s)" in result.output
+
+    def test_memory_search_no_results(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--home", str(base), "memory", "search", "tars", "nonexistent_xyz"]
+        )
+        assert result.exit_code == 0
+        assert "No results" in result.output
+
+    def test_memory_add(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "add", "tars", "New fact here"])
+        assert result.exit_code == 0
+        assert "Added fact #" in result.output
+        assert "general" in result.output
+
+    def test_memory_add_with_category(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(base), "memory", "add", "tars", "Work stuff", "-c", "work"],
+        )
+        assert result.exit_code == 0
+        assert "work" in result.output
+
+    def test_memory_delete(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "delete", "tars", "1"])
+        assert result.exit_code == 0
+        assert "Deleted fact #1" in result.output
+
+    def test_memory_delete_not_found(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "delete", "tars", "999"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+    def test_memory_list_long_content_truncated(self, tmp_path: Path):
+        """Long fact content gets truncated in list output."""
+        from smolclaw.memory import Memory
+
+        base = _setup_agent_with_memory(tmp_path)
+        db_path = base / "shared" / "memory.db"
+        mem = Memory(db_path, agent="tars")
+        mem.add_fact("A" * 200, category="test")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "list", "tars"])
+        assert result.exit_code == 0
+        assert "..." in result.output
 
 
 class TestMain:
