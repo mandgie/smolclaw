@@ -281,17 +281,22 @@ class Agent:
             cost_str = f", ${self.last_cost_usd:.4f}" if self.last_cost_usd else ""
             log.info(f"[{self.name}] Response ({elapsed:.1f}s, {len(response)} chars{cost_str})")
 
-            # Record LLM response metadata on the span
+            # Record LLM response metadata on the span (GenAI conventions)
             set_span_attribute("gen_ai.response.model", self.model)
             set_span_attribute("smolclaw.response.length", len(response))
             if self.last_cost_usd is not None:
                 set_span_attribute("smolclaw.cost_usd", self.last_cost_usd)
             if self.last_num_turns is not None:
-                set_span_attribute("gen_ai.usage.turns", self.last_num_turns)
+                set_span_attribute("smolclaw.usage.turns", self.last_num_turns)
             if self.last_duration_ms is not None:
                 set_span_attribute("smolclaw.duration_ms", self.last_duration_ms)
             if self.last_stop_reason:
-                set_span_attribute("gen_ai.response.finish_reason", self.last_stop_reason)
+                set_span_attribute("gen_ai.response.finish_reasons", [self.last_stop_reason])
+            if self.last_usage:
+                if hasattr(self.last_usage, "input_tokens"):
+                    set_span_attribute("gen_ai.usage.input_tokens", self.last_usage.input_tokens)
+                if hasattr(self.last_usage, "output_tokens"):
+                    set_span_attribute("gen_ai.usage.output_tokens", self.last_usage.output_tokens)
 
             if self.last_stop_reason == "max_tokens":
                 log.warning(

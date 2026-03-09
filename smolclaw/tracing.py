@@ -174,11 +174,12 @@ def span(
 
 
 def trace_route(agent_name: str, source: str, text: str) -> Any:
-    """Create a span for message routing."""
+    """Create a span for message routing (GenAI agent invocation convention)."""
     return span(
-        "smolclaw.route",
+        f"invoke_agent {agent_name}",
         attributes={
-            "smolclaw.agent": agent_name,
+            "gen_ai.operation.name": "invoke_agent",
+            "gen_ai.agent.name": agent_name,
             "smolclaw.source": source,
             "smolclaw.message.length": len(text),
         },
@@ -189,12 +190,12 @@ def trace_route(agent_name: str, source: str, text: str) -> Any:
 def trace_llm_call(agent_name: str, model: str, text: str) -> Any:
     """Create a span for an LLM call (GenAI semantic conventions)."""
     return span(
-        "gen_ai.chat",
+        f"chat {model}",
         attributes={
-            "gen_ai.system": "anthropic",
+            "gen_ai.provider.name": "anthropic",
             "gen_ai.request.model": model,
             "gen_ai.operation.name": "chat",
-            "smolclaw.agent": agent_name,
+            "gen_ai.agent.name": agent_name,
             "smolclaw.prompt.length": len(text),
         },
         kind="client",
