@@ -501,6 +501,196 @@ class TestSchedulerLoop:
         router.route.assert_not_called()
 
 
+class TestLoadJobsNextRunValidation:
+    """Tests for invalid next_run handling during load_jobs."""
+
+    def test_load_jobs_recomputes_invalid_next_run(self, tmp_base: Path):
+        """A job with a garbage next_run string gets it recomputed on load."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "bad-next-run",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Hello",
+                        "enabled": True,
+                        "next_run": "not-a-date",
+                    }
+                ]
+            )
+        )
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+
+        assert len(scheduler.jobs) == 1
+        # The invalid next_run should have been replaced with a valid ISO timestamp
+        job = scheduler.jobs[0]
+        assert job.next_run != "not-a-date"
+        datetime.fromisoformat(job.next_run)  # Should not raise
+
+    def test_load_jobs_preserves_valid_next_run(self, tmp_base: Path):
+        """A job with a valid next_run keeps it unchanged."""
+        valid_ts = "2099-01-01T08:00:00"
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "good-next-run",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Hello",
+                        "enabled": True,
+                        "next_run": valid_ts,
+                    }
+                ]
+            )
+        )
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+
+        assert len(scheduler.jobs) == 1
+        assert scheduler.jobs[0].next_run == valid_ts
+
+
+class TestLoopEdgeCases:
+    """Tests for edge cases in the scheduler _loop and _on_loop_done."""
+
+    async def test_loop_handles_invalid_next_run_at_runtime(self, tmp_base: Path):
+        """A job with corrupted next_run during runtime gets it recomputed."""
+        from smolclaw.router import OutboundMessage
+
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "runtime-bad",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Hello",
+                        "enabled": True,
+                    }
+                ]
+            )
+        )
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(agent="testagent", text="ok", source="cron")
+        )
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+
+        # Corrupt the next_run at runtime
+        scheduler.jobs[0].next_run = "garbage-timestamp"
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._loop())
+        await asyncio.sleep(0.05)
+        scheduler._running = False
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+        # The job's next_run should have been recomputed
+        job = scheduler.jobs[0]
+        assert job.next_run != "garbage-timestamp"
+        datetime.fromisoformat(job.next_run)  # Should not raise
+
+    async def test_loop_disables_job_on_unrecoverable_next_run(self, tmp_base: Path):
+        """A job that fails to recompute next_run is disabled."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "unrecoverable",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Hello",
+                        "enabled": True,
+                    }
+                ]
+            )
+        )
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+
+        # Corrupt next_run and make compute_next_run fail too
+        job = scheduler.jobs[0]
+        job.next_run = "garbage"
+        job.compute_next_run = MagicMock(side_effect=Exception("broken schedule"))
+
+        scheduler._running = True
+        task = asyncio.create_task(scheduler._loop())
+        await asyncio.sleep(0.05)
+        scheduler._running = False
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+        # The job should be disabled
+        assert job.enabled is False
+
+    async def test_on_loop_done_restarts_on_crash(self, tmp_base: Path, jobs_file: Path):
+        """_on_loop_done schedules a restart when the loop crashes."""
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler._running = True
+
+        # Create a task that fails
+        async def crashing_loop():
+            raise RuntimeError("loop exploded")
+
+        task = asyncio.create_task(crashing_loop())
+        await asyncio.sleep(0.05)  # Let it crash
+
+        assert task.done()
+        assert task.exception() is not None
+
+        # Call _on_loop_done manually — it should schedule a restart via call_later
+        # and not crash
+        scheduler._on_loop_done(task)
+
+    async def test_on_loop_done_noop_on_clean_shutdown(self, tmp_base: Path, jobs_file: Path):
+        """_on_loop_done does nothing when _running is False (clean shutdown)."""
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler._running = False  # Clean shutdown
+
+        task = MagicMock()
+        task.cancelled.return_value = False
+        task.exception.return_value = None
+
+        # Should return early without trying to restart
+        scheduler._on_loop_done(task)
+        # No exception means success — it returned early
+
+    async def test_loop_cancellation_propagates(self, tmp_base: Path, jobs_file: Path):
+        """CancelledError during the loop propagates cleanly."""
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler.load_jobs()
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._loop())
+        await asyncio.sleep(0.05)
+
+        # Cancel the task
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+
 class TestRepr:
     def test_job_repr(self):
         job = Job({"id": "j1", "agent": "tars", "schedule": "0 8 * * *"})

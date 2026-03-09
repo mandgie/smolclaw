@@ -193,8 +193,11 @@ class Scheduler:
             log.warning("Scheduler: loop exited unexpectedly, restarting in 5s")
 
         # Schedule restart on the event loop
-        loop = asyncio.get_event_loop()
-        loop.call_later(5, self._start_loop)
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_later(5, self._start_loop)
+        except RuntimeError:
+            log.error("Scheduler: no running event loop, cannot restart")
 
     async def stop(self) -> None:
         """Stop the scheduler."""

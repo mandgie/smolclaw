@@ -244,6 +244,125 @@ class TestTracingAvailableFlag:
         assert isinstance(TRACING_AVAILABLE, bool)
 
 
+class TestConfigureTracingUnavailable:
+    """Tests for configure_tracing when OTEL is not installed."""
+
+    def test_returns_false_when_otel_unavailable(self):
+        """When TRACING_AVAILABLE is False, configure returns False."""
+        import smolclaw.tracing as tracing_mod
+
+        original_avail = tracing_mod.TRACING_AVAILABLE
+        original_conf = tracing_mod._configured
+        tracing_mod.TRACING_AVAILABLE = False
+        tracing_mod._configured = False
+        try:
+            cfg = TracingConfig(enabled=True)
+            result = configure_tracing(cfg)
+            assert result is False
+        finally:
+            tracing_mod.TRACING_AVAILABLE = original_avail
+            tracing_mod._configured = original_conf
+
+
+class TestConfigureTracingOTLP:
+    """Tests for OTLP exporter configuration."""
+
+    @pytest.mark.skipif(not TRACING_AVAILABLE, reason="opentelemetry not installed")
+    def test_configure_otlp_with_endpoint(self):
+        """When OTLP package is available and endpoint set, uses OTLP exporter."""
+        import smolclaw.tracing as tracing_mod
+
+        tracing_mod._configured = False
+        try:
+            # Check if OTLP exporter is installed
+            try:
+                from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # noqa: F401
+                    OTLPSpanExporter,
+                )
+            except ImportError:
+                pytest.skip("OTLP exporter not installed")
+
+            cfg = TracingConfig(
+                enabled=True,
+                exporter="otlp",
+                endpoint="http://localhost:4318/v1/traces",
+            )
+            result = configure_tracing(cfg)
+            assert result is True
+        finally:
+            tracing_mod._configured = False
+
+
+class TestSetSpanAttributeActive:
+    """Tests for set_span_attribute when tracing IS configured."""
+
+    @pytest.mark.skipif(not TRACING_AVAILABLE, reason="opentelemetry not installed")
+    def test_sets_attribute_on_active_span(self):
+        """set_span_attribute works when called inside an active span."""
+        import smolclaw.tracing as tracing_mod
+
+        tracing_mod._configured = False
+        try:
+            cfg = TracingConfig(enabled=True)
+            configure_tracing(cfg)
+
+            with span("test.set_attr") as s:
+                set_span_attribute("test.key", "test_value")
+                set_span_attribute("test.number", 42)
+                assert s is not None
+        finally:
+            tracing_mod._configured = False
+
+    @pytest.mark.skipif(not TRACING_AVAILABLE, reason="opentelemetry not installed")
+    def test_sets_attribute_outside_span_no_crash(self):
+        """set_span_attribute outside any span context doesn't crash."""
+        import smolclaw.tracing as tracing_mod
+
+        tracing_mod._configured = False
+        try:
+            cfg = TracingConfig(enabled=True)
+            configure_tracing(cfg)
+            # Call outside any span
+            set_span_attribute("orphan.key", "value")
+        finally:
+            tracing_mod._configured = False
+
+
+class TestGetVersion:
+    """Tests for the _get_version helper."""
+
+    def test_returns_version_string(self):
+        from smolclaw.tracing import _get_version
+
+        version = _get_version()
+        assert isinstance(version, str)
+        assert version != "unknown"
+
+
+class TestSpanKindVariations:
+    """Test different span kind parameters."""
+
+    @pytest.mark.skipif(not TRACING_AVAILABLE, reason="opentelemetry not installed")
+    def test_span_with_all_valid_kinds(self):
+        """All valid span kinds work without error."""
+        import smolclaw.tracing as tracing_mod
+
+        tracing_mod._configured = False
+        try:
+            cfg = TracingConfig(enabled=True)
+            configure_tracing(cfg)
+
+            for kind in ["internal", "client", "server", "producer", "consumer"]:
+                with span(f"test.{kind}", kind=kind) as s:
+                    assert s is not None
+
+            # Unknown kind falls back to internal
+            with span("test.unknown_kind", kind="banana") as s:
+                assert s is not None
+        finally:
+            tracing_mod._configured = False
+
+
 class TestPublicExports:
     """Verify tracing is exported from the main package."""
 
