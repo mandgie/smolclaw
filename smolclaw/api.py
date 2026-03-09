@@ -274,16 +274,53 @@ def create_app(gateway: Gateway) -> FastAPI:
         if not agent:
             raise HTTPException(404, f"Agent '{name}' not found")
 
+        # Resolve skill names from the skills directory
+        skill_names: list[str] = []
+        skills_dir = agent.info.path / "skills"
+        if skills_dir.exists():
+            for d in sorted(skills_dir.iterdir()):
+                if d.is_dir() and (d / "SKILL.md").exists():
+                    skill_names.append(d.name)
+
+        # Build config dict (exclude defaults that aren't set)
+        cfg = agent.info.config
+        config_detail: dict[str, Any] = {"model": cfg.model}
+        if cfg.max_turns is not None:
+            config_detail["max_turns"] = cfg.max_turns
+        if cfg.max_budget_usd is not None:
+            config_detail["max_budget_usd"] = cfg.max_budget_usd
+        if cfg.fallback_model is not None:
+            config_detail["fallback_model"] = cfg.fallback_model
+        if cfg.thinking is not None:
+            config_detail["thinking"] = cfg.thinking
+        if cfg.effort is not None:
+            config_detail["effort"] = cfg.effort
+        if cfg.enable_file_checkpointing:
+            config_detail["file_checkpointing"] = True
+        if cfg.mcp_servers is not None:
+            config_detail["mcp_servers"] = True
+        config_detail["memory"] = {
+            "enabled": cfg.memory.enabled,
+            "cross_agent": cfg.memory.cross_agent,
+        }
+        config_detail["channels"] = {
+            ch_name: {"authorized_users": len(ch.authorized_users)}
+            for ch_name, ch in cfg.channels.items()
+        }
+
         return {
             "name": agent.name,
             "model": agent.model,
             "connected": agent.is_connected,
-            "channels": list(agent.info.config.channels.keys()),
+            "channels": list(cfg.channels.keys()),
             "skills": len(agent.info.skills),
-            "soul": agent.info.soul[:500] if agent.info.soul else "",
-            "agents_md": agent.info.agents_md[:500] if agent.info.agents_md else "",
+            "skill_names": skill_names,
+            "soul": agent.info.soul or "",
+            "agents_md": agent.info.agents_md or "",
             "memory": agent.memory.stats() if agent.memory else None,
-            "context_files": list(agent.info.context_files.keys()),
+            "context_files": agent.info.context_files,
+            "config": config_detail,
+            "peers": [{"name": p["name"], "model": p["model"]} for p in agent.peers],
         }
 
     @app.post(

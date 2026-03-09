@@ -155,6 +155,38 @@
     cursor: pointer; transition: all 0.2s;
   }
   .session-bar-back:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Agent detail view */
+  .detail-view { padding: 18px; overflow-y: auto; flex: 1; display: none; flex-direction: column; gap: 16px; }
+  .detail-view.visible { display: flex; }
+  .detail-section {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  .detail-section-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; cursor: pointer; font-size: 12px; font-weight: 600;
+    color: var(--text); transition: background 0.2s;
+  }
+  .detail-section-header:hover { background: var(--surface); }
+  .detail-section-header .arrow { color: var(--muted); font-size: 10px; transition: transform 0.2s; }
+  .detail-section-header .arrow.open { transform: rotate(90deg); }
+  .detail-section-body { display: none; padding: 12px 14px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.6; }
+  .detail-section-body.open { display: block; }
+  .detail-section-body pre {
+    background: var(--surface); padding: 10px 12px; border-radius: 4px;
+    overflow-x: auto; font-size: 11px; white-space: pre-wrap; word-break: break-word;
+    color: var(--text); margin: 0;
+  }
+  .detail-kv { display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px; font-size: 12px; }
+  .detail-kv .label { color: var(--muted); }
+  .detail-kv .value { color: var(--text); }
+  .detail-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .detail-tag {
+    font-size: 11px; padding: 3px 8px; border-radius: 4px;
+    background: var(--accent-dim); color: var(--accent); border: 1px solid transparent;
+  }
+  .detail-tag.muted { background: var(--bg); color: var(--muted); border-color: var(--border); }
+  .detail-empty { color: var(--muted); font-style: italic; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -194,6 +226,7 @@
       <div class="chat-header-actions">
         <button class="chat-btn active" id="btn-chat" title="Live chat">Chat</button>
         <button class="chat-btn" id="btn-history" title="Session history">History</button>
+        <button class="chat-btn" id="btn-details" title="Agent details">Details</button>
         <button class="chat-btn" id="chat-new" title="New session">New</button>
         <button class="chat-btn chat-btn-close" id="chat-close" title="Close">&#x2715;</button>
       </div>
@@ -205,6 +238,7 @@
     <div class="chat-messages" id="chat-messages">
       <div class="chat-empty">Send a message to start chatting</div>
     </div>
+    <div class="detail-view" id="detail-view"></div>
     <div class="chat-input-area" id="chat-input-area">
       <textarea class="chat-input" id="chat-input" placeholder="Message..." rows="1"></textarea>
       <button class="chat-send" id="chat-send">Send</button>
@@ -273,7 +307,7 @@ async function fetchHealth() {
 // --- Chat panel state ---
 let chatAgent = null;
 let sessionCost = 0;
-let panelView = 'chat'; // 'chat' | 'sessions' | 'session-detail'
+let panelView = 'chat'; // 'chat' | 'sessions' | 'session-detail' | 'details'
 
 function openChat(name, model, connected) {
   chatAgent = name;
@@ -296,21 +330,35 @@ function closeChat() {
 function updatePanelView() {
   const inputArea = document.getElementById('chat-input-area');
   const sessionBar = document.getElementById('session-bar');
+  const chatMessages = document.getElementById('chat-messages');
+  const detailView = document.getElementById('detail-view');
   const btnChat = document.getElementById('btn-chat');
   const btnHistory = document.getElementById('btn-history');
+  const btnDetails = document.getElementById('btn-details');
 
   btnChat.classList.toggle('active', panelView === 'chat');
-  btnHistory.classList.toggle('active', panelView !== 'chat');
+  btnHistory.classList.toggle('active', panelView === 'sessions' || panelView === 'session-detail');
+  btnDetails.classList.toggle('active', panelView === 'details');
 
-  if (panelView === 'chat') {
-    inputArea.classList.remove('hidden');
-    sessionBar.classList.add('hidden');
-  } else if (panelView === 'sessions') {
+  // Show/hide detail view vs chat messages
+  if (panelView === 'details') {
+    chatMessages.style.display = 'none';
+    detailView.classList.add('visible');
     inputArea.classList.add('hidden');
     sessionBar.classList.add('hidden');
   } else {
-    inputArea.classList.add('hidden');
-    sessionBar.classList.remove('hidden');
+    chatMessages.style.display = '';
+    detailView.classList.remove('visible');
+    if (panelView === 'chat') {
+      inputArea.classList.remove('hidden');
+      sessionBar.classList.add('hidden');
+    } else if (panelView === 'sessions') {
+      inputArea.classList.add('hidden');
+      sessionBar.classList.add('hidden');
+    } else {
+      inputArea.classList.add('hidden');
+      sessionBar.classList.remove('hidden');
+    }
   }
 }
 
@@ -536,12 +584,113 @@ function switchToChat() {
   document.getElementById('chat-input').focus();
 }
 
+// --- Agent detail view ---
+function toggleSection(el) {
+  const body = el.nextElementSibling;
+  const arrow = el.querySelector('.arrow');
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+
+function makeSection(title, content, startOpen) {
+  return `<div class="detail-section">
+    <div class="detail-section-header" onclick="toggleSection(this)">
+      <span>${title}</span>
+      <span class="arrow ${startOpen ? 'open' : ''}">&#x25B6;</span>
+    </div>
+    <div class="detail-section-body ${startOpen ? 'open' : ''}">${content}</div>
+  </div>`;
+}
+
+async function showDetails() {
+  if (!chatAgent) return;
+  panelView = 'details';
+  updatePanelView();
+
+  const container = document.getElementById('detail-view');
+  container.innerHTML = '<div class="chat-empty">Loading agent details...</div>';
+
+  try {
+    const res = await fetch(`${API}/api/agents/${encodeURIComponent(chatAgent)}`);
+    const a = await res.json();
+
+    let html = '';
+
+    // Config section (always open)
+    let configHtml = '<div class="detail-kv">';
+    configHtml += `<span class="label">Model</span><span class="value">${a.model}</span>`;
+    if (a.config.max_budget_usd) configHtml += `<span class="label">Budget</span><span class="value">$${a.config.max_budget_usd}/run</span>`;
+    if (a.config.fallback_model) configHtml += `<span class="label">Fallback</span><span class="value">${a.config.fallback_model}</span>`;
+    if (a.config.max_turns) configHtml += `<span class="label">Max turns</span><span class="value">${a.config.max_turns}</span>`;
+    if (a.config.effort) configHtml += `<span class="label">Effort</span><span class="value">${a.config.effort}</span>`;
+    if (a.config.thinking) configHtml += `<span class="label">Thinking</span><span class="value">${JSON.stringify(a.config.thinking)}</span>`;
+    if (a.config.file_checkpointing) configHtml += `<span class="label">Checkpointing</span><span class="value">enabled</span>`;
+    if (a.config.mcp_servers) configHtml += `<span class="label">MCP</span><span class="value">configured</span>`;
+    configHtml += `<span class="label">Memory</span><span class="value">${a.config.memory.enabled ? 'enabled' : 'disabled'}${a.config.memory.cross_agent ? ' (cross-agent)' : ''}</span>`;
+    const chNames = Object.keys(a.config.channels);
+    configHtml += `<span class="label">Channels</span><span class="value">${chNames.length ? chNames.join(', ') : 'none'}</span>`;
+    configHtml += '</div>';
+    html += makeSection('Configuration', configHtml, true);
+
+    // Memory stats
+    if (a.memory) {
+      let memHtml = '<div class="detail-kv">';
+      memHtml += `<span class="label">Facts</span><span class="value">${a.memory.facts || 0}</span>`;
+      memHtml += `<span class="label">Chunks</span><span class="value">${a.memory.chunks || 0}</span>`;
+      if (a.memory.vec_status) memHtml += `<span class="label">Vector</span><span class="value">${a.memory.vec_status}</span>`;
+      memHtml += '</div>';
+      html += makeSection('Memory', memHtml, true);
+    }
+
+    // Skills
+    if (a.skill_names && a.skill_names.length) {
+      let skillHtml = '<div class="detail-tags">';
+      skillHtml += a.skill_names.map(s => `<span class="detail-tag">${escapeHtml(s)}</span>`).join('');
+      skillHtml += '</div>';
+      html += makeSection(`Skills (${a.skill_names.length})`, skillHtml, true);
+    } else {
+      html += makeSection('Skills', '<span class="detail-empty">No skills configured</span>', false);
+    }
+
+    // Peers
+    if (a.peers && a.peers.length) {
+      let peerHtml = '<div class="detail-tags">';
+      peerHtml += a.peers.map(p => `<span class="detail-tag muted">${escapeHtml(p.name)} <span style="color:var(--muted)">(${p.model})</span></span>`).join('');
+      peerHtml += '</div>';
+      html += makeSection(`Peers (${a.peers.length})`, peerHtml, true);
+    }
+
+    // Soul
+    if (a.soul) {
+      html += makeSection('Soul', `<pre>${escapeHtml(a.soul)}</pre>`, false);
+    }
+
+    // Agents.md
+    if (a.agents_md) {
+      html += makeSection('Operational Rules', `<pre>${escapeHtml(a.agents_md)}</pre>`, false);
+    }
+
+    // Context files
+    const ctxKeys = Object.keys(a.context_files || {});
+    if (ctxKeys.length) {
+      for (const key of ctxKeys) {
+        html += makeSection(`Context: ${escapeHtml(key)}`, `<pre>${escapeHtml(a.context_files[key])}</pre>`, false);
+      }
+    }
+
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = `<div class="chat-empty">Failed to load details: ${e.message}</div>`;
+  }
+}
+
 // --- Event listeners ---
 document.getElementById('chat-close').addEventListener('click', closeChat);
 document.getElementById('chat-new').addEventListener('click', newSession);
 document.getElementById('chat-send').addEventListener('click', sendMessage);
 document.getElementById('btn-chat').addEventListener('click', switchToChat);
 document.getElementById('btn-history').addEventListener('click', showSessions);
+document.getElementById('btn-details').addEventListener('click', showDetails);
 document.getElementById('session-back').addEventListener('click', showSessions);
 document.getElementById('chat-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }

@@ -32,11 +32,24 @@ def mock_gateway(tmp_path: Path):
     agent.name = "testagent"
     agent.model = "claude-sonnet-4-6"
     agent.is_connected = False
+    agent.info.path = tmp_path / "agents" / "testagent"
+    agent.info.config.name = "testagent"
+    agent.info.config.model = "claude-sonnet-4-6"
     agent.info.config.channels = {}
+    agent.info.config.max_turns = None
+    agent.info.config.max_budget_usd = None
+    agent.info.config.fallback_model = None
+    agent.info.config.thinking = None
+    agent.info.config.effort = None
+    agent.info.config.enable_file_checkpointing = False
+    agent.info.config.mcp_servers = None
+    agent.info.config.memory.enabled = True
+    agent.info.config.memory.cross_agent = False
     agent.info.skills = ["skill1"]
     agent.info.soul = "You are a test agent."
     agent.info.agents_md = "Be helpful."
     agent.info.context_files = {"notes": "some notes"}
+    agent.peers = []
     agent.memory = Memory(tmp_path / "memory.db", agent="testagent")
     agent.new_session = AsyncMock()
     agent.last_cost_usd = None
@@ -104,7 +117,55 @@ class TestGetAgent:
         assert data["name"] == "testagent"
         assert data["soul"] == "You are a test agent."
         assert data["agents_md"] == "Be helpful."
-        assert "notes" in data["context_files"]
+        assert data["context_files"]["notes"] == "some notes"
+
+    def test_returns_config_detail(self, client):
+        resp = client.get("/api/agents/testagent")
+        data = resp.json()
+        assert data["config"]["model"] == "claude-sonnet-4-6"
+        assert data["config"]["memory"]["enabled"] is True
+        assert data["config"]["memory"]["cross_agent"] is False
+
+    def test_returns_optional_config_fields(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        agent.info.config.max_budget_usd = 5.0
+        agent.info.config.fallback_model = "claude-haiku-4-5-20251001"
+        agent.info.config.effort = "high"
+        resp = client.get("/api/agents/testagent")
+        data = resp.json()
+        assert data["config"]["max_budget_usd"] == 5.0
+        assert data["config"]["fallback_model"] == "claude-haiku-4-5-20251001"
+        assert data["config"]["effort"] == "high"
+
+    def test_returns_skill_names_from_filesystem(self, client, mock_gateway, tmp_path):
+        # Create skills directory with skill subdirectories
+        agent_dir = tmp_path / "agents" / "testagent"
+        skills_dir = agent_dir / "skills"
+        (skills_dir / "remindctl").mkdir(parents=True)
+        (skills_dir / "remindctl" / "SKILL.md").write_text("# Remindctl")
+        (skills_dir / "gogcli").mkdir(parents=True)
+        (skills_dir / "gogcli" / "SKILL.md").write_text("# Gogcli")
+        # Dir without SKILL.md should not appear
+        (skills_dir / "empty-dir").mkdir(parents=True)
+
+        resp = client.get("/api/agents/testagent")
+        data = resp.json()
+        assert "gogcli" in data["skill_names"]
+        assert "remindctl" in data["skill_names"]
+        assert "empty-dir" not in data["skill_names"]
+
+    def test_returns_peers(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        agent.peers = [{"name": "coach", "model": "claude-sonnet-4-6", "description": "A coach"}]
+        resp = client.get("/api/agents/testagent")
+        data = resp.json()
+        assert len(data["peers"]) == 1
+        assert data["peers"][0]["name"] == "coach"
+
+    def test_returns_full_context_file_content(self, client):
+        resp = client.get("/api/agents/testagent")
+        data = resp.json()
+        assert data["context_files"]["notes"] == "some notes"
 
     def test_404_unknown_agent(self, client):
         resp = client.get("/api/agents/nobody")

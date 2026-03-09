@@ -35,7 +35,7 @@ Gateway (one process)
 ## File Structure
 
 ```
-smolclaw/              # Python package (~2900 lines, 11 modules)
+smolclaw/              # Python package (~2900 lines, 13 modules)
 ├── __init__.py        # Version
 ├── config.py          # Agent discovery from filesystem, YAML loading, Pydantic models
 ├── agent.py           # Agent class: loads identity, builds system prompt, wraps Claude SDK
@@ -106,7 +106,7 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] Cron delivery to Telegram (gateway wires scheduler → channel.send via deliver_callback)
 - [ ] `smolclaw cron` interactive — let agents manage their own schedule conversationally
 - [x] Cross-agent awareness (peer agents injected into system prompts, API-based messaging)
-- [ ] Dashboard: agent detail view (click card → see soul, skills, logs, config editor)
+- [x] Dashboard: agent detail view (click card → Details tab shows config, skills, memory, soul)
 - [ ] Dashboard: WebSocket live updates instead of polling
 - [ ] Multiple Telegram bots (one per agent, each with own token)
 - [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
