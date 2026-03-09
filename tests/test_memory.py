@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 import struct
 from pathlib import Path
+from unittest.mock import patch
 
 from smolclaw.memory import Memory, serialize_f32
 
@@ -791,3 +792,143 @@ class TestVectorStats:
         stats = mem.stats()
         assert stats["vec_enabled"] is False
         assert "vec_facts" not in stats
+
+
+class TestLikeSearchCrossAgent:
+    """Test the LIKE search fallback path with cross_agent=True."""
+
+    def test_like_search_facts_cross_agent(self, tmp_path: Path):
+        """LIKE search with cross_agent=True finds facts from all agents."""
+        db = tmp_path / "shared.db"
+        tars = Memory(db, agent="tars")
+        coach = Memory(db, agent="coach")
+
+        tars.add_fact("TARS stores data")
+        coach.add_fact("Coach stores data")
+
+        # Empty query → FTS5 escape returns "" → LIKE fallback with %%
+        results = tars.search_facts("", cross_agent=True)
+        assert len(results) == 2
+
+    def test_like_search_chunks_cross_agent(self, tmp_path: Path):
+        """LIKE search for chunks with cross_agent=True finds all agents."""
+        db = tmp_path / "shared.db"
+        tars = Memory(db, agent="tars")
+        coach = Memory(db, agent="coach")
+
+        tars.add_chunk("TARS question", "TARS answer")
+        coach.add_chunk("Coach question", "Coach answer")
+
+        # Empty query triggers LIKE path
+        results = tars.search_chunks("", cross_agent=True)
+        assert len(results) == 2
+
+    def test_like_search_facts_cross_agent_with_match(self, tmp_path: Path):
+        """LIKE cross-agent search matches content from multiple agents."""
+        db = tmp_path / "shared.db"
+        tars = Memory(db, agent="tars")
+        coach = Memory(db, agent="coach")
+
+        tars.add_fact("weather forecast sunny")
+        coach.add_fact("weather forecast rainy")
+        coach.add_fact("unrelated content")
+
+        # Force LIKE path with special chars that FTS5 escape strips
+        results = tars.search_facts("***", cross_agent=True)
+        # *** → LIKE %***% — won't match anything since content doesn't contain ***
+        assert len(results) == 0
+
+
+class TestFTS5OperationalErrorFallback:
+    """Test that FTS5 OperationalError falls back to LIKE search."""
+
+    def test_search_facts_fts_error_fallback(self, tmp_path: Path):
+        """When FTS5 raises OperationalError, search falls back to LIKE."""
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        mem.add_fact("Python is great")
+
+        with patch.object(
+            mem, "_fts_search_facts", side_effect=sqlite3.OperationalError("FTS corrupted")
+        ):
+            results = mem.search_facts("Python")
+            assert len(results) == 1
+            assert results[0]["content"] == "Python is great"
+
+    def test_search_chunks_fts_error_fallback(self, tmp_path: Path):
+        """When FTS5 raises OperationalError, chunk search falls back to LIKE."""
+        mem = Memory(tmp_path / "test.db", agent="tars")
+        mem.add_chunk("What is Python?", "A programming language")
+
+        with patch.object(
+            mem, "_fts_search_chunks", side_effect=sqlite3.OperationalError("FTS corrupted")
+        ):
+            results = mem.search_chunks("Python")
+            assert len(results) == 1
+            assert "Python" in results[0]["combined"]
+
+
+class TestVectorSearchOperationalError:
+    """Test that vector search handles OperationalError gracefully."""
+
+    def _drop_vec_tables(self, db_path: Path) -> None:
+        """Drop vec tables to simulate corruption."""
+        conn = sqlite3.connect(str(db_path))
+        conn.enable_load_extension(True)
+        import sqlite_vec
+
+        sqlite_vec.load(conn)
+        conn.enable_load_extension(False)
+        conn.execute("DROP TABLE IF EXISTS vec_facts")
+        conn.execute("DROP TABLE IF EXISTS vec_chunks")
+        conn.commit()
+        conn.close()
+
+    def test_vector_search_facts_operational_error(self, tmp_path: Path):
+        """vector_search_facts returns [] on OperationalError."""
+        db = tmp_path / "test.db"
+        mem = Memory(db, agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        mem.add_fact("Test fact")
+
+        # Drop vec tables to cause OperationalError on search
+        self._drop_vec_tables(db)
+
+        results = mem.vector_search_facts("Test")
+        assert results == []
+
+    def test_vector_search_chunks_operational_error(self, tmp_path: Path):
+        """vector_search_chunks returns [] on OperationalError."""
+        db = tmp_path / "test.db"
+        mem = Memory(db, agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        mem.add_chunk("Question", "Answer")
+
+        self._drop_vec_tables(db)
+
+        results = mem.vector_search_chunks("Question")
+        assert results == []
+
+
+class TestStatsVecTableError:
+    """Test stats() when vec tables are corrupted."""
+
+    def test_stats_vec_table_operational_error(self, tmp_path: Path):
+        """stats() handles OperationalError on vec tables gracefully."""
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        mem.add_fact("Test fact")
+
+        # Drop the vec table to simulate corruption
+        conn = sqlite3.connect(str(tmp_path / "test.db"))
+        conn.enable_load_extension(True)
+        import sqlite_vec
+
+        sqlite_vec.load(conn)
+        conn.enable_load_extension(False)
+        conn.execute("DROP TABLE IF EXISTS vec_facts")
+        conn.execute("DROP TABLE IF EXISTS vec_chunks")
+        conn.commit()
+        conn.close()
+
+        stats = mem.stats()
+        # Should return stats without crashing, vec counts omitted
+        assert stats["facts"] == 1
+        assert stats["vec_enabled"] is True  # Still thinks vec is enabled
+        assert "vec_facts" not in stats  # But couldn't query vec tables

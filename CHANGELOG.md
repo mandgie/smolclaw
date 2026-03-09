@@ -21,10 +21,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `[all]` optional dependency extra — `pip install smolclaw[all]` for all features
 - `[otel]` and `[otel-otlp]` optional extras for OpenTelemetry tracing
 
+### Fixed
+- Replaced deprecated `asyncio.get_event_loop()` with `get_running_loop()` in scheduler crash recovery callback
+- Scheduler crash recovery now handles missing event loop gracefully
+
 ### Changed
 - CI now tests with `[all]` extras to cover sqlite-vec and watchfiles code paths
 - Updated README — REST API examples section, accurate line counts, roadmap updated
 - Updated CLAUDE.md TODO — marked cron delivery, tests, and cross-agent as done
+- Test coverage improved: scheduler 89%→97%, tracing 88%→93%, memory 91%→98%. 630 tests, 96% overall.
 
 ## [0.1.0] — 2026-03-07
 
