@@ -102,6 +102,11 @@ class GatewayConfig(BaseModel):
     agents_dir: str = "agents"
     shared_dir: str = "shared"
     log_level: str = "INFO"
+    api_key: str | None = Field(
+        None,
+        description="Optional API key for authenticating REST API requests. "
+        "When set, clients must send 'Authorization: Bearer <key>' header.",
+    )
 
     @field_validator("port")
     @classmethod

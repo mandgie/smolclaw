@@ -27,7 +27,7 @@ Run multiple AI agents — each with its own personality, skills, and channels �
 - **Hot-reload** — Change a skill, soul, or config file and the agent updates live. No restart needed.
 - **Interactive REPL** — `smolclaw chat <agent>` for terminal conversations with session persistence.
 - **MCP support** — Connect agents to MCP servers (stdio/SSE/HTTP) for extended tool access.
-- **REST API + dashboard** — FastAPI on `:7890` with agent management, messaging, and a built-in dark-mode dashboard.
+- **REST API + dashboard** — FastAPI on `:7890` with agent management, messaging, optional API key auth, and a built-in dark-mode dashboard.
 - **Claude SDK powered** — Built on Anthropic's Claude Agent SDK with session management, extended thinking, and tool support.
 
 ## Quick Start
@@ -174,6 +174,24 @@ curl -s localhost:7890/api/agents | jq
 curl -s localhost:7890/api/health | jq
 curl -s localhost:7890/api/cron/jobs | jq
 ```
+
+### API Authentication
+
+Protect your API with an optional Bearer token. Add `api_key` to your `config.yaml`:
+
+```yaml
+# ~/.smolclaw/config.yaml
+api_key: "your-secret-key-here"
+```
+
+Then include the key in requests:
+
+```bash
+curl -s localhost:7890/api/agents \
+  -H "Authorization: Bearer your-secret-key-here" | jq
+```
+
+Health (`/api/health`) and dashboard (`/`) are always public. When no `api_key` is set, all endpoints are open (default).
 
 ## Dashboard
 

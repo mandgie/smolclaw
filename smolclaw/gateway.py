@@ -260,6 +260,13 @@ async def run_gateway(base_dir: Path, with_api: bool = True) -> None:
             server = uvicorn.Server(config)
             api_task = asyncio.create_task(server.serve())
             log.info(f"API server: http://{gw.config.host}:{gw.config.port}")
+            if gw.config.api_key:
+                log.info("API authentication: enabled (Bearer token)")
+            else:
+                log.warning(
+                    "API authentication: disabled — set api_key in config.yaml "
+                    "or run 'smolclaw config set api_key <key>'"
+                )
         except ImportError:
             log.warning("FastAPI/uvicorn not installed — API disabled")
 

@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import secrets
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 __all__ = ["create_app"]
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from .agent import Agent
     from .gateway import Gateway
+
+log = logging.getLogger("smolclaw")
 
 _SESSION_ID_RE = re.compile(r"^[a-f0-9\-]+$")
 
@@ -228,9 +232,24 @@ def create_app(gateway: Gateway) -> FastAPI:
         description="Lightweight multi-agent framework for personal AI assistants",
     )
 
+    # --- API key authentication ---
+
+    api_key = gateway.config.api_key
+
+    async def _require_auth(request: Request) -> None:
+        """Verify Bearer token if api_key is configured. Skips if no key set."""
+        if api_key is None:
+            return
+        auth = request.headers.get("authorization", "")
+        if not auth.startswith("Bearer "):
+            raise HTTPException(401, "Missing API key. Use 'Authorization: Bearer <key>' header.")
+        token = auth[7:]
+        if not secrets.compare_digest(token, api_key):
+            raise HTTPException(403, "Invalid API key.")
+
     # --- Agent endpoints ---
 
-    @app.get("/api/agents")
+    @app.get("/api/agents", dependencies=[Depends(_require_auth)])
     async def list_agents() -> dict[str, Any]:
         """List all registered agents with their status and configuration."""
         agents = []
@@ -248,7 +267,7 @@ def create_app(gateway: Gateway) -> FastAPI:
             )
         return {"agents": agents}
 
-    @app.get("/api/agents/{name}")
+    @app.get("/api/agents/{name}", dependencies=[Depends(_require_auth)])
     async def get_agent(name: str) -> dict[str, Any]:
         """Get detailed information about a specific agent."""
         agent = gateway.router.get_agent(name)
@@ -267,7 +286,11 @@ def create_app(gateway: Gateway) -> FastAPI:
             "context_files": list(agent.info.context_files.keys()),
         }
 
-    @app.post("/api/agents/{name}/send", response_model=SendMessageResponse)
+    @app.post(
+        "/api/agents/{name}/send",
+        response_model=SendMessageResponse,
+        dependencies=[Depends(_require_auth)],
+    )
     async def send_message(name: str, body: SendMessageRequest) -> dict[str, Any]:
         """Send a message to an agent and get the response."""
         try:
@@ -285,7 +308,11 @@ def create_app(gateway: Gateway) -> FastAPI:
         except Exception as e:
             raise HTTPException(500, str(e))
 
-    @app.post("/api/agents/{name}/new-session", response_model=StatusResponse)
+    @app.post(
+        "/api/agents/{name}/new-session",
+        response_model=StatusResponse,
+        dependencies=[Depends(_require_auth)],
+    )
     async def new_session(name: str) -> dict[str, str]:
         """Clear an agent's current session and start fresh."""
         agent = gateway.router.get_agent(name)
@@ -296,7 +323,7 @@ def create_app(gateway: Gateway) -> FastAPI:
 
     # --- Session endpoints ---
 
-    @app.get("/api/agents/{name}/sessions")
+    @app.get("/api/agents/{name}/sessions", dependencies=[Depends(_require_auth)])
     async def list_sessions(name: str) -> dict[str, Any]:
         """List conversation sessions for an agent."""
         agent = gateway.router.get_agent(name)
@@ -315,7 +342,7 @@ def create_app(gateway: Gateway) -> FastAPI:
 
         return {"sessions": sessions}
 
-    @app.get("/api/agents/{name}/sessions/{session_id}")
+    @app.get("/api/agents/{name}/sessions/{session_id}", dependencies=[Depends(_require_auth)])
     async def get_session(name: str, session_id: str) -> dict[str, Any]:
         """Read messages from a specific session."""
         if not _SESSION_ID_RE.match(session_id):
@@ -335,7 +362,7 @@ def create_app(gateway: Gateway) -> FastAPI:
 
     # --- Memory endpoints ---
 
-    @app.get("/api/agents/{name}/memory/facts")
+    @app.get("/api/agents/{name}/memory/facts", dependencies=[Depends(_require_auth)])
     async def list_facts(
         name: str, limit: int = 100, category: str | None = None
     ) -> dict[str, Any]:
@@ -347,7 +374,7 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(400, f"Agent '{name}' has no memory enabled")
         return {"facts": agent.memory.list_facts(limit=limit, category=category)}
 
-    @app.get("/api/agents/{name}/memory/search")
+    @app.get("/api/agents/{name}/memory/search", dependencies=[Depends(_require_auth)])
     async def search_memory(
         name: str,
         q: str,
@@ -378,7 +405,7 @@ def create_app(gateway: Gateway) -> FastAPI:
 
         return {"query": q, "mode": mode, "results": results}
 
-    @app.post("/api/agents/{name}/memory/facts")
+    @app.post("/api/agents/{name}/memory/facts", dependencies=[Depends(_require_auth)])
     async def add_fact(name: str, body: AddFactRequest) -> dict[str, Any]:
         """Add a fact to an agent's memory."""
         agent = gateway.router.get_agent(name)
@@ -389,7 +416,7 @@ def create_app(gateway: Gateway) -> FastAPI:
         fact_id = agent.memory.add_fact(body.content, category=body.category)
         return {"id": fact_id, "status": "created"}
 
-    @app.delete("/api/agents/{name}/memory/facts/{fact_id}")
+    @app.delete("/api/agents/{name}/memory/facts/{fact_id}", dependencies=[Depends(_require_auth)])
     async def delete_fact(name: str, fact_id: int) -> dict[str, str]:
         """Delete a specific fact from an agent's memory."""
         agent = gateway.router.get_agent(name)
@@ -402,7 +429,7 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(404, f"Fact {fact_id} not found")
         return {"status": "deleted"}
 
-    @app.get("/api/agents/{name}/memory/stats")
+    @app.get("/api/agents/{name}/memory/stats", dependencies=[Depends(_require_auth)])
     async def memory_stats(name: str) -> dict[str, Any]:
         """Get memory statistics for an agent."""
         agent = gateway.router.get_agent(name)
@@ -412,7 +439,11 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(400, f"Agent '{name}' has no memory enabled")
         return agent.memory.stats()
 
-    @app.delete("/api/agents/{name}/memory", response_model=ClearMemoryResponse)
+    @app.delete(
+        "/api/agents/{name}/memory",
+        response_model=ClearMemoryResponse,
+        dependencies=[Depends(_require_auth)],
+    )
     async def clear_memory(name: str) -> dict[str, int]:
         """Clear all facts and chunks from an agent's memory."""
         agent = gateway.router.get_agent(name)
@@ -425,14 +456,14 @@ def create_app(gateway: Gateway) -> FastAPI:
 
     # --- Cron endpoints ---
 
-    @app.get("/api/cron/jobs")
+    @app.get("/api/cron/jobs", dependencies=[Depends(_require_auth)])
     async def list_jobs() -> dict[str, Any]:
         """List all scheduled cron jobs."""
         if gateway.scheduler:
             return {"jobs": gateway.scheduler.list_jobs()}
         return {"jobs": []}
 
-    @app.post("/api/cron/jobs")
+    @app.post("/api/cron/jobs", dependencies=[Depends(_require_auth)])
     async def add_job(body: AddJobRequest) -> dict[str, Any]:
         """Add a new scheduled cron job."""
         if not gateway.scheduler:
@@ -440,7 +471,11 @@ def create_app(gateway: Gateway) -> FastAPI:
         job = gateway.scheduler.add_job(body.model_dump())
         return {"job": job.to_dict()}
 
-    @app.delete("/api/cron/jobs/{job_id}", response_model=StatusResponse)
+    @app.delete(
+        "/api/cron/jobs/{job_id}",
+        response_model=StatusResponse,
+        dependencies=[Depends(_require_auth)],
+    )
     async def remove_job(job_id: str) -> dict[str, str]:
         """Remove a scheduled cron job by ID."""
         if not gateway.scheduler:

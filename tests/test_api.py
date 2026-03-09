@@ -48,6 +48,9 @@ def mock_gateway(tmp_path: Path):
 
     gw.agents = {"testagent": agent}
 
+    # Gateway config — no auth by default
+    gw.config.api_key = None
+
     # Mock router
     gw.router.get_agent.side_effect = lambda name: gw.agents.get(name)
 
@@ -711,3 +714,94 @@ class TestGetSession:
         with patch("smolclaw.api._sessions_dir_for_agent", return_value=sessions_dir):
             resp = client.get("/api/agents/testagent/sessions/abc-123")
         assert resp.status_code == 404
+
+
+# --- API Key Authentication ---
+
+
+class TestApiKeyAuth:
+    """Test optional API key authentication."""
+
+    @pytest.fixture
+    def auth_gateway(self, mock_gateway):
+        """Gateway with API key set."""
+        mock_gateway.config.api_key = "test-secret-key-123"
+        return mock_gateway
+
+    @pytest.fixture
+    def auth_client(self, auth_gateway):
+        """Test client with auth-enabled gateway."""
+        app = create_app(auth_gateway)
+        return TestClient(app)
+
+    def test_no_auth_required_when_key_not_set(self, client):
+        """When api_key is None, requests work without auth header."""
+        resp = client.get("/api/agents")
+        assert resp.status_code == 200
+
+    def test_rejects_request_without_header(self, auth_client):
+        """When api_key is set, missing auth header returns 401."""
+        resp = auth_client.get("/api/agents")
+        assert resp.status_code == 401
+        assert "Missing API key" in resp.json()["detail"]
+
+    def test_rejects_wrong_key(self, auth_client):
+        """Wrong API key returns 403."""
+        resp = auth_client.get("/api/agents", headers={"Authorization": "Bearer wrong-key"})
+        assert resp.status_code == 403
+        assert "Invalid API key" in resp.json()["detail"]
+
+    def test_accepts_correct_key(self, auth_client):
+        """Correct API key allows access."""
+        resp = auth_client.get(
+            "/api/agents",
+            headers={"Authorization": "Bearer test-secret-key-123"},
+        )
+        assert resp.status_code == 200
+
+    def test_rejects_non_bearer_scheme(self, auth_client):
+        """Non-Bearer auth scheme returns 401."""
+        resp = auth_client.get("/api/agents", headers={"Authorization": "Basic dXNlcjpwYXNz"})
+        assert resp.status_code == 401
+
+    def test_health_always_public(self, auth_client):
+        """Health endpoint is always accessible without auth."""
+        resp = auth_client.get("/api/health")
+        assert resp.status_code == 200
+
+    def test_dashboard_always_public(self, auth_client):
+        """Dashboard is always accessible without auth."""
+        resp = auth_client.get("/")
+        assert resp.status_code == 200
+
+    def test_send_requires_auth(self, auth_client):
+        """Send endpoint requires auth when key is set."""
+        resp = auth_client.post(
+            "/api/agents/testagent/send",
+            json={"text": "hello"},
+        )
+        assert resp.status_code == 401
+
+    def test_send_with_auth(self, auth_client):
+        """Send endpoint works with valid auth."""
+        resp = auth_client.post(
+            "/api/agents/testagent/send",
+            json={"text": "hello"},
+            headers={"Authorization": "Bearer test-secret-key-123"},
+        )
+        assert resp.status_code == 200
+
+    def test_memory_requires_auth(self, auth_client):
+        """Memory endpoints require auth when key is set."""
+        resp = auth_client.get("/api/agents/testagent/memory/facts")
+        assert resp.status_code == 401
+
+    def test_cron_requires_auth(self, auth_client):
+        """Cron endpoints require auth when key is set."""
+        resp = auth_client.get("/api/cron/jobs")
+        assert resp.status_code == 401
+
+    def test_delete_requires_auth(self, auth_client):
+        """Destructive endpoints require auth."""
+        resp = auth_client.delete("/api/agents/testagent/memory")
+        assert resp.status_code == 401

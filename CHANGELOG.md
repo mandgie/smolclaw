@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **API key authentication** — optional Bearer token auth for the REST API. Set `api_key` in config.yaml. Health and dashboard remain public. Uses constant-time comparison.
+- **py.typed marker** — PEP 561 typed package marker for downstream type checking
 - **Cross-agent awareness** — agents see peer agents in system prompt with API-based messaging
 - **Smart send** — `smolclaw send` uses running gateway API when available, falls back to temporary gateway
 - **Memory search API** — `GET /api/agents/{name}/memory/search` with auto/vector/hybrid modes
