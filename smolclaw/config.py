@@ -107,6 +107,9 @@ class GatewayConfig(BaseModel):
         description="Optional API key for authenticating REST API requests. "
         "When set, clients must send 'Authorization: Bearer <key>' header.",
     )
+    tracing: bool = Field(False, description="Enable OpenTelemetry tracing")
+    tracing_exporter: str = Field("console", description="Tracing exporter: 'console' or 'otlp'")
+    tracing_endpoint: str = Field("", description="OTLP endpoint URL (when exporter is 'otlp')")
 
     @field_validator("port")
     @classmethod

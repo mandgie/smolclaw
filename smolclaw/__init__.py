@@ -9,6 +9,7 @@ from .gateway import Gateway
 from .memory import Memory, serialize_f32
 from .router import InboundMessage, OutboundMessage, Router
 from .scheduler import Job, Scheduler
+from .tracing import TRACING_AVAILABLE, TracingConfig, configure_tracing, span
 from .watcher import FileWatcher
 
 __all__ = [
@@ -25,7 +26,11 @@ __all__ = [
     "Router",
     "Scheduler",
     "FileWatcher",
+    "TRACING_AVAILABLE",
     "TelegramChannel",
+    "TracingConfig",
     "__version__",
+    "configure_tracing",
     "serialize_f32",
+    "span",
 ]

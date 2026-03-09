@@ -225,6 +225,8 @@ class Agent:
             return await self._send_internal(text)
 
     async def _send_internal(self, text: str) -> str:
+        from .tracing import set_span_attribute, trace_llm_call
+
         if not await self.connect(resume_id=self._session_id):
             raise CLIConnectionError(f"[{self.name}] Could not connect")
 
@@ -233,57 +235,70 @@ class Agent:
         response_parts: list[str] = []
         self.last_structured_output = None
 
-        try:
-            await self._client.query(text)
-            async for message in self._client.receive_response():
-                if isinstance(message, AssistantMessage):
-                    for block in message.content:
-                        if isinstance(block, TextBlock):
-                            response_parts.append(block.text)
-                elif isinstance(message, ResultMessage):
-                    self._session_id = message.session_id
-                    self.last_cost_usd = message.total_cost_usd
-                    self.last_usage = message.usage
-                    self.last_num_turns = message.num_turns
-                    self.last_duration_ms = message.duration_ms
-                    self.last_duration_api_ms = message.duration_api_ms
-                    self.last_stop_reason = message.stop_reason
-                    if message.structured_output is not None:
-                        self.last_structured_output = message.structured_output
-                    if message.is_error and message.result:
-                        response_parts.append(f"[Error: {message.result}]")
-                elif isinstance(message, TaskStartedMessage):
-                    log.debug(f"[{self.name}] Task started: {message.description}")
-                elif isinstance(message, TaskProgressMessage):
-                    log.debug(
-                        f"[{self.name}] Task progress: {message.description}"
-                        f" (tokens={message.usage.total_tokens})"
-                    )
-                elif isinstance(message, TaskNotificationMessage):
-                    log.debug(f"[{self.name}] Task {message.status}: {message.summary}")
-                elif isinstance(message, StreamEvent):
-                    log.debug(f"[{self.name}] Stream event: {message.event}")
-        except Exception as e:
-            log.error(f"[{self.name}] Query failed ({time.time() - start:.1f}s): {e}")
-            self._connected = False
-            raise
+        with trace_llm_call(self.name, self.model, text):
+            try:
+                await self._client.query(text)
+                async for message in self._client.receive_response():
+                    if isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            if isinstance(block, TextBlock):
+                                response_parts.append(block.text)
+                    elif isinstance(message, ResultMessage):
+                        self._session_id = message.session_id
+                        self.last_cost_usd = message.total_cost_usd
+                        self.last_usage = message.usage
+                        self.last_num_turns = message.num_turns
+                        self.last_duration_ms = message.duration_ms
+                        self.last_duration_api_ms = message.duration_api_ms
+                        self.last_stop_reason = message.stop_reason
+                        if message.structured_output is not None:
+                            self.last_structured_output = message.structured_output
+                        if message.is_error and message.result:
+                            response_parts.append(f"[Error: {message.result}]")
+                    elif isinstance(message, TaskStartedMessage):
+                        log.debug(f"[{self.name}] Task started: {message.description}")
+                    elif isinstance(message, TaskProgressMessage):
+                        log.debug(
+                            f"[{self.name}] Task progress: {message.description}"
+                            f" (tokens={message.usage.total_tokens})"
+                        )
+                    elif isinstance(message, TaskNotificationMessage):
+                        log.debug(f"[{self.name}] Task {message.status}: {message.summary}")
+                    elif isinstance(message, StreamEvent):
+                        log.debug(f"[{self.name}] Stream event: {message.event}")
+            except Exception as e:
+                log.error(f"[{self.name}] Query failed ({time.time() - start:.1f}s): {e}")
+                self._connected = False
+                raise
 
-        # If structured output was returned, serialize it as the response
-        if self.last_structured_output is not None:
-            response = json.dumps(self.last_structured_output, indent=2)
-        else:
-            response = "\n".join(response_parts) if response_parts else "(No response)"
+            # If structured output was returned, serialize it as the response
+            if self.last_structured_output is not None:
+                response = json.dumps(self.last_structured_output, indent=2)
+            else:
+                response = "\n".join(response_parts) if response_parts else "(No response)"
 
-        elapsed = time.time() - start
-        cost_str = f", ${self.last_cost_usd:.4f}" if self.last_cost_usd else ""
-        log.info(f"[{self.name}] Response ({elapsed:.1f}s, {len(response)} chars{cost_str})")
+            elapsed = time.time() - start
+            cost_str = f", ${self.last_cost_usd:.4f}" if self.last_cost_usd else ""
+            log.info(f"[{self.name}] Response ({elapsed:.1f}s, {len(response)} chars{cost_str})")
 
-        if self.last_stop_reason == "max_tokens":
-            log.warning(
-                f"[{self.name}] Response truncated (stop_reason=max_tokens)."
-                " Consider increasing max_turns or simplifying the query."
-            )
-        return response
+            # Record LLM response metadata on the span
+            set_span_attribute("gen_ai.response.model", self.model)
+            set_span_attribute("smolclaw.response.length", len(response))
+            if self.last_cost_usd is not None:
+                set_span_attribute("smolclaw.cost_usd", self.last_cost_usd)
+            if self.last_num_turns is not None:
+                set_span_attribute("gen_ai.usage.turns", self.last_num_turns)
+            if self.last_duration_ms is not None:
+                set_span_attribute("smolclaw.duration_ms", self.last_duration_ms)
+            if self.last_stop_reason:
+                set_span_attribute("gen_ai.response.finish_reason", self.last_stop_reason)
+
+            if self.last_stop_reason == "max_tokens":
+                log.warning(
+                    f"[{self.name}] Response truncated (stop_reason=max_tokens)."
+                    " Consider increasing max_turns or simplifying the query."
+                )
+            return response
 
     async def new_session(self) -> None:
         """Drop current session and start fresh."""

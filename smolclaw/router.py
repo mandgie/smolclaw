@@ -63,37 +63,41 @@ class Router:
 
     async def route(self, message: InboundMessage) -> OutboundMessage:
         """Route an inbound message to the correct agent, return response."""
-        agent = self._agents.get(message.agent)
-        if not agent:
-            log.error(f"Router: no agent '{message.agent}' registered")
-            return OutboundMessage(
+        from .tracing import set_span_attribute, trace_route
+
+        with trace_route(message.agent, message.source, message.text):
+            agent = self._agents.get(message.agent)
+            if not agent:
+                log.error(f"Router: no agent '{message.agent}' registered")
+                return OutboundMessage(
+                    agent=message.agent,
+                    text=f"Agent '{message.agent}' not found.",
+                    source=message.source,
+                    chat_id=message.chat_id,
+                )
+
+            try:
+                response_text = await agent.send(message.text)
+            except Exception as e:
+                log.error(f"Router: agent '{message.agent}' error: {e}")
+                response_text = f"Error: {e}"
+
+            outbound = OutboundMessage(
                 agent=message.agent,
-                text=f"Agent '{message.agent}' not found.",
+                text=response_text,
                 source=message.source,
                 chat_id=message.chat_id,
             )
+            set_span_attribute("smolclaw.response.length", len(outbound.text))
 
-        try:
-            response_text = await agent.send(message.text)
-        except Exception as e:
-            log.error(f"Router: agent '{message.agent}' error: {e}")
-            response_text = f"Error: {e}"
+            # Notify handlers for this source
+            for callback in self._handlers.get(message.source, []):
+                try:
+                    await callback(outbound)
+                except Exception as e:
+                    log.error(f"Router: handler error for source '{message.source}': {e}")
 
-        outbound = OutboundMessage(
-            agent=message.agent,
-            text=response_text,
-            source=message.source,
-            chat_id=message.chat_id,
-        )
-
-        # Notify handlers for this source
-        for callback in self._handlers.get(message.source, []):
-            try:
-                await callback(outbound)
-            except Exception as e:
-                log.error(f"Router: handler error for source '{message.source}': {e}")
-
-        return outbound
+            return outbound
 
     def get_agent(self, name: str) -> Agent | None:
         """Look up a registered agent by name, or None if not found."""

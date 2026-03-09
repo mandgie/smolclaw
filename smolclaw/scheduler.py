@@ -192,27 +192,30 @@ class Scheduler:
                 next_dt = datetime.fromisoformat(job.next_run)
                 if now >= next_dt:
                     log.info(f"Scheduler: firing job '{job.id}' for agent '{job.agent}'")
-                    try:
-                        message = InboundMessage(
-                            agent=job.agent,
-                            text=job.prompt,
-                            source="cron",
-                            chat_id=job.delivery_chat_id,
-                            session_key=f"cron:{job.id}",
-                        )
-                        outbound = await self.router.route(message)
+                    from .tracing import trace_cron_job
 
-                        # Deliver to channel if configured
-                        if job.delivery and job.delivery_chat_id:
-                            await self._deliver(job, outbound.text)
+                    with trace_cron_job(job.id, job.agent):
+                        try:
+                            message = InboundMessage(
+                                agent=job.agent,
+                                text=job.prompt,
+                                source="cron",
+                                chat_id=job.delivery_chat_id,
+                                session_key=f"cron:{job.id}",
+                            )
+                            outbound = await self.router.route(message)
 
-                        job.last_run = now.isoformat()
-                        job.status = "ok"
-                        job.failures = 0
-                    except Exception as e:
-                        log.error(f"Scheduler: job '{job.id}' failed: {e}")
-                        job.status = "error"
-                        job.failures += 1
+                            # Deliver to channel if configured
+                            if job.delivery and job.delivery_chat_id:
+                                await self._deliver(job, outbound.text)
+
+                            job.last_run = now.isoformat()
+                            job.status = "ok"
+                            job.failures = 0
+                        except Exception as e:
+                            log.error(f"Scheduler: job '{job.id}' failed: {e}")
+                            job.status = "error"
+                            job.failures += 1
 
                     # Compute next run
                     job.next_run = job.compute_next_run(after=now).isoformat()

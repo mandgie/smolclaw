@@ -224,38 +224,49 @@ class Memory:
 
     def add_fact(self, content: str, category: str = "general", source: str = "manual") -> int:
         """Add a fact to this agent's namespace. Embeds for vector search if available."""
-        conn = self._connect()
-        try:
-            cursor = conn.execute(
-                "INSERT INTO facts (agent, content, category, source, created_at)"
-                " VALUES (?, ?, ?, ?, ?)",
-                (self.agent, content, category, source, datetime.now().isoformat()),
-            )
-            fact_id = cursor.lastrowid
-            embedding = self._embed(content)
-            if embedding is not None:
-                conn.execute(
-                    "INSERT INTO vec_facts (rowid, embedding) VALUES (?, ?)",
-                    (fact_id, embedding),
+        from .tracing import set_span_attribute, trace_memory_op
+
+        with trace_memory_op(self.agent, "add_fact"):
+            conn = self._connect()
+            try:
+                cursor = conn.execute(
+                    "INSERT INTO facts (agent, content, category, source, created_at)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    (self.agent, content, category, source, datetime.now().isoformat()),
                 )
-            conn.commit()
-            return fact_id
-        finally:
-            conn.close()
+                fact_id = cursor.lastrowid
+                embedding = self._embed(content)
+                if embedding is not None:
+                    conn.execute(
+                        "INSERT INTO vec_facts (rowid, embedding) VALUES (?, ?)",
+                        (fact_id, embedding),
+                    )
+                conn.commit()
+                set_span_attribute("smolclaw.memory.fact_id", fact_id)
+                return fact_id
+            finally:
+                conn.close()
 
     def search_facts(self, query: str, limit: int = 10, cross_agent: bool = False) -> list[dict]:
         """Search facts using best available method (vector > FTS5 > LIKE)."""
-        conn = self._connect()
-        try:
-            fts_query = self._fts5_escape(query)
-            if fts_query:
-                try:
-                    return self._fts_search_facts(conn, fts_query, limit, cross_agent)
-                except sqlite3.OperationalError:
-                    pass
-            return self._like_search_facts(conn, query, limit, cross_agent)
-        finally:
-            conn.close()
+        from .tracing import set_span_attribute, trace_memory_op
+
+        with trace_memory_op(self.agent, "search_facts", query):
+            conn = self._connect()
+            try:
+                fts_query = self._fts5_escape(query)
+                if fts_query:
+                    try:
+                        results = self._fts_search_facts(conn, fts_query, limit, cross_agent)
+                        set_span_attribute("smolclaw.memory.results", len(results))
+                        return results
+                    except sqlite3.OperationalError:
+                        pass
+                results = self._like_search_facts(conn, query, limit, cross_agent)
+                set_span_attribute("smolclaw.memory.results", len(results))
+                return results
+            finally:
+                conn.close()
 
     def vector_search_facts(
         self, query: str, limit: int = 10, cross_agent: bool = False

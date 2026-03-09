@@ -6,6 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **OpenTelemetry tracing** — optional OTEL instrumentation for message routing, LLM calls, memory operations, and cron jobs. Zero overhead when disabled. Install with `pip install smolclaw[otel]`. Follows GenAI semantic conventions.
 - **API key authentication** — optional Bearer token auth for the REST API. Set `api_key` in config.yaml. Health and dashboard remain public. Uses constant-time comparison.
 - **py.typed marker** — PEP 561 typed package marker for downstream type checking
 - **Cross-agent awareness** — agents see peer agents in system prompt with API-based messaging
@@ -16,6 +17,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **CLI memory commands** — `smolclaw memory search/list/stats/add/delete` for managing agent memory from the terminal
 - Doctor edge case tests (Python version, Claude CLI, packages, memory DB, port conflicts)
 - `[all]` optional dependency extra — `pip install smolclaw[all]` for all features
+- `[otel]` and `[otel-otlp]` optional extras for OpenTelemetry tracing
 
 ### Changed
 - CI now tests with `[all]` extras to cover sqlite-vec and watchfiles code paths

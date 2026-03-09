@@ -28,6 +28,7 @@ Run multiple AI agents — each with its own personality, skills, and channels �
 - **Interactive REPL** — `smolclaw chat <agent>` for terminal conversations with session persistence.
 - **MCP support** — Connect agents to MCP servers (stdio/SSE/HTTP) for extended tool access.
 - **REST API + dashboard** — FastAPI on `:7890` with agent management, messaging, optional API key auth, and a built-in dark-mode dashboard.
+- **OpenTelemetry tracing** — Optional OTEL instrumentation for routing, LLM calls, memory, and cron. Zero overhead when disabled. `pip install smolclaw[otel]`.
 - **Claude SDK powered** — Built on Anthropic's Claude Agent SDK with session management, extended thinking, and tool support.
 
 ## Quick Start
@@ -224,6 +225,7 @@ smolclaw/              # Python package (~2700 lines)
 ├── channel.py         # Channel adapters (Telegram)
 ├── memory.py          # Namespaced SQLite memory (FTS5 + vector search)
 ├── scheduler.py       # Cron scheduler (croniter)
+├── tracing.py         # Optional OpenTelemetry instrumentation
 ├── watcher.py         # Hot-reload file watcher (watchfiles)
 ├── api.py             # FastAPI REST endpoints
 ├── config.py          # Filesystem-based agent discovery

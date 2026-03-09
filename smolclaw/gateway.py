@@ -23,6 +23,7 @@ from .config import (
 from .memory import Memory
 from .router import Router
 from .scheduler import Job, Scheduler
+from .tracing import TracingConfig, configure_tracing
 from .watcher import FileWatcher
 
 log = logging.getLogger("smolclaw")
@@ -55,6 +56,20 @@ class Gateway:
     async def start(self) -> None:
         """Boot everything: agents, channels, scheduler."""
         log.info(f"smolclaw gateway starting (base={self.base_dir})")
+
+        # Configure tracing if enabled
+        if self.config.tracing:
+            tracing_cfg = TracingConfig(
+                enabled=True,
+                exporter=self.config.tracing_exporter,
+                endpoint=self.config.tracing_endpoint,
+            )
+            if configure_tracing(tracing_cfg):
+                log.info("OpenTelemetry tracing: enabled")
+            else:
+                log.warning(
+                    "OpenTelemetry tracing: requested but unavailable (pip install smolclaw[otel])"
+                )
 
         # Load shared context
         self._user_md = load_shared_user_md(self.base_dir)
