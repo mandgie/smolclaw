@@ -148,8 +148,17 @@ class Scheduler:
                 continue
 
             if job.enabled and job.prompt:
-                # Compute next run if not set
-                if not job.next_run:
+                # Validate or compute next_run
+                if job.next_run:
+                    try:
+                        datetime.fromisoformat(job.next_run)
+                    except (ValueError, TypeError):
+                        log.warning(
+                            f"Scheduler: job '{job.id}' has invalid next_run "
+                            f"'{job.next_run}', recomputing"
+                        )
+                        job.next_run = job.compute_next_run().isoformat()
+                else:
                     job.next_run = job.compute_next_run().isoformat()
                 self.jobs.append(job)
         log.info(f"Scheduler: loaded {len(self.jobs)} jobs")
@@ -164,8 +173,28 @@ class Scheduler:
         """Start the scheduler loop."""
         self.load_jobs()
         self._running = True
-        self._task = asyncio.create_task(self._loop())
+        self._start_loop()
         log.info("Scheduler: started")
+
+    def _start_loop(self) -> None:
+        """Create the loop task with a done callback for crash detection."""
+        self._task = asyncio.create_task(self._loop())
+        self._task.add_done_callback(self._on_loop_done)
+
+    def _on_loop_done(self, task: asyncio.Task) -> None:
+        """Restart the loop if it crashed unexpectedly."""
+        if not self._running:
+            return  # Clean shutdown, nothing to do
+
+        exc = task.exception() if not task.cancelled() else None
+        if exc:
+            log.error(f"Scheduler: loop crashed ({exc}), restarting in 5s")
+        else:
+            log.warning("Scheduler: loop exited unexpectedly, restarting in 5s")
+
+        # Schedule restart on the event loop
+        loop = asyncio.get_event_loop()
+        loop.call_later(5, self._start_loop)
 
     async def stop(self) -> None:
         """Stop the scheduler."""
@@ -183,43 +212,68 @@ class Scheduler:
         from .router import InboundMessage
 
         while self._running:
-            now = datetime.now()
+            try:
+                now = datetime.now()
 
-            for job in self.jobs:
-                if not job.enabled or not job.next_run:
-                    continue
+                for job in self.jobs:
+                    if not job.enabled or not job.next_run:
+                        continue
 
-                next_dt = datetime.fromisoformat(job.next_run)
-                if now >= next_dt:
-                    log.info(f"Scheduler: firing job '{job.id}' for agent '{job.agent}'")
-                    from .tracing import trace_cron_job
-
-                    with trace_cron_job(job.id, job.agent):
+                    # Per-job isolation: a bad next_run string must not kill the loop
+                    try:
+                        next_dt = datetime.fromisoformat(job.next_run)
+                    except (ValueError, TypeError) as e:
+                        log.error(
+                            f"Scheduler: job '{job.id}' has invalid next_run "
+                            f"'{job.next_run}', recomputing: {e}"
+                        )
                         try:
-                            message = InboundMessage(
-                                agent=job.agent,
-                                text=job.prompt,
-                                source="cron",
-                                chat_id=job.delivery_chat_id,
-                                session_key=f"cron:{job.id}",
+                            job.next_run = job.compute_next_run().isoformat()
+                            self.save_jobs()
+                        except Exception as e2:
+                            log.error(
+                                f"Scheduler: job '{job.id}' failed to recompute next_run, "
+                                f"disabling: {e2}"
                             )
-                            outbound = await self.router.route(message)
+                            job.enabled = False
+                            self.save_jobs()
+                        continue
 
-                            # Deliver to channel if configured
-                            if job.delivery and job.delivery_chat_id:
-                                await self._deliver(job, outbound.text)
+                    if now >= next_dt:
+                        log.info(f"Scheduler: firing job '{job.id}' for agent '{job.agent}'")
+                        from .tracing import trace_cron_job
 
-                            job.last_run = now.isoformat()
-                            job.status = "ok"
-                            job.failures = 0
-                        except Exception as e:
-                            log.error(f"Scheduler: job '{job.id}' failed: {e}")
-                            job.status = "error"
-                            job.failures += 1
+                        with trace_cron_job(job.id, job.agent):
+                            try:
+                                message = InboundMessage(
+                                    agent=job.agent,
+                                    text=job.prompt,
+                                    source="cron",
+                                    chat_id=job.delivery_chat_id,
+                                    session_key=f"cron:{job.id}",
+                                )
+                                outbound = await self.router.route(message)
 
-                    # Compute next run
-                    job.next_run = job.compute_next_run(after=now).isoformat()
-                    self.save_jobs()
+                                # Deliver to channel if configured
+                                if job.delivery and job.delivery_chat_id:
+                                    await self._deliver(job, outbound.text)
+
+                                job.last_run = now.isoformat()
+                                job.status = "ok"
+                                job.failures = 0
+                            except Exception as e:
+                                log.error(f"Scheduler: job '{job.id}' failed: {e}")
+                                job.status = "error"
+                                job.failures += 1
+
+                        # Compute next run
+                        job.next_run = job.compute_next_run(after=now).isoformat()
+                        self.save_jobs()
+
+            except asyncio.CancelledError:
+                raise  # Let cancellation propagate for clean shutdown
+            except Exception as e:
+                log.error(f"Scheduler: unexpected error in loop iteration: {e}", exc_info=True)
 
             await asyncio.sleep(30)
 
