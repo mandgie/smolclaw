@@ -82,6 +82,18 @@ class Router:
                 log.error(f"Router: agent '{message.agent}' error: {e}")
                 response_text = f"Error: {e}"
 
+            # Auto-save conversation chunk to memory (non-blocking)
+            if agent.memory and not response_text.startswith("Error:"):
+                try:
+                    session_id = getattr(agent, "_session_id", "") or ""
+                    agent.memory.add_chunk(
+                        user_text=message.text,
+                        assistant_text=response_text[:2000],
+                        session_id=session_id,
+                    )
+                except Exception as e:
+                    log.warning(f"Router: memory save failed for '{message.agent}': {e}")
+
             outbound = OutboundMessage(
                 agent=message.agent,
                 text=response_text,

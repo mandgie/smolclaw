@@ -73,6 +73,46 @@ class TestRouter:
         result = await router.route(msg)
         assert result.text == "Hello back!"
 
+    async def test_route_saves_chunk_to_memory(self, router, mock_agent):
+        memory = MagicMock()
+        mock_agent.memory = memory
+        mock_agent._session_id = "sess-123"
+
+        msg = InboundMessage(agent="testagent", text="What is Saltfish?", source="telegram")
+        await router.route(msg)
+
+        memory.add_chunk.assert_called_once_with(
+            user_text="What is Saltfish?",
+            assistant_text="Hello back!",
+            session_id="sess-123",
+        )
+
+    async def test_route_skips_memory_on_error_response(self, router, mock_agent):
+        mock_agent.send = AsyncMock(side_effect=RuntimeError("boom"))
+        memory = MagicMock()
+        mock_agent.memory = memory
+
+        msg = InboundMessage(agent="testagent", text="Hello", source="cli")
+        await router.route(msg)
+
+        memory.add_chunk.assert_not_called()
+
+    async def test_route_skips_memory_when_none(self, router, mock_agent):
+        mock_agent.memory = None
+
+        msg = InboundMessage(agent="testagent", text="Hello", source="cli")
+        result = await router.route(msg)
+        assert result.text == "Hello back!"  # No crash
+
+    async def test_memory_failure_doesnt_break_routing(self, router, mock_agent):
+        memory = MagicMock()
+        memory.add_chunk.side_effect = RuntimeError("DB locked")
+        mock_agent.memory = memory
+
+        msg = InboundMessage(agent="testagent", text="Hello", source="cli")
+        result = await router.route(msg)
+        assert result.text == "Hello back!"  # Response still delivered
+
 
 class TestRouterRepr:
     def test_empty_router(self):
