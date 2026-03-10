@@ -12,7 +12,12 @@ from click.testing import CliRunner
 
 from smolclaw.cli import (
     _clear_session_file,
+    _get_latest_version,
+    _is_editable_install,
+    _is_gateway_running,
     _load_session_id,
+    _parse_version_tuple,
+    _restart_gateway,
     _save_session_id,
     _session_file_path,
     _try_api_send,
@@ -1246,6 +1251,209 @@ class TestUninstallCommand:
 
         assert result.exit_code == 0
         assert not plist_file.exists()
+
+
+class TestUpdateCommand:
+    """Tests for the smolclaw update command and its helpers."""
+
+    def test_parse_version_tuple(self):
+        assert _parse_version_tuple("0.1.0") == (0, 1, 0)
+        assert _parse_version_tuple("1.2.3") == (1, 2, 3)
+        assert _parse_version_tuple("0.10.0") > _parse_version_tuple("0.9.0")
+
+    def test_check_shows_newer_version(self, tmp_base: Path):
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._get_latest_version", return_value=("0.2.0", "release")),
+            patch("smolclaw.__version__", "0.1.0"),
+        ):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "update", "--check"])
+
+        assert result.exit_code == 0
+        assert "0.2.0" in result.output
+        assert "Update available" in result.output
+
+    def test_check_already_latest(self, tmp_base: Path):
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._get_latest_version", return_value=("0.1.0", "release")),
+            patch("smolclaw.__version__", "0.1.0"),
+        ):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "update"])
+
+        assert result.exit_code == 0
+        assert "already up to date" in result.output
+
+    def test_check_no_internet(self, tmp_base: Path):
+        runner = CliRunner()
+        with patch("smolclaw.cli._get_latest_version", return_value=(None, "")):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "update"])
+
+        assert result.exit_code != 0
+        assert "Could not check" in result.output
+
+    def test_check_flag_does_not_install(self, tmp_base: Path):
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._get_latest_version", return_value=("0.2.0", "release")),
+            patch("smolclaw.__version__", "0.1.0"),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "update", "--check"])
+
+        assert result.exit_code == 0
+        mock_run.assert_not_called()
+
+    def test_editable_install_warns(self, tmp_base: Path):
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._get_latest_version", return_value=("0.2.0", "release")),
+            patch("smolclaw.__version__", "0.1.0"),
+            patch("smolclaw.cli._is_editable_install", return_value=True),
+        ):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "update"])
+
+        assert result.exit_code == 0
+        assert "editable" in result.output or "development" in result.output
+        assert "git" in result.output
+
+    def test_editable_install_force_proceeds(self, tmp_base: Path):
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._get_latest_version", return_value=("0.2.0", "release")),
+            patch("smolclaw.__version__", "0.1.0"),
+            patch("smolclaw.cli._is_editable_install", return_value=True),
+            patch("smolclaw.cli._is_gateway_running", return_value=False),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stdout="smolclaw 0.2.0", stderr="")
+            result = runner.invoke(cli, ["--home", str(tmp_base), "update", "--force"])
+
+        assert result.exit_code == 0
+        assert mock_run.called
+
+    def test_update_installs_via_pip(self, tmp_base: Path):
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._get_latest_version", return_value=("0.2.0", "release")),
+            patch("smolclaw.__version__", "0.1.0"),
+            patch("smolclaw.cli._is_editable_install", return_value=False),
+            patch("smolclaw.cli._is_gateway_running", return_value=False),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stdout="0.2.0", stderr="")
+            result = runner.invoke(cli, ["--home", str(tmp_base), "update"])
+
+        assert result.exit_code == 0
+        # First call should be pip install
+        pip_call = mock_run.call_args_list[0]
+        assert "pip" in str(pip_call)
+        assert "mandgie/smolclaw" in str(pip_call)
+
+    def test_update_pip_failure(self, tmp_base: Path):
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._get_latest_version", return_value=("0.2.0", "release")),
+            patch("smolclaw.__version__", "0.1.0"),
+            patch("smolclaw.cli._is_editable_install", return_value=False),
+            patch("smolclaw.cli._is_gateway_running", return_value=False),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
+            result = runner.invoke(cli, ["--home", str(tmp_base), "update"])
+
+        assert result.exit_code != 0
+        assert "failed" in result.output.lower()
+
+    def test_update_restarts_gateway(self, tmp_base: Path):
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._get_latest_version", return_value=("0.2.0", "release")),
+            patch("smolclaw.__version__", "0.1.0"),
+            patch("smolclaw.cli._is_editable_install", return_value=False),
+            patch("smolclaw.cli._is_gateway_running", return_value=True),
+            patch("smolclaw.cli._restart_gateway", return_value="Gateway restarted via LaunchAgent.") as mock_restart,
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stdout="0.2.0", stderr="")
+            result = runner.invoke(cli, ["--home", str(tmp_base), "update"])
+
+        assert result.exit_code == 0
+        mock_restart.assert_called_once()
+        assert "restarted" in result.output.lower()
+
+    def test_no_restart_flag(self, tmp_base: Path):
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._get_latest_version", return_value=("0.2.0", "release")),
+            patch("smolclaw.__version__", "0.1.0"),
+            patch("smolclaw.cli._is_editable_install", return_value=False),
+            patch("smolclaw.cli._is_gateway_running", return_value=True),
+            patch("smolclaw.cli._restart_gateway") as mock_restart,
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stdout="0.2.0", stderr="")
+            result = runner.invoke(cli, ["--home", str(tmp_base), "update", "--no-restart"])
+
+        assert result.exit_code == 0
+        mock_restart.assert_not_called()
+        assert "still running" in result.output.lower()
+
+    def test_force_when_current(self, tmp_base: Path):
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._get_latest_version", return_value=("0.1.0", "release")),
+            patch("smolclaw.__version__", "0.1.0"),
+            patch("smolclaw.cli._is_editable_install", return_value=False),
+            patch("smolclaw.cli._is_gateway_running", return_value=False),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stdout="0.1.0", stderr="")
+            result = runner.invoke(cli, ["--home", str(tmp_base), "update", "--force"])
+
+        assert result.exit_code == 0
+        assert mock_run.called
+
+    def test_is_editable_install_false_by_default(self):
+        """Non-editable installs return False."""
+        with patch("importlib.metadata.distribution") as mock_dist:
+            mock_dist.return_value.read_text.return_value = None
+            assert _is_editable_install() is False
+
+    def test_is_editable_install_true(self):
+        """Editable install detected from direct_url.json."""
+        with patch("importlib.metadata.distribution") as mock_dist:
+            mock_dist.return_value.read_text.return_value = json.dumps(
+                {"dir_info": {"editable": True}}
+            )
+            assert _is_editable_install() is True
+
+    def test_is_gateway_running_false_when_down(self, tmp_base: Path):
+        """Gateway not running returns False."""
+        import urllib.error
+
+        with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("refused")):
+            assert _is_gateway_running(tmp_base) is False
+
+    def test_restart_gateway_no_launchagent(self, tmp_base: Path):
+        """Restart without LaunchAgent returns manual restart message."""
+        with patch("smolclaw.cli._plist_path") as mock_plist:
+            mock_plist.return_value = tmp_base / "nonexistent.plist"
+            msg = _restart_gateway(tmp_base)
+        assert "manually" in msg.lower()
+
+    def test_restart_gateway_with_launchagent(self, tmp_base: Path):
+        """Restart with LaunchAgent calls launchctl."""
+        plist_file = tmp_base / "test.plist"
+        plist_file.write_text("plist content")
+        with (
+            patch("smolclaw.cli._plist_path", return_value=plist_file),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0)
+            msg = _restart_gateway(tmp_base)
+        assert "restarted" in msg.lower()
+        assert mock_run.call_count == 2  # unload + load
 
 
 class TestGeneratePlist:

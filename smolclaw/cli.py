@@ -126,6 +126,185 @@ def version():
     click.echo(f"smolclaw {__version__}")
 
 
+# ---------------------------------------------------------------------------
+# Update
+# ---------------------------------------------------------------------------
+
+GITHUB_REPO = "mandgie/smolclaw"
+
+
+def _parse_version_tuple(version_str: str) -> tuple[int, ...]:
+    """Parse '0.1.0' into a comparable tuple (0, 1, 0)."""
+    return tuple(int(x) for x in version_str.strip().split("."))
+
+
+def _get_latest_version() -> tuple[str | None, str]:
+    """Fetch the latest smolclaw version from GitHub.
+
+    Returns (version_string, source) where source is 'release' or 'main'.
+    Returns (None, '') on failure.
+    """
+    import urllib.error
+    import urllib.request
+
+    # Try GitHub releases first
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+            tag = data.get("tag_name", "")
+            ver = tag.lstrip("v")
+            if ver:
+                return ver, "release"
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError, json.JSONDecodeError):
+        pass
+
+    # Fall back: read pyproject.toml from main branch
+    try:
+        url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/pyproject.toml"
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            for line in resp.read().decode().splitlines():
+                if line.strip().startswith("version"):
+                    # version = "0.1.0"
+                    ver = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    if ver:
+                        return ver, "main"
+    except (urllib.error.URLError, OSError):
+        pass
+
+    return None, ""
+
+
+def _is_editable_install() -> bool:
+    """Check if smolclaw is installed in editable (development) mode."""
+    try:
+        import importlib.metadata
+
+        dist = importlib.metadata.distribution("smolclaw")
+        # Editable installs have a direct_url.json with "dir_info": {"editable": true}
+        direct_url = dist.read_text("direct_url.json")
+        if direct_url:
+            data = json.loads(direct_url)
+            return data.get("dir_info", {}).get("editable", False)
+    except Exception:
+        pass
+    return False
+
+
+def _is_gateway_running(base: Path) -> bool:
+    """Check if the gateway is running by probing the API."""
+    import urllib.error
+    import urllib.request
+
+    from .config import load_gateway_config
+
+    try:
+        config = load_gateway_config(base)
+    except Exception:
+        return False
+
+    try:
+        url = f"http://{config.host}:{config.port}/api/cron/jobs"
+        with urllib.request.urlopen(url, timeout=3) as resp:
+            return resp.status == 200
+    except (urllib.error.URLError, OSError):
+        return False
+
+
+def _restart_gateway(base: Path) -> str:
+    """Restart the gateway. Returns a status message."""
+    plist = _plist_path()
+    if plist.exists():
+        subprocess.run(["launchctl", "unload", str(plist)], capture_output=True)
+        result = subprocess.run(["launchctl", "load", str(plist)], capture_output=True, text=True)
+        if result.returncode == 0:
+            return "Gateway restarted via LaunchAgent."
+        return f"LaunchAgent reload failed: {result.stderr.strip()}"
+    return "Gateway is running but not managed by LaunchAgent. Restart manually: smolclaw up"
+
+
+@cli.command()
+@click.option("--check", is_flag=True, help="Check for updates without installing")
+@click.option("--restart/--no-restart", default=True, help="Restart gateway after update")
+@click.option("--force", is_flag=True, help="Force update even if already at latest")
+@click.pass_context
+def update(ctx, check, restart, force):
+    """Update smolclaw to the latest version."""
+    from . import __version__
+
+    base = ctx.obj["base"]
+    current = __version__
+
+    click.echo(f"  Current version: {current}")
+    click.echo("  Checking for updates...")
+
+    latest, source = _get_latest_version()
+    if latest is None:
+        click.echo("  Could not check for updates (no internet?)")
+        sys.exit(1)
+
+    click.echo(f"  Latest version:  {latest} ({source})")
+
+    try:
+        is_newer = _parse_version_tuple(latest) > _parse_version_tuple(current)
+    except (ValueError, TypeError):
+        click.echo(f"  Could not parse version: {latest}")
+        sys.exit(1)
+
+    if not is_newer and not force:
+        click.echo(f"\n  smolclaw {current} is already up to date.")
+        return
+
+    if is_newer:
+        click.echo(f"\n  Update available: {current} → {latest}")
+
+    if check:
+        return
+
+    # Editable install guard
+    if _is_editable_install():
+        click.echo("\n  You're running an editable (development) install.")
+        click.echo("  Update via git instead:")
+        click.echo(f"    cd {Path(__file__).resolve().parent.parent} && git pull && pip install -e .")
+        if not force:
+            return
+        click.echo("  --force passed, updating anyway...")
+
+    # Check gateway before update
+    gateway_was_running = _is_gateway_running(base)
+
+    # Install
+    click.echo("\n  Installing...")
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--upgrade",
+         f"git+https://github.com/{GITHUB_REPO}.git"],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        click.echo("  Update failed:")
+        click.echo(result.stderr or result.stdout)
+        sys.exit(1)
+
+    # Verify new version
+    verify = subprocess.run(
+        [sys.executable, "-c", "import smolclaw; print(smolclaw.__version__)"],
+        capture_output=True,
+        text=True,
+    )
+    new_version = verify.stdout.strip() if verify.returncode == 0 else "unknown"
+
+    click.echo(f"  Updated: {current} → {new_version}")
+
+    # Restart gateway if it was running
+    if restart and gateway_was_running:
+        click.echo(f"  {_restart_gateway(base)}")
+    elif gateway_was_running:
+        click.echo("  Gateway is still running with old code — restart when ready.")
+
+
 @cli.command()
 @click.option("--agent", default="myagent", help="Name of the first agent to create")
 @click.option("--model", default="claude-sonnet-4-6", help="Default model for the agent")
