@@ -12,7 +12,6 @@ from click.testing import CliRunner
 
 from smolclaw.cli import (
     _clear_session_file,
-    _get_latest_version,
     _is_editable_install,
     _is_gateway_running,
     _load_session_id,
@@ -404,9 +403,7 @@ class TestCronEnableDisable:
         """Disabling a job sets enabled=false."""
         jobs_path = self._make_jobs(tmp_path, enabled=True)
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["--home", str(tmp_path), "cron", "disable", "heartbeat"]
-        )
+        result = runner.invoke(cli, ["--home", str(tmp_path), "cron", "disable", "heartbeat"])
         assert result.exit_code == 0
         assert "disabled" in result.output
         jobs = json.loads(jobs_path.read_text())
@@ -416,9 +413,7 @@ class TestCronEnableDisable:
         """Enabling a disabled job sets enabled=true."""
         jobs_path = self._make_jobs(tmp_path, enabled=False)
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["--home", str(tmp_path), "cron", "enable", "heartbeat"]
-        )
+        result = runner.invoke(cli, ["--home", str(tmp_path), "cron", "enable", "heartbeat"])
         assert result.exit_code == 0
         assert "enabled" in result.output
         jobs = json.loads(jobs_path.read_text())
@@ -428,18 +423,14 @@ class TestCronEnableDisable:
         """Disabling a non-existent job gives a friendly message."""
         self._make_jobs(tmp_path)
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["--home", str(tmp_path), "cron", "disable", "nonexistent"]
-        )
+        result = runner.invoke(cli, ["--home", str(tmp_path), "cron", "disable", "nonexistent"])
         assert result.exit_code == 0
         assert "not found" in result.output
 
     def test_enable_no_file(self, tmp_path: Path):
         """Enabling when no jobs file exists gives a friendly message."""
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["--home", str(tmp_path), "cron", "enable", "j1"]
-        )
+        result = runner.invoke(cli, ["--home", str(tmp_path), "cron", "enable", "j1"])
         assert result.exit_code == 0
         assert "No jobs file" in result.output
 
@@ -474,9 +465,7 @@ class TestCronEnableDisable:
         assert "disabled-job" not in result.output
 
         # --all: show everything
-        result = runner.invoke(
-            cli, ["--home", str(tmp_path), "cron", "list", "--all"]
-        )
+        result = runner.invoke(cli, ["--home", str(tmp_path), "cron", "list", "--all"])
         assert "active-job" in result.output
         assert "disabled-job" in result.output
 
@@ -1473,7 +1462,10 @@ class TestUpdateCommand:
             patch("smolclaw.__version__", "0.1.0"),
             patch("smolclaw.cli._is_editable_install", return_value=False),
             patch("smolclaw.cli._is_gateway_running", return_value=True),
-            patch("smolclaw.cli._restart_gateway", return_value="Gateway restarted via LaunchAgent.") as mock_restart,
+            patch(
+                "smolclaw.cli._restart_gateway",
+                return_value="Gateway restarted via LaunchAgent.",
+            ) as mock_restart,
             patch("smolclaw.cli.subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0, stdout="0.2.0", stderr="")
