@@ -266,7 +266,8 @@ def update(ctx, check, restart, force):
     if _is_editable_install():
         click.echo("\n  You're running an editable (development) install.")
         click.echo("  Update via git instead:")
-        click.echo(f"    cd {Path(__file__).resolve().parent.parent} && git pull && pip install -e .")
+        repo = Path(__file__).resolve().parent.parent
+        click.echo(f"    cd {repo} && git pull && pip install -e .")
         if not force:
             return
         click.echo("  --force passed, updating anyway...")
@@ -277,8 +278,14 @@ def update(ctx, check, restart, force):
     # Install
     click.echo("\n  Installing...")
     result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "--upgrade",
-         f"git+https://github.com/{GITHUB_REPO}.git"],
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            f"git+https://github.com/{GITHUB_REPO}.git",
+        ],
         capture_output=True,
         text=True,
     )
@@ -820,8 +827,9 @@ def cron():
 
 
 @cron.command("list")
+@click.option("--all", "show_all", is_flag=True, help="Show disabled jobs too")
 @click.pass_context
-def cron_list(ctx):
+def cron_list(ctx, show_all):
     """List all scheduled jobs."""
     base = ctx.obj["base"]
     jobs_path = base / "shared" / "cron" / "jobs.json"
@@ -831,12 +839,31 @@ def cron_list(ctx):
         return
 
     jobs = json.loads(jobs_path.read_text())
-    click.echo(f"{'ID':<25} {'AGENT':<12} {'SCHEDULE':<20} {'STATUS':<8} {'NEXT RUN'}")
-    click.echo("─" * 85)
-    for job in jobs:
+    if not show_all:
+        visible = [j for j in jobs if j.get("enabled", True)]
+    else:
+        visible = jobs
+
+    if not visible:
+        click.echo("No jobs found. Use --all to include disabled jobs.")
+        return
+
+    click.echo(
+        f"{'ID':<25} {'AGENT':<10} {'SCHEDULE':<18} "
+        f"{'ON':<4} {'STATUS':<8} {'LAST RUN':<20} {'NEXT RUN'}"
+    )
+    click.echo("─" * 110)
+    for job in visible:
+        enabled = "✓" if job.get("enabled", True) else "✗"
+        last_run = job.get("last_run", "") or "—"
+        if last_run != "—":
+            last_run = last_run[:19]  # Trim to seconds
+        next_run = job.get("next_run", "") or "—"
+        if next_run != "—":
+            next_run = next_run[:19]
         click.echo(
-            f"{job['id']:<25} {job['agent']:<12} {job['schedule']:<20} "
-            f"{job.get('status', 'pending'):<8} {job.get('next_run', 'N/A')}"
+            f"{job['id']:<25} {job['agent']:<10} {job['schedule']:<18} "
+            f"{enabled:<4} {job.get('status', 'pending'):<8} {last_run:<20} {next_run}"
         )
 
 
@@ -920,6 +947,47 @@ def cron_remove(ctx, job_id):
 
     jobs_path.write_text(json.dumps(jobs, indent=2))
     click.echo(f"Removed job '{job_id}'")
+
+
+@cron.command("enable")
+@click.argument("job_id")
+@click.pass_context
+def cron_enable(ctx, job_id):
+    """Enable a disabled job."""
+    _toggle_job(ctx.obj["base"], job_id, enabled=True)
+
+
+@cron.command("disable")
+@click.argument("job_id")
+@click.pass_context
+def cron_disable(ctx, job_id):
+    """Disable a job without removing it."""
+    _toggle_job(ctx.obj["base"], job_id, enabled=False)
+
+
+def _toggle_job(base: Path, job_id: str, *, enabled: bool) -> None:
+    """Enable or disable a job by ID."""
+    jobs_path = base / "shared" / "cron" / "jobs.json"
+
+    if not jobs_path.exists():
+        click.echo("No jobs file found.")
+        return
+
+    jobs = json.loads(jobs_path.read_text())
+    found = False
+    for job in jobs:
+        if job["id"] == job_id:
+            job["enabled"] = enabled
+            found = True
+            break
+
+    if not found:
+        click.echo(f"Job '{job_id}' not found.")
+        return
+
+    jobs_path.write_text(json.dumps(jobs, indent=2))
+    state = "enabled" if enabled else "disabled"
+    click.echo(f"Job '{job_id}' {state}.")
 
 
 def _resolve_memory_db(base: Path, agent_name: str) -> Path:

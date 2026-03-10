@@ -380,6 +380,107 @@ class TestCronListWithJobs:
         assert "0 8 * * 1-5" in result.output
 
 
+class TestCronEnableDisable:
+    def _make_jobs(self, tmp_path: Path, enabled: bool = True) -> Path:
+        cron_dir = tmp_path / "shared" / "cron"
+        cron_dir.mkdir(parents=True)
+        jobs_path = cron_dir / "jobs.json"
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "heartbeat",
+                        "agent": "tars",
+                        "schedule": "0 * * * *",
+                        "enabled": enabled,
+                        "status": "ok",
+                    }
+                ]
+            )
+        )
+        return jobs_path
+
+    def test_disable_job(self, tmp_path: Path):
+        """Disabling a job sets enabled=false."""
+        jobs_path = self._make_jobs(tmp_path, enabled=True)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--home", str(tmp_path), "cron", "disable", "heartbeat"]
+        )
+        assert result.exit_code == 0
+        assert "disabled" in result.output
+        jobs = json.loads(jobs_path.read_text())
+        assert jobs[0]["enabled"] is False
+
+    def test_enable_job(self, tmp_path: Path):
+        """Enabling a disabled job sets enabled=true."""
+        jobs_path = self._make_jobs(tmp_path, enabled=False)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--home", str(tmp_path), "cron", "enable", "heartbeat"]
+        )
+        assert result.exit_code == 0
+        assert "enabled" in result.output
+        jobs = json.loads(jobs_path.read_text())
+        assert jobs[0]["enabled"] is True
+
+    def test_disable_not_found(self, tmp_path: Path):
+        """Disabling a non-existent job gives a friendly message."""
+        self._make_jobs(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--home", str(tmp_path), "cron", "disable", "nonexistent"]
+        )
+        assert result.exit_code == 0
+        assert "not found" in result.output
+
+    def test_enable_no_file(self, tmp_path: Path):
+        """Enabling when no jobs file exists gives a friendly message."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--home", str(tmp_path), "cron", "enable", "j1"]
+        )
+        assert result.exit_code == 0
+        assert "No jobs file" in result.output
+
+    def test_list_hides_disabled_by_default(self, tmp_path: Path):
+        """cron list hides disabled jobs unless --all is passed."""
+        cron_dir = tmp_path / "shared" / "cron"
+        cron_dir.mkdir(parents=True)
+        (cron_dir / "jobs.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "active-job",
+                        "agent": "tars",
+                        "schedule": "0 8 * * *",
+                        "enabled": True,
+                        "status": "ok",
+                    },
+                    {
+                        "id": "disabled-job",
+                        "agent": "tars",
+                        "schedule": "0 12 * * *",
+                        "enabled": False,
+                        "status": "ok",
+                    },
+                ]
+            )
+        )
+        runner = CliRunner()
+        # Default: hide disabled
+        result = runner.invoke(cli, ["--home", str(tmp_path), "cron", "list"])
+        assert "active-job" in result.output
+        assert "disabled-job" not in result.output
+
+        # --all: show everything
+        result = runner.invoke(
+            cli, ["--home", str(tmp_path), "cron", "list", "--all"]
+        )
+        assert "active-job" in result.output
+        assert "disabled-job" in result.output
+
+
 class TestAddSkill:
     def test_add_skill_success(self, tmp_path: Path):
         """Successfully link a shared skill to an agent."""
