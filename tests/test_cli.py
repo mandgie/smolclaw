@@ -470,6 +470,51 @@ class TestCronEnableDisable:
         assert "disabled-job" in result.output
 
 
+class TestCronRun:
+    def test_cron_run_success(self, tmp_path: Path):
+        """cron run triggers the job via the API and shows the response."""
+        runner = CliRunner()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps(
+            {"status": "triggered", "job_id": "test-job", "response": "Job output!"}
+        ).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = runner.invoke(cli, ["--home", str(tmp_path), "cron", "run", "test-job"])
+
+        assert result.exit_code == 0
+        assert "Triggered job" in result.output
+        assert "Job output!" in result.output
+
+    def test_cron_run_gateway_not_running(self, tmp_path: Path):
+        """cron run shows error when gateway is not running."""
+        import urllib.error
+
+        runner = CliRunner()
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError("Connection refused"),
+        ):
+            result = runner.invoke(cli, ["--home", str(tmp_path), "cron", "run", "test-job"])
+
+        assert result.exit_code == 1
+        assert "Gateway not running" in result.output
+
+    def test_cron_run_job_not_found(self, tmp_path: Path):
+        """cron run shows error when job ID doesn't exist."""
+        import urllib.error
+
+        runner = CliRunner()
+        error = urllib.error.HTTPError("http://localhost", 404, "Not Found", {}, None)
+        with patch("urllib.request.urlopen", side_effect=error):
+            result = runner.invoke(cli, ["--home", str(tmp_path), "cron", "run", "nonexistent"])
+
+        assert result.exit_code == 1
+        assert "Error (404)" in result.output
+
+
 class TestAddSkill:
     def test_add_skill_success(self, tmp_path: Path):
         """Successfully link a shared skill to an agent."""

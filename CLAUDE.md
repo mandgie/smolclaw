@@ -112,7 +112,7 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
 - [x] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
 - [ ] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
-- [x] Tests (539 tests, 96% coverage, pytest with mocked Claude SDK)
+- [x] Tests (668 tests, 95% coverage, pytest with mocked Claude SDK)
 - [ ] PyPI publish
 
 ## Development

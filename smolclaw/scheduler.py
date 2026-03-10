@@ -317,6 +317,52 @@ class Scheduler:
             return True
         return False
 
+    async def trigger_job(self, job_id: str) -> str:
+        """Manually trigger a job immediately, returning the response text.
+
+        Args:
+            job_id: The ID of the job to trigger.
+
+        Returns:
+            The agent's response text.
+
+        Raises:
+            KeyError: If no job with the given ID exists.
+        """
+        from .router import InboundMessage
+
+        job = next((j for j in self.jobs if j.id == job_id), None)
+        if job is None:
+            raise KeyError(f"Job '{job_id}' not found")
+
+        if not job.prompt:
+            raise ValueError(f"Job '{job_id}' has no prompt")
+
+        log.info(f"Scheduler: manually triggering job '{job.id}' for agent '{job.agent}'")
+
+        from .tracing import trace_cron_job
+
+        with trace_cron_job(job.id, job.agent):
+            message = InboundMessage(
+                agent=job.agent,
+                text=job.prompt,
+                source="cron",
+                chat_id=job.delivery_chat_id,
+                session_key=f"cron:{job.id}",
+            )
+            outbound = await self.router.route(message)
+
+            # Deliver to channel if configured
+            if job.delivery and job.delivery_chat_id:
+                await self._deliver(job, outbound.text)
+
+            job.last_run = datetime.now().isoformat()
+            job.status = "ok"
+            job.failures = 0
+            self.save_jobs()
+
+        return outbound.text
+
     def list_jobs(self) -> list[dict]:
         """List all jobs as dicts."""
         return [j.to_dict() for j in self.jobs]

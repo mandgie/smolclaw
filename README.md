@@ -142,6 +142,9 @@ smolclaw cron add \
   --prompt "morning briefing" \
   --delivery telegram \
   --chat-id 123456789               # Add a cron job with delivery
+smolclaw cron run <job_id>           # Manually trigger a job (for debugging)
+smolclaw cron enable <job_id>        # Enable a disabled job
+smolclaw cron disable <job_id>       # Disable a job without removing
 smolclaw memory stats <agent>        # Memory statistics
 smolclaw memory list <agent>         # List stored facts
 smolclaw memory search <agent> "q"   # Search memory

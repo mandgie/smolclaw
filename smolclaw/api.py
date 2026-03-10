@@ -522,6 +522,22 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(404, f"Job '{job_id}' not found")
         return {"status": "removed"}
 
+    @app.post(
+        "/api/cron/jobs/{job_id}/trigger",
+        dependencies=[Depends(_require_auth)],
+    )
+    async def trigger_job(job_id: str) -> dict[str, Any]:
+        """Manually trigger a scheduled job immediately."""
+        if not gateway.scheduler:
+            raise HTTPException(500, "Scheduler not running")
+        try:
+            response = await gateway.scheduler.trigger_job(job_id)
+        except KeyError:
+            raise HTTPException(404, f"Job '{job_id}' not found")
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return {"status": "triggered", "job_id": job_id, "response": response}
+
     # --- Health ---
 
     @app.get("/api/health", response_model=HealthResponse)

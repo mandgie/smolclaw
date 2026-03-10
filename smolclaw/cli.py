@@ -990,6 +990,59 @@ def _toggle_job(base: Path, job_id: str, *, enabled: bool) -> None:
     click.echo(f"Job '{job_id}' {state}.")
 
 
+@cron.command("run")
+@click.argument("job_id")
+@click.pass_context
+def cron_run(ctx, job_id):
+    """Manually trigger a scheduled job (requires running gateway)."""
+    import urllib.error
+    import urllib.request
+
+    base = ctx.obj["base"]
+
+    # Read port from config
+    port = 7890
+    config_path = base / "config.yaml"
+    if config_path.exists():
+        import yaml
+
+        try:
+            cfg = yaml.safe_load(config_path.read_text()) or {}
+            port = cfg.get("api_port", 7890)
+        except Exception:
+            pass
+
+    url = f"http://127.0.0.1:{port}/api/cron/jobs/{job_id}/trigger"
+
+    # Build request with optional auth
+    headers = {"Content-Type": "application/json"}
+    if config_path.exists():
+        try:
+            cfg = yaml.safe_load(config_path.read_text()) or {}
+            api_key = cfg.get("api_key")
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+        except Exception:
+            pass
+
+    req = urllib.request.Request(url, data=b"{}", headers=headers, method="POST")
+
+    try:
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode() if e.fp else ""
+        click.echo(f"Error ({e.code}): {body}", err=True)
+        sys.exit(1)
+    except urllib.error.URLError:
+        click.echo("Gateway not running. Start it with 'smolclaw up' first.", err=True)
+        sys.exit(1)
+
+    click.echo(f"✓ Triggered job '{job_id}'")
+    if result.get("response"):
+        click.echo(f"\n{result['response']}")
+
+
 def _resolve_memory_db(base: Path, agent_name: str) -> Path:
     """Validate the agent exists and return the memory DB path."""
     from .config import discover_all_agents, load_gateway_config

@@ -496,6 +496,37 @@ class TestRemoveJob:
         assert resp.status_code == 500
 
 
+# --- Trigger Job ---
+
+
+class TestTriggerJobApi:
+    def test_trigger_job_success(self, client, mock_gateway):
+        mock_gateway.scheduler.trigger_job = AsyncMock(return_value="Job output here")
+        resp = client.post("/api/cron/jobs/my-job/trigger")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "triggered"
+        assert data["job_id"] == "my-job"
+        assert data["response"] == "Job output here"
+
+    def test_trigger_job_not_found(self, client, mock_gateway):
+        mock_gateway.scheduler.trigger_job = AsyncMock(side_effect=KeyError("Job 'nope' not found"))
+        resp = client.post("/api/cron/jobs/nope/trigger")
+        assert resp.status_code == 404
+
+    def test_trigger_job_no_prompt(self, client, mock_gateway):
+        mock_gateway.scheduler.trigger_job = AsyncMock(
+            side_effect=ValueError("Job 'bad' has no prompt")
+        )
+        resp = client.post("/api/cron/jobs/bad/trigger")
+        assert resp.status_code == 400
+
+    def test_trigger_job_no_scheduler(self, client, mock_gateway):
+        mock_gateway.scheduler = None
+        resp = client.post("/api/cron/jobs/any/trigger")
+        assert resp.status_code == 500
+
+
 # --- Health & Dashboard ---
 
 

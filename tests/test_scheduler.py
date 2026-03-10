@@ -704,3 +704,104 @@ class TestRepr:
         scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
         assert "Scheduler" in repr(scheduler)
         assert "running=False" in repr(scheduler)
+
+
+class TestTriggerJob:
+    """Tests for the manual trigger_job method."""
+
+    async def test_trigger_job_routes_and_returns_response(self, tmp_base: Path, jobs_file: Path):
+        """trigger_job should route the job and return the response text."""
+        from smolclaw.router import OutboundMessage
+
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(agent="testagent", text="triggered!", source="cron")
+        )
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler.load_jobs()
+        assert len(scheduler.jobs) == 1
+
+        result = await scheduler.trigger_job("test-job")
+
+        assert result == "triggered!"
+        router.route.assert_called_once()
+        call_msg = router.route.call_args[0][0]
+        assert call_msg.agent == "testagent"
+        assert call_msg.source == "cron"
+        assert call_msg.text == "Hello from cron"
+
+    async def test_trigger_job_updates_state(self, tmp_base: Path, jobs_file: Path):
+        """trigger_job should update last_run, status, and failures."""
+        from smolclaw.router import OutboundMessage
+
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(agent="testagent", text="ok", source="cron")
+        )
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler.load_jobs()
+
+        await scheduler.trigger_job("test-job")
+
+        job = scheduler.jobs[0]
+        assert job.status == "ok"
+        assert job.failures == 0
+        assert job.last_run != ""
+
+    async def test_trigger_job_delivers_to_channel(self, tmp_base: Path, jobs_file: Path):
+        """trigger_job should deliver to channel if delivery is configured."""
+        from smolclaw.router import OutboundMessage
+
+        # Set up job with delivery config
+        jobs_data = json.loads(jobs_file.read_text())
+        jobs_data[0]["delivery"] = "telegram"
+        jobs_data[0]["delivery_chat_id"] = "123456"
+        jobs_file.write_text(json.dumps(jobs_data))
+
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(agent="testagent", text="delivered!", source="cron")
+        )
+        deliver_cb = AsyncMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router, deliver_callback=deliver_cb)
+        scheduler.load_jobs()
+
+        await scheduler.trigger_job("test-job")
+
+        deliver_cb.assert_called_once()
+        assert deliver_cb.call_args[0][1] == "delivered!"
+
+    async def test_trigger_job_not_found(self, tmp_base: Path, jobs_file: Path):
+        """trigger_job should raise KeyError for unknown job ID."""
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler.load_jobs()
+
+        with pytest.raises(KeyError, match="not-real"):
+            await scheduler.trigger_job("not-real")
+
+    async def test_trigger_job_no_prompt(self, tmp_base: Path):
+        """trigger_job should raise ValueError for job without prompt."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "empty-prompt",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "has prompt",
+                    }
+                ]
+            )
+        )
+
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+        # Clear prompt after loading
+        scheduler.jobs[0].prompt = ""
+
+        with pytest.raises(ValueError, match="no prompt"):
+            await scheduler.trigger_job("empty-prompt")
