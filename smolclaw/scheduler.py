@@ -51,10 +51,10 @@ class Job:
         self.session_mode: str = data.get("session_mode", "isolated")
 
         # Load prompt from file or inline
-        prompt_file = data.get("prompt_file", "")
+        self.prompt_file: str = data.get("prompt_file", "")
         self.prompt: str = data.get("prompt", "")
-        if prompt_file and prompts_base:
-            path = prompts_base / prompt_file
+        if self.prompt_file and prompts_base:
+            path = prompts_base / self.prompt_file
             if path.exists():
                 self.prompt = path.read_text().strip()
             else:
@@ -77,11 +77,12 @@ class Job:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the job back to a JSON-compatible dict."""
-        return {
+        d: dict[str, Any] = {
             "id": self.id,
             "agent": self.agent,
             "schedule": self.schedule,
-            "prompt": self.prompt,
+            # If prompt_file is set, keep prompt empty on disk (file is source of truth)
+            "prompt": "" if self.prompt_file else self.prompt,
             "enabled": self.enabled,
             "delivery": self.delivery,
             "delivery_chat_id": self.delivery_chat_id,
@@ -91,6 +92,9 @@ class Job:
             "status": self.status,
             "failures": self.failures,
         }
+        if self.prompt_file:
+            d["prompt_file"] = self.prompt_file
+        return d
 
 
 class Scheduler:
@@ -162,6 +166,9 @@ class Scheduler:
                     job.next_run = job.compute_next_run().isoformat()
                 self.jobs.append(job)
         log.info(f"Scheduler: loaded {len(self.jobs)} jobs")
+        # Persist computed next_run values so CLI/disk stays in sync
+        if self.jobs:
+            self.save_jobs()
 
     def save_jobs(self) -> None:
         """Persist jobs back to jobs.json."""
