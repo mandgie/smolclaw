@@ -675,8 +675,8 @@ class TestLoopEdgeCases:
         scheduler._on_loop_done(task)
         # No exception means success — it returned early
 
-    async def test_loop_cancellation_propagates(self, tmp_base: Path, jobs_file: Path):
-        """CancelledError during the loop propagates cleanly."""
+    async def test_loop_cancellation_exits_cleanly(self, tmp_base: Path, jobs_file: Path):
+        """CancelledError during sleep exits the loop cleanly (no propagation)."""
         router = MagicMock()
         scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
         scheduler.load_jobs()
@@ -685,10 +685,92 @@ class TestLoopEdgeCases:
         task = asyncio.create_task(scheduler._loop())
         await asyncio.sleep(0.05)
 
-        # Cancel the task
+        # Cancel the task — it should exit cleanly, not raise
         task.cancel()
-        with pytest.raises(asyncio.CancelledError):
+        await task  # Should complete without error
+
+        assert task.done()
+        assert not task.cancelled()
+
+    async def test_cancelled_job_does_not_kill_loop(self, tmp_base: Path, jobs_file: Path):
+        """A CancelledError during job execution marks it cancelled, loop continues."""
+
+        router = MagicMock()
+        router.route = AsyncMock(side_effect=asyncio.CancelledError)
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler.load_jobs()
+        assert len(scheduler.jobs) == 1
+
+        # Make the job due
+        scheduler.jobs[0].next_run = "2020-01-01T00:00:00"
+        scheduler._running = True
+
+        # Run one iteration — the job will be cancelled but loop should survive
+        task = asyncio.create_task(scheduler._loop())
+        await asyncio.sleep(0.1)
+
+        # Stop cleanly
+        scheduler._running = False
+        task.cancel()
+        await task
+
+        # Job should be marked as cancelled, not error
+        job = scheduler.jobs[0]
+        assert job.status == "cancelled"
+        # next_run should be recomputed (job wasn't abandoned)
+        assert job.next_run != "2020-01-01T00:00:00"
+
+    async def test_session_cleanup_cancelled_error_ignored(self, tmp_base: Path, jobs_file: Path):
+        """CancelledError during session cleanup is caught and ignored."""
+        from smolclaw.router import OutboundMessage
+
+        mock_agent = MagicMock()
+        mock_agent.new_session = AsyncMock(side_effect=asyncio.CancelledError)
+
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(agent="testagent", text="done", source="cron")
+        )
+        router.get_agent = MagicMock(return_value=mock_agent)
+
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler.load_jobs()
+        scheduler.jobs[0].next_run = "2020-01-01T00:00:00"
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._loop())
+        await asyncio.sleep(0.1)
+
+        scheduler._running = False
+        task.cancel()
+        await task
+
+        # Job should still succeed despite cleanup failure
+        assert scheduler.jobs[0].status == "ok"
+        mock_agent.new_session.assert_called_once()
+
+    async def test_on_loop_done_logs_cancelled(self, tmp_base: Path, jobs_file: Path):
+        """_on_loop_done handles a cancelled task distinctly from a crash."""
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler._running = True
+
+        # Create a task that gets cancelled
+        async def sleepy():
+            await asyncio.sleep(100)
+
+        task = asyncio.create_task(sleepy())
+        await asyncio.sleep(0.01)
+        task.cancel()
+        try:
             await task
+        except asyncio.CancelledError:
+            pass
+
+        assert task.cancelled()
+
+        # Call _on_loop_done — it should not crash and should schedule restart
+        scheduler._on_loop_done(task)
 
 
 class TestRepr:
