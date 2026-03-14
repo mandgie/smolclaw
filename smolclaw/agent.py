@@ -295,10 +295,11 @@ class Agent:
             return response
 
     async def new_session(self) -> None:
-        """Drop current session and start fresh."""
-        await self._disconnect_stale()
-        self._session_id = None
-        log.info(f"[{self.name}] Session cleared")
+        """Drop current session and start fresh. Thread-safe."""
+        async with self._lock:
+            await self._disconnect_stale()
+            self._session_id = None
+            log.info(f"[{self.name}] Session cleared")
 
     async def shutdown(self) -> None:
         """Clean shutdown."""

@@ -276,6 +276,20 @@ class Scheduler:
                                 job.status = "error"
                                 job.failures += 1
 
+                        # Clean up: disconnect agent session after cron jobs to
+                        # prevent stale SDK connections from accumulating and
+                        # burning CPU (CLOSE_WAIT sockets, leaked file descriptors).
+                        if job.session_mode == "isolated":
+                            agent = self.router.get_agent(job.agent)
+                            if agent:
+                                try:
+                                    await agent.new_session()
+                                except Exception as e:
+                                    log.debug(
+                                        f"Scheduler: session cleanup for "
+                                        f"'{job.agent}' failed (ignored): {e}"
+                                    )
+
                         # Compute next run
                         job.next_run = job.compute_next_run(after=now).isoformat()
                         self.save_jobs()
