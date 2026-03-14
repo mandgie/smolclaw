@@ -574,6 +574,8 @@ class TestUpCommand:
 
         assert result.exit_code == 0
         mock_run.assert_called_once()
+        # Close the unawaited coroutine to suppress RuntimeWarning
+        mock_run.call_args[0][0].close()
 
     def test_up_no_api(self, tmp_base: Path, agent_dir: Path):
         """The --no-api flag should pass with_api=False to run_gateway."""
@@ -583,6 +585,8 @@ class TestUpCommand:
 
         assert result.exit_code == 0
         mock_run.assert_called_once()
+        # Close the unawaited coroutine to suppress RuntimeWarning
+        mock_run.call_args[0][0].close()
 
     def test_up_scaffolds_on_empty(self, tmp_path: Path):
         """If no agents exist, up should scaffold first."""
@@ -592,12 +596,14 @@ class TestUpCommand:
         (tmp_path / "config.yaml").write_text("host: 127.0.0.1\nport: 7890\n")
 
         runner = CliRunner()
-        with patch("smolclaw.cli.asyncio.run"):
+        with patch("smolclaw.cli.asyncio.run") as mock_run:
             result = runner.invoke(cli, ["--home", str(tmp_path), "up"])
 
         assert result.exit_code == 0
         assert "First run" in result.output
         assert (tmp_path / "agents" / "myagent" / "agent.yaml").exists()
+        # Close the unawaited coroutine to suppress RuntimeWarning
+        mock_run.call_args[0][0].close()
 
 
 # ---------------------------------------------------------------------------

@@ -19,9 +19,6 @@ from claude_agent_sdk import (
     ClaudeSDKClient,
     CLIConnectionError,
     ResultMessage,
-    TaskNotificationMessage,
-    TaskProgressMessage,
-    TaskStartedMessage,
     TextBlock,
 )
 from claude_agent_sdk.types import (
@@ -255,15 +252,7 @@ class Agent:
                             self.last_structured_output = message.structured_output
                         if message.is_error and message.result:
                             response_parts.append(f"[Error: {message.result}]")
-                    elif isinstance(message, TaskStartedMessage):
-                        log.debug(f"[{self.name}] Task started: {message.description}")
-                    elif isinstance(message, TaskProgressMessage):
-                        log.debug(
-                            f"[{self.name}] Task progress: {message.description}"
-                            f" (tokens={message.usage.total_tokens})"
-                        )
-                    elif isinstance(message, TaskNotificationMessage):
-                        log.debug(f"[{self.name}] Task {message.status}: {message.summary}")
+                    # Other message types (subagent notifications, etc.) — log and skip
                     elif isinstance(message, StreamEvent):
                         log.debug(f"[{self.name}] Stream event: {message.event}")
             except Exception as e:

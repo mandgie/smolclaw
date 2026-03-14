@@ -504,45 +504,6 @@ class TestResultMetadata:
         assert agent.last_stop_reason == "end_turn"
 
     @pytest.mark.asyncio
-    async def test_task_messages_logged(self, caplog):
-        """Task lifecycle messages should be logged at debug level."""
-        from smolclaw.agent import Agent, TaskProgressMessage, TaskStartedMessage
-
-        agent = Agent(_make_info())
-        mock_client = _mock_sdk_client(response_text="Done")
-
-        # Build a task started message mock
-        task_started = MagicMock(spec=TaskStartedMessage)
-        task_started.description = "Running search"
-
-        # Build a task progress message mock
-        task_progress = MagicMock(spec=TaskProgressMessage)
-        task_progress.description = "Searching files"
-        task_progress.usage = MagicMock()
-        task_progress.usage.total_tokens = 500
-
-        # Inject task messages into the stream
-        original_receive = mock_client.receive_response
-
-        async def receive_with_tasks():
-            yield task_started
-            yield task_progress
-            async for msg in original_receive():
-                yield msg
-
-        mock_client.receive_response = receive_with_tasks
-
-        import logging
-
-        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
-            with caplog.at_level(logging.DEBUG, logger="smolclaw"):
-                response = await agent.send("Do something")
-
-        assert response == "Done"
-        assert "Task started: Running search" in caplog.text
-        assert "Task progress: Searching files (tokens=500)" in caplog.text
-
-    @pytest.mark.asyncio
     async def test_max_tokens_warning_logged(self, caplog):
         """A max_tokens stop_reason should trigger a warning log."""
         import logging
