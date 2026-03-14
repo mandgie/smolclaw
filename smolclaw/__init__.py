@@ -6,6 +6,7 @@ from .agent import Agent
 from .channel import TelegramChannel
 from .config import AgentConfig, AgentInfo, GatewayConfig, MemoryConfig
 from .gateway import Gateway
+from .hooks import HookContext, HookRegistry, PostRouteHook, PreRouteHook
 from .memory import Memory, serialize_f32
 from .router import InboundMessage, OutboundMessage, Router
 from .scheduler import Job, Scheduler
@@ -18,11 +19,15 @@ __all__ = [
     "AgentInfo",
     "Gateway",
     "GatewayConfig",
+    "HookContext",
+    "HookRegistry",
     "InboundMessage",
     "Job",
     "Memory",
     "MemoryConfig",
     "OutboundMessage",
+    "PostRouteHook",
+    "PreRouteHook",
     "Router",
     "Scheduler",
     "FileWatcher",

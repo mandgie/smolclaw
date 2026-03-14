@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .agent import Agent
+    from .hooks import HookRegistry
 
 log = logging.getLogger("smolclaw")
 
@@ -39,12 +40,22 @@ class OutboundMessage:
 
 
 class Router:
-    """Routes messages to agents and collects responses."""
+    """Routes messages to agents and collects responses.
 
-    def __init__(self) -> None:
-        """Initialize the router with empty agent and handler registries."""
+    Supports pre-route and post-route hooks via a HookRegistry. Hooks are
+    executed in order before and after agent invocation, allowing message
+    transformation, short-circuiting, rate limiting, logging, etc.
+    """
+
+    def __init__(self, hooks: HookRegistry | None = None) -> None:
+        """Initialize the router with empty agent and handler registries.
+
+        Args:
+            hooks: Optional hook registry for pre/post-route message hooks.
+        """
         self._agents: dict[str, Agent] = {}
         self._handlers: dict[str, list[Callable[[OutboundMessage], Awaitable[None]]]] = {}
+        self._hooks: HookRegistry | None = hooks
 
     def __repr__(self) -> str:
         names = list(self._agents.keys())
@@ -61,25 +72,49 @@ class Router:
         """Register a callback for outbound messages from a source."""
         self._handlers.setdefault(source, []).append(callback)
 
+    @property
+    def hooks(self) -> HookRegistry | None:
+        """The hook registry attached to this router, if any."""
+        return self._hooks
+
+    @hooks.setter
+    def hooks(self, registry: HookRegistry | None) -> None:
+        self._hooks = registry
+
     async def route(self, message: InboundMessage) -> OutboundMessage:
-        """Route an inbound message to the correct agent, return response."""
+        """Route an inbound message to the correct agent, return response.
+
+        If hooks are registered, pre-route hooks execute first (may modify the
+        message or short-circuit). After the agent responds, post-route hooks
+        execute (may modify the response).
+        """
         from .tracing import set_span_attribute, trace_route
 
         with trace_route(message.agent, message.source, message.text):
-            agent = self._agents.get(message.agent)
+            # --- Pre-route hooks ---
+            routed_message = message
+            if self._hooks:
+                result = await self._hooks.run_pre_hooks(message)
+                if isinstance(result, OutboundMessage):
+                    # Hook short-circuited — skip agent, deliver directly
+                    set_span_attribute("smolclaw.hooks.short_circuited", True)
+                    return result
+                routed_message = result
+
+            agent = self._agents.get(routed_message.agent)
             if not agent:
-                log.error(f"Router: no agent '{message.agent}' registered")
+                log.error(f"Router: no agent '{routed_message.agent}' registered")
                 return OutboundMessage(
-                    agent=message.agent,
-                    text=f"Agent '{message.agent}' not found.",
-                    source=message.source,
-                    chat_id=message.chat_id,
+                    agent=routed_message.agent,
+                    text=f"Agent '{routed_message.agent}' not found.",
+                    source=routed_message.source,
+                    chat_id=routed_message.chat_id,
                 )
 
             try:
-                response_text = await agent.send(message.text)
+                response_text = await agent.send(routed_message.text)
             except Exception as e:
-                log.error(f"Router: agent '{message.agent}' error: {e}")
+                log.error(f"Router: agent '{routed_message.agent}' error: {e}")
                 response_text = f"Error: {e}"
 
             # Auto-save conversation chunk to memory (non-blocking)
@@ -87,27 +122,32 @@ class Router:
                 try:
                     session_id = getattr(agent, "_session_id", "") or ""
                     agent.memory.add_chunk(
-                        user_text=message.text,
+                        user_text=routed_message.text,
                         assistant_text=response_text[:2000],
                         session_id=session_id,
                     )
                 except Exception as e:
-                    log.warning(f"Router: memory save failed for '{message.agent}': {e}")
+                    log.warning(f"Router: memory save failed for '{routed_message.agent}': {e}")
 
             outbound = OutboundMessage(
-                agent=message.agent,
+                agent=routed_message.agent,
                 text=response_text,
-                source=message.source,
-                chat_id=message.chat_id,
+                source=routed_message.source,
+                chat_id=routed_message.chat_id,
             )
+
+            # --- Post-route hooks ---
+            if self._hooks:
+                outbound = await self._hooks.run_post_hooks(routed_message, outbound)
+
             set_span_attribute("smolclaw.response.length", len(outbound.text))
 
             # Notify handlers for this source
-            for callback in self._handlers.get(message.source, []):
+            for callback in self._handlers.get(routed_message.source, []):
                 try:
                     await callback(outbound)
                 except Exception as e:
-                    log.error(f"Router: handler error for source '{message.source}': {e}")
+                    log.error(f"Router: handler error for source '{routed_message.source}': {e}")
 
             return outbound
 

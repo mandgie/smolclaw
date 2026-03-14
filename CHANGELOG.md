@@ -6,6 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Message hooks** — Pre-route and post-route hook system at the router level. Hooks can modify messages, transform responses, short-circuit routing, redirect to different agents, or run side effects like logging. HookRegistry with named hooks, error isolation, and GET /api/hooks endpoint. 100% test coverage.
 - **Manual job trigger** — `smolclaw cron run <job_id>` to manually trigger a scheduled job via the running gateway. Also adds `POST /api/cron/jobs/{job_id}/trigger` API endpoint. Useful for debugging cron jobs without waiting for the schedule.
 - **Dashboard agent detail view** — click an agent card → Details tab shows config, memory stats, skills, peers, soul, operational rules, and context files in collapsible sections
 - **Enhanced agent detail API** — `GET /api/agents/{name}` now returns full soul, agents_md, skill names, config details, peers, and context file content

@@ -538,6 +538,16 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(400, str(e))
         return {"status": "triggered", "job_id": job_id, "response": response}
 
+    # --- Hooks ---
+
+    @app.get("/api/hooks", dependencies=[Depends(_require_auth)])
+    async def list_hooks() -> dict[str, Any]:
+        """List registered message hooks."""
+        hooks = gateway.router.hooks
+        if hooks:
+            return hooks.stats
+        return {"pre_route": [], "post_route": [], "total": 0}
+
     # --- Health ---
 
     @app.get("/api/health", response_model=HealthResponse)

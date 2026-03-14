@@ -66,6 +66,7 @@ def mock_gateway(tmp_path: Path):
 
     # Mock router
     gw.router.get_agent.side_effect = lambda name: gw.agents.get(name)
+    gw.router.hooks = None  # No hooks registered by default
 
     # Mock send (async)
     gw.send = AsyncMock(return_value="Hello from the agent!")
@@ -897,3 +898,42 @@ class TestApiKeyAuth:
         """Destructive endpoints require auth."""
         resp = auth_client.delete("/api/agents/testagent/memory")
         assert resp.status_code == 401
+
+
+# --- Hooks API ---
+
+
+class TestHooksApi:
+    def test_list_hooks_empty(self, client):
+        """Returns empty hooks when no registry is set."""
+        resp = client.get("/api/hooks")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["pre_route"] == []
+        assert data["post_route"] == []
+        assert data["total"] == 0
+
+    def test_list_hooks_with_registry(self, mock_gateway):
+        """Returns hook names when registry has hooks."""
+        from smolclaw.hooks import HookRegistry
+
+        registry = HookRegistry()
+
+        async def pre_hook(msg, ctx):
+            return None
+
+        async def post_hook(msg, resp, ctx):
+            return None
+
+        registry.add_pre_hook("rate-limiter", pre_hook)
+        registry.add_post_hook("logger", post_hook)
+        mock_gateway.router.hooks = registry
+
+        app = create_app(mock_gateway)
+        client = TestClient(app)
+        resp = client.get("/api/hooks")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["pre_route"] == ["rate-limiter"]
+        assert data["post_route"] == ["logger"]
+        assert data["total"] == 2
