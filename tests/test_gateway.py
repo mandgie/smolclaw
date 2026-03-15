@@ -184,6 +184,90 @@ class TestGatewayStart:
         os.environ.pop("TEST_KEY_12345", None)
 
     @pytest.mark.asyncio
+    async def test_duplicate_token_skipped(self, tmp_base: Path):
+        """Two agents with the same Telegram token should not both start channels."""
+        import os
+
+        for name in ["agent_a", "agent_b"]:
+            agent = tmp_base / "agents" / name
+            for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+                (agent / subdir).mkdir(parents=True, exist_ok=True)
+            (agent / "agent.yaml").write_text(
+                f"name: {name}\nmodel: claude-sonnet-4-6\n"
+                "channels:\n  telegram:\n    token_env: SHARED_DUP_TOKEN\n"
+                "memory:\n  enabled: true\n  cross_agent: false\n"
+            )
+            (agent / "soul.md").write_text(f"# {name}")
+            # Both point to same env var with same value
+            (agent / "channels" / "telegram.env").write_text(
+                "SHARED_DUP_TOKEN=same-bot-token-12345\n"
+            )
+
+        mock_channel = MagicMock()
+        mock_channel.start = AsyncMock()
+
+        gw = Gateway(tmp_base)
+        with patch("smolclaw.gateway.create_channel", return_value=mock_channel) as factory:
+            await gw.start()
+
+        # create_channel should only be called ONCE — the second agent's channel is skipped
+        assert factory.call_count == 1
+
+        # Cleanup
+        os.environ.pop("SHARED_DUP_TOKEN", None)
+
+    @pytest.mark.asyncio
+    async def test_unique_tokens_both_start(self, tmp_base: Path):
+        """Two agents with different Telegram tokens should both start channels."""
+        import os
+
+        for idx, name in enumerate(["agent_x", "agent_y"]):
+            agent = tmp_base / "agents" / name
+            for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+                (agent / subdir).mkdir(parents=True, exist_ok=True)
+            env_var = f"TOKEN_UNIQUE_{name.upper()}"
+            (agent / "agent.yaml").write_text(
+                f"name: {name}\nmodel: claude-sonnet-4-6\n"
+                f"channels:\n  telegram:\n    token_env: {env_var}\n"
+                "memory:\n  enabled: true\n  cross_agent: false\n"
+            )
+            (agent / "soul.md").write_text(f"# {name}")
+            (agent / "channels" / "telegram.env").write_text(f"{env_var}=unique-token-{idx}\n")
+
+        mock_channel = MagicMock()
+        mock_channel.start = AsyncMock()
+
+        gw = Gateway(tmp_base)
+        with patch("smolclaw.gateway.create_channel", return_value=mock_channel) as factory:
+            await gw.start()
+
+        # Both channels should start
+        assert factory.call_count == 2
+
+        # Cleanup
+        os.environ.pop("TOKEN_UNIQUE_AGENT_X", None)
+        os.environ.pop("TOKEN_UNIQUE_AGENT_Y", None)
+
+    @pytest.mark.asyncio
+    async def test_empty_token_not_tracked(self, gw_base: Path, agent_dir: Path):
+        """Channels with empty/missing tokens should not block other agents."""
+        (agent_dir / "agent.yaml").write_text(
+            "name: testagent\nmodel: claude-sonnet-4-6\n"
+            "channels:\n  telegram:\n    token_env: NONEXISTENT_TOKEN_VAR\n"
+            "memory:\n  enabled: true\n  cross_agent: false\n"
+        )
+
+        mock_channel = MagicMock()
+        mock_channel.start = AsyncMock()
+
+        gw = Gateway(gw_base)
+        with patch("smolclaw.gateway.create_channel", return_value=mock_channel) as factory:
+            await gw.start()
+
+        # Channel should still be created (empty token is the channel's problem to handle)
+        assert factory.call_count == 1
+
+    @pytest.mark.asyncio
     async def test_bad_env_file_continues(self, gw_base: Path, agent_dir: Path):
         """Unreadable env file should log error and continue."""
         channels_dir = agent_dir / "channels"

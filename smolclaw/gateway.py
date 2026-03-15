@@ -115,6 +115,10 @@ class Gateway:
             ]
 
         # Load channel env files and start channels
+        # Track active tokens per channel type to prevent duplicate polling
+        # (e.g. two Telegram agents with the same bot token cause 409 Conflict errors)
+        active_tokens: dict[str, str] = {}  # token_value -> agent_name
+
         for name, agent in self.agents.items():
             # Load env files from agent's channels/ directory
             channels_dir = agent.info.path / "channels"
@@ -130,6 +134,20 @@ class Gateway:
                         log.error(f"Failed to read env file {env_file}: {e}")
 
             for ch_type, ch_config in agent.info.config.channels.items():
+                # Check for duplicate tokens (same bot used by multiple agents)
+                token_value = os.environ.get(ch_config.token_env, "")
+                if token_value:
+                    token_key = f"{ch_type}:{token_value}"
+                    if token_key in active_tokens:
+                        owner = active_tokens[token_key]
+                        log.warning(
+                            f"[{name}] Skipping {ch_type} channel — token "
+                            f"{ch_config.token_env} already in use by agent '{owner}'. "
+                            f"Each agent needs a unique bot token to avoid polling conflicts."
+                        )
+                        continue
+                    active_tokens[token_key] = name
+
                 try:
                     channel = create_channel(ch_type, name, ch_config, self.router)
                     await channel.start()
