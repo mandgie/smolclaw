@@ -79,7 +79,7 @@ examples/              # Example two-agent setup (tars + coach)
 
 - **OpenClaw** (openclaw/openclaw): Full-featured TypeScript agent platform. We took the channel normalization pattern, AGENTS.md/SOUL.md convention, and cron-through-message-bus idea.
 - **Nanobot** (HKUDS/nanobot): Ultra-lightweight Python agent. We took the "cron triggers are just messages" pattern and separate job store approach.
-- **TARS** (~/.tars/): Magnus's existing personal assistant. smolclaw is the framework extracted from TARS's architecture.
+- **TARS** (~/.smolclaw/agents/tars/): Magnus's personal assistant, fully running on smolclaw.
 
 ## What Works
 
@@ -111,7 +111,7 @@ examples/              # Example two-agent setup (tars + coach)
 - [ ] Multiple Telegram bots (one per agent, each with own token)
 - [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
 - [x] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
-- [ ] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
+- [x] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
 - [x] Tests (668 tests, 95% coverage, pytest with mocked Claude SDK)
 - [ ] PyPI publish
 

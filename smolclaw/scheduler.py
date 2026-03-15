@@ -265,8 +265,22 @@ class Scheduler:
                             )
                             outbound = await self.router.route(message)
 
-                            # Deliver to channel if configured
-                            if job.delivery and job.delivery_chat_id:
+                            # Deliver to channel if configured.
+                            # Suppress delivery when the agent responds with
+                            # NO_SUGGESTIONS (convention: nothing needs attention).
+                            # Check any line, not just entire text — models
+                            # sometimes narrate before the keyword.
+                            _text = (outbound.text or "").strip()
+                            _suppress = any(
+                                ln.strip().upper().replace("_", " ") == "NO SUGGESTIONS"
+                                for ln in _text.splitlines()
+                            )
+                            if _suppress:
+                                log.info(
+                                    f"Scheduler: job '{job.id}' returned "
+                                    f"NO_SUGGESTIONS — skipping delivery"
+                                )
+                            elif job.delivery and job.delivery_chat_id:
                                 await self._deliver(job, outbound.text)
 
                             job.last_run = now.isoformat()
