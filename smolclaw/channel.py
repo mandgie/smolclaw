@@ -15,7 +15,7 @@ from .router import InboundMessage, Router
 
 log = logging.getLogger("smolclaw")
 
-__all__ = ["Channel", "TelegramChannel", "create_channel"]
+__all__ = ["Channel", "TelegramChannel", "WebhookChannel", "create_channel"]
 
 
 class Channel(ABC):
@@ -296,10 +296,80 @@ class TelegramChannel(Channel):
                     log.error(f"[{self.agent_name}] Telegram send to {chat_id} failed: {e}")
 
 
+# --- Webhook Channel ---
+
+
+class WebhookChannel(Channel):
+    """Outgoing webhook channel — POSTs agent responses to a configured URL.
+
+    Send-only channel for delivering messages to HTTP endpoints (e.g. Slack
+    incoming webhooks, Discord webhooks, custom APIs). Does not receive
+    inbound messages (use the REST API for that).
+
+    Config in agent.yaml::
+
+        channels:
+          webhook:
+            url: "https://hooks.example.com/endpoint"
+            headers:
+              X-Custom-Header: "value"
+    """
+
+    channel_type = "webhook"
+
+    def __init__(self, agent_name: str, config: ChannelConfig, router: Router):
+        """Initialize the webhook channel with URL and optional headers."""
+        super().__init__(agent_name, config, router)
+        self._url = config.url
+        self._headers = {
+            "Content-Type": "application/json",
+            **config.headers,
+        }
+
+    async def start(self) -> None:
+        """Validate webhook configuration (no persistent connection needed)."""
+        if not self._url:
+            log.error(f"[{self.agent_name}] Webhook: no url configured")
+            return
+        log.info(f"[{self.agent_name}] Webhook channel ready → {self._url}")
+
+    async def stop(self) -> None:
+        """No-op — webhook channel has no persistent connection."""
+
+    async def send(self, chat_id: str, text: str) -> None:
+        """POST a JSON payload to the configured webhook URL."""
+        import json
+        import urllib.request
+
+        if not self._url:
+            return
+
+        payload = json.dumps(
+            {
+                "agent": self.agent_name,
+                "text": text,
+                "chat_id": chat_id,
+            }
+        ).encode()
+
+        req = urllib.request.Request(
+            self._url,
+            data=payload,
+            headers=self._headers,
+            method="POST",
+        )
+
+        try:
+            await asyncio.to_thread(urllib.request.urlopen, req, timeout=30)
+        except Exception as e:
+            log.error(f"[{self.agent_name}] Webhook POST to {self._url} failed: {e}")
+
+
 # --- Channel Factory ---
 
 CHANNEL_TYPES: dict[str, type[Channel]] = {
     "telegram": TelegramChannel,
+    "webhook": WebhookChannel,
 }
 
 

@@ -22,6 +22,7 @@ Run multiple AI agents — each with its own personality, skills, and channels �
 - **Filesystem-as-config** — Drop a folder, get an agent. `soul.md` for personality, `agent.yaml` for model/channels, `skills/` for capabilities.
 - **Single gateway process** — All agents, channels, scheduler, and API run in one async process. No microservices, no Docker, no infra.
 - **Telegram integration** — Each agent gets its own Telegram bot with typing indicators, markdown rendering, and user authorization.
+- **Webhook delivery** — POST agent responses to any HTTP endpoint (Slack incoming webhooks, Discord, custom APIs). Zero dependencies.
 - **Cron scheduler** — Schedule jobs with cron expressions, deliver results to Telegram. Jobs route through the same message bus as everything else.
 - **Semantic memory** — Shared SQLite database with per-agent isolation, FTS5 full-text search, and optional vector search via sqlite-vec with hybrid retrieval (RRF).
 - **Hot-reload** — Change a skill, soul, or config file and the agent updates live. No restart needed.
@@ -251,6 +252,7 @@ smolclaw/              # Python package (~2900 lines)
 - [x] Hot-reload on config/skill/context changes
 - [x] Cross-agent awareness (peer agents visible in prompts, API-based messaging)
 - [ ] Multiple Telegram bots (one per agent)
+- [x] Webhook channel (outgoing HTTP POST delivery)
 - [ ] Discord / Slack channel adapters
 - [ ] PyPI publish
 

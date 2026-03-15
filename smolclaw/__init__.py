@@ -3,7 +3,7 @@
 __version__ = "0.1.0"
 
 from .agent import Agent
-from .channel import TelegramChannel
+from .channel import TelegramChannel, WebhookChannel
 from .config import AgentConfig, AgentInfo, GatewayConfig, MemoryConfig
 from .gateway import Gateway
 from .hooks import HookContext, HookRegistry, PostRouteHook, PreRouteHook
@@ -34,6 +34,7 @@ __all__ = [
     "Scheduler",
     "TelegramChannel",
     "TracingConfig",
+    "WebhookChannel",
     "__version__",
     "configure_tracing",
     "serialize_f32",

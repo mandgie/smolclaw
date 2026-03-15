@@ -26,10 +26,14 @@ __all__ = [
 
 
 class ChannelConfig(BaseModel):
-    """Configuration for a single channel (e.g. Telegram)."""
+    """Configuration for a single channel (e.g. Telegram, webhook)."""
 
-    token_env: str
+    token_env: str = ""
     authorized_users: list[int] = Field(default_factory=list)
+    url: str = Field("", description="Webhook URL for outgoing messages")
+    headers: dict[str, str] = Field(
+        default_factory=dict, description="Extra HTTP headers for webhook requests"
+    )
 
 
 class MemoryConfig(BaseModel):

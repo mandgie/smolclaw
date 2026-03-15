@@ -40,7 +40,7 @@ smolclaw/              # Python package (~2900 lines, 13 modules)
 ├── config.py          # Agent discovery from filesystem, YAML loading, Pydantic models
 ├── agent.py           # Agent class: loads identity, builds system prompt, wraps Claude SDK
 ├── router.py          # InboundMessage/OutboundMessage routing
-├── channel.py         # Channel base class + TelegramChannel adapter
+├── channel.py         # Channel base class + TelegramChannel + WebhookChannel adapters
 ├── memory.py          # Namespaced SQLite memory (FTS5 + vector search)
 ├── scheduler.py       # Cron scheduler using croniter, fires through router
 ├── gateway.py         # Single process: boots agents, channels, scheduler, API

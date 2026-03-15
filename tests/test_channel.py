@@ -1,8 +1,9 @@
-"""Tests for channel helper functions and TelegramChannel adapter."""
+"""Tests for channel helper functions, TelegramChannel, and WebhookChannel adapters."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,6 +11,7 @@ import pytest
 from smolclaw.channel import (
     CHANNEL_TYPES,
     TelegramChannel,
+    WebhookChannel,
     create_channel,
     md_to_telegram_html,
     split_message,
@@ -593,3 +595,139 @@ class TestChannelRepr:
         r = repr(ch)
         assert "TelegramChannel" in r
         assert "testagent" in r
+
+
+# --- Webhook Channel ---
+
+
+def _make_webhook_channel(
+    url: str = "https://hooks.example.com/test",
+    headers: dict | None = None,
+) -> WebhookChannel:
+    config = ChannelConfig(url=url, headers=headers or {})
+    router = Router()
+    return WebhookChannel("testagent", config, router)
+
+
+class TestWebhookChannelInit:
+    def test_defaults(self):
+        ch = _make_webhook_channel()
+        assert ch.channel_type == "webhook"
+        assert ch.agent_name == "testagent"
+        assert ch._url == "https://hooks.example.com/test"
+        assert ch._headers["Content-Type"] == "application/json"
+
+    def test_custom_headers(self):
+        ch = _make_webhook_channel(headers={"X-Custom": "value"})
+        assert ch._headers["X-Custom"] == "value"
+        assert ch._headers["Content-Type"] == "application/json"
+
+    def test_repr(self):
+        ch = _make_webhook_channel()
+        r = repr(ch)
+        assert "WebhookChannel" in r
+        assert "testagent" in r
+
+
+class TestWebhookChannelStart:
+    @pytest.mark.asyncio
+    async def test_start_with_url(self):
+        """start() logs ready when URL is configured."""
+        ch = _make_webhook_channel()
+        await ch.start()  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_start_without_url(self):
+        """start() logs error when no URL is configured."""
+        ch = _make_webhook_channel(url="")
+        await ch.start()  # Should not raise, just logs error
+
+
+class TestWebhookChannelStop:
+    @pytest.mark.asyncio
+    async def test_stop_is_noop(self):
+        """stop() is a no-op for webhook channels."""
+        ch = _make_webhook_channel()
+        await ch.stop()  # Should not raise
+
+
+class TestWebhookChannelSend:
+    @pytest.mark.asyncio
+    async def test_send_posts_json(self):
+        """send() POSTs correct JSON payload to configured URL."""
+        ch = _make_webhook_channel()
+
+        with patch("smolclaw.channel.asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
+            await ch.send("chat123", "Hello world")
+
+            mock_thread.assert_awaited_once()
+            # First arg to to_thread is urlopen, second is the Request
+            call_args = mock_thread.call_args
+            req = call_args[0][1]
+
+            assert req.full_url == "https://hooks.example.com/test"
+            assert req.method == "POST"
+            assert req.get_header("Content-type") == "application/json"
+
+            payload = json.loads(req.data)
+            assert payload["agent"] == "testagent"
+            assert payload["text"] == "Hello world"
+            assert payload["chat_id"] == "chat123"
+
+    @pytest.mark.asyncio
+    async def test_send_includes_custom_headers(self):
+        """send() includes custom headers from config."""
+        ch = _make_webhook_channel(headers={"X-Token": "secret"})
+
+        with patch("smolclaw.channel.asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
+            await ch.send("123", "Hi")
+
+            req = mock_thread.call_args[0][1]
+            assert req.get_header("X-token") == "secret"
+
+    @pytest.mark.asyncio
+    async def test_send_no_url_noop(self):
+        """send() is a no-op when no URL is configured."""
+        ch = _make_webhook_channel(url="")
+
+        with patch("smolclaw.channel.asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
+            await ch.send("123", "Hello")
+            mock_thread.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_send_error_logged(self):
+        """send() catches and logs errors instead of raising."""
+        ch = _make_webhook_channel()
+
+        with patch(
+            "smolclaw.channel.asyncio.to_thread",
+            new_callable=AsyncMock,
+            side_effect=Exception("network error"),
+        ):
+            # Should not raise
+            await ch.send("123", "Hello")
+
+    @pytest.mark.asyncio
+    async def test_send_timeout(self):
+        """send() passes timeout to urlopen."""
+        ch = _make_webhook_channel()
+
+        with patch("smolclaw.channel.asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
+            await ch.send("123", "Hello")
+
+            # Verify timeout kwarg is passed
+            call_args = mock_thread.call_args
+            assert call_args[1].get("timeout") == 30 or call_args[0][2] == 30
+
+
+class TestWebhookChannelFactory:
+    def test_create_webhook(self):
+        config = ChannelConfig(url="https://example.com/hook")
+        router = Router()
+        ch = create_channel("webhook", "myagent", config, router)
+        assert isinstance(ch, WebhookChannel)
+        assert ch.agent_name == "myagent"
+
+    def test_webhook_in_registry(self):
+        assert "webhook" in CHANNEL_TYPES
+        assert CHANNEL_TYPES["webhook"] is WebhookChannel
