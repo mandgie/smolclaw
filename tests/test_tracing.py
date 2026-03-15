@@ -338,6 +338,20 @@ class TestGetVersion:
         assert isinstance(version, str)
         assert version != "unknown"
 
+    def test_returns_unknown_when_version_missing(self):
+        """_get_version returns 'unknown' when __version__ cannot be imported."""
+        import smolclaw
+        from smolclaw.tracing import _get_version
+
+        # Temporarily remove __version__ from the package to trigger the except path
+        original = smolclaw.__version__
+        delattr(smolclaw, "__version__")
+        try:
+            result = _get_version()
+            assert result == "unknown"
+        finally:
+            smolclaw.__version__ = original
+
 
 class TestSpanKindVariations:
     """Test different span kind parameters."""

@@ -301,3 +301,62 @@ class TestHandleChanges:
         await fw._handle_changes(changes)
 
         cb.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Tests: FileWatcher._watch_loop error handling
+# ---------------------------------------------------------------------------
+
+
+class TestWatchLoopErrors:
+    @pytest.mark.asyncio
+    async def test_watch_loop_handles_non_cancelled_exception(self, tmp_path: Path):
+        """Non-CancelledError exceptions in _watch_loop should be caught and logged."""
+        cb = AsyncMock()
+        fw = FileWatcher(tmp_path, cb)
+
+        # Make awatch raise a RuntimeError after yielding once
+        async def fake_awatch(*args, **kwargs):
+            raise RuntimeError("filesystem error")
+            yield  # make it an async generator
+
+        with patch("smolclaw.watcher.awatch", fake_awatch):
+            await fw._watch_loop()  # should not raise
+
+    @pytest.mark.asyncio
+    async def test_watch_loop_propagates_cancelled_error(self, tmp_path: Path):
+        """CancelledError in _watch_loop should propagate (not be swallowed)."""
+        cb = AsyncMock()
+        fw = FileWatcher(tmp_path, cb)
+
+        async def fake_awatch(*args, **kwargs):
+            raise asyncio.CancelledError()
+            yield  # make it an async generator
+
+        with (
+            patch("smolclaw.watcher.awatch", fake_awatch),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await fw._watch_loop()
+
+    @pytest.mark.asyncio
+    async def test_watch_loop_calls_handle_changes(self, tmp_path: Path):
+        """_watch_loop should call _handle_changes for each batch from awatch."""
+        cb = AsyncMock()
+        fw = FileWatcher(tmp_path, cb)
+        handled = []
+
+        async def fake_handle(changes):
+            handled.append(changes)
+
+        async def fake_awatch(*args, **kwargs):
+            yield {(1, str(tmp_path / "tars" / "soul.md"))}
+            # After yielding once, stop by not yielding again
+
+        with (
+            patch("smolclaw.watcher.awatch", fake_awatch),
+            patch.object(fw, "_handle_changes", fake_handle),
+        ):
+            await fw._watch_loop()
+
+        assert len(handled) == 1
