@@ -760,6 +760,101 @@ class TestLoopEdgeCases:
         scheduler._on_loop_done(task)
 
 
+class TestNoSuggestionsSuppression:
+    """Tests for the NO_SUGGESTIONS delivery suppression logic."""
+
+    async def _run_job_with_response(
+        self, tmp_base: Path, response_text: str
+    ) -> AsyncMock:
+        """Helper: run a due job that returns response_text, return deliver mock."""
+        from smolclaw.router import OutboundMessage
+
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "suppress-test",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Check stuff",
+                        "enabled": True,
+                        "delivery": "telegram",
+                        "delivery_chat_id": "99999",
+                    }
+                ]
+            )
+        )
+
+        deliver_mock = AsyncMock()
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(
+                agent="testagent", text=response_text, source="cron"
+            )
+        )
+
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router, deliver_callback=deliver_mock)
+        scheduler.load_jobs()
+        scheduler.jobs[0].next_run = "2020-01-01T00:00:00"
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._loop())
+        await asyncio.sleep(0.1)
+        scheduler._running = False
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+        return deliver_mock
+
+    async def test_exact_no_suggestions_suppresses(self, tmp_base: Path):
+        """Exact 'NO_SUGGESTIONS' text suppresses delivery."""
+        deliver = await self._run_job_with_response(tmp_base, "NO_SUGGESTIONS")
+        deliver.assert_not_called()
+
+    async def test_no_suggestions_with_narration_suppresses(self, tmp_base: Path):
+        """'NO_SUGGESTIONS' on any line suppresses delivery (model may narrate first)."""
+        deliver = await self._run_job_with_response(
+            tmp_base, "Nothing interesting today.\nNO_SUGGESTIONS"
+        )
+        deliver.assert_not_called()
+
+    async def test_no_suggestions_lowercase_suppresses(self, tmp_base: Path):
+        """Case-insensitive: 'no_suggestions' also suppresses."""
+        deliver = await self._run_job_with_response(tmp_base, "no_suggestions")
+        deliver.assert_not_called()
+
+    async def test_no_suggestions_with_spaces_suppresses(self, tmp_base: Path):
+        """'NO SUGGESTIONS' (space instead of underscore) also suppresses."""
+        deliver = await self._run_job_with_response(tmp_base, "NO SUGGESTIONS")
+        deliver.assert_not_called()
+
+    async def test_no_suggestions_with_leading_whitespace_suppresses(self, tmp_base: Path):
+        """Leading/trailing whitespace on the line is ignored."""
+        deliver = await self._run_job_with_response(tmp_base, "  NO_SUGGESTIONS  ")
+        deliver.assert_not_called()
+
+    async def test_normal_response_delivers(self, tmp_base: Path):
+        """Normal response text is delivered as usual."""
+        deliver = await self._run_job_with_response(tmp_base, "Here is your briefing!")
+        deliver.assert_called_once()
+        assert deliver.call_args[0][1] == "Here is your briefing!"
+
+    async def test_empty_response_delivers(self, tmp_base: Path):
+        """Empty response is not suppressed (only NO_SUGGESTIONS is)."""
+        deliver = await self._run_job_with_response(tmp_base, "")
+        # Empty string with delivery configured — still calls deliver
+        deliver.assert_called_once()
+
+    async def test_partial_match_does_not_suppress(self, tmp_base: Path):
+        """Text containing 'NO_SUGGESTIONS' as substring does not suppress."""
+        deliver = await self._run_job_with_response(
+            tmp_base, "The response was NO_SUGGESTIONS_FOUND for this query"
+        )
+        deliver.assert_called_once()
+
+
 class TestRepr:
     def test_job_repr(self):
         job = Job({"id": "j1", "agent": "tars", "schedule": "0 8 * * *"})
