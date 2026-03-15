@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -214,10 +215,8 @@ class Scheduler:
         self._running = False
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         log.info("Scheduler: stopped")
 
     async def _loop(self) -> None:

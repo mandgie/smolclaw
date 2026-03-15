@@ -14,9 +14,11 @@ from .tracing import TRACING_AVAILABLE, TracingConfig, configure_tracing, span
 from .watcher import FileWatcher
 
 __all__ = [
+    "TRACING_AVAILABLE",
     "Agent",
     "AgentConfig",
     "AgentInfo",
+    "FileWatcher",
     "Gateway",
     "GatewayConfig",
     "HookContext",
@@ -30,8 +32,6 @@ __all__ = [
     "PreRouteHook",
     "Router",
     "Scheduler",
-    "FileWatcher",
-    "TRACING_AVAILABLE",
     "TelegramChannel",
     "TracingConfig",
     "__version__",

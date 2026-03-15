@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Union
+from typing import Any
 
 from .router import InboundMessage, OutboundMessage
 
@@ -14,8 +14,8 @@ log = logging.getLogger("smolclaw")
 __all__ = [
     "HookContext",
     "HookRegistry",
-    "PreRouteHook",
     "PostRouteHook",
+    "PreRouteHook",
 ]
 
 
@@ -28,7 +28,7 @@ __all__ = [
 #   - None: pass through unchanged
 PreRouteHook = Callable[
     ["InboundMessage", "HookContext"],
-    Awaitable[Union[InboundMessage, OutboundMessage, None]],
+    Awaitable[InboundMessage | OutboundMessage | None],
 ]
 
 # Post-route hook signature:
@@ -37,7 +37,7 @@ PreRouteHook = Callable[
 #   - None: pass through unchanged
 PostRouteHook = Callable[
     ["InboundMessage", "OutboundMessage", "HookContext"],
-    Awaitable[Union[OutboundMessage, None]],
+    Awaitable[OutboundMessage | None],
 ]
 
 

@@ -10,6 +10,8 @@ from pathlib import Path
 
 __all__ = ["Gateway", "get_log_path", "run_gateway", "setup_logging"]
 
+import contextlib
+
 from . import __version__
 from .agent import Agent
 from .channel import Channel, create_channel
@@ -330,7 +332,5 @@ async def run_gateway(base_dir: Path, with_api: bool = True) -> None:
 
     if api_task:
         api_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await api_task
-        except asyncio.CancelledError:
-            pass

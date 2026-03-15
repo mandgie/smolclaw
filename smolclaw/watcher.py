@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Coroutine
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .config import AgentInfo
 
 log = logging.getLogger("smolclaw")
 
-__all__ = ["FileWatcher", "WATCHFILES_AVAILABLE"]
+__all__ = ["WATCHFILES_AVAILABLE", "FileWatcher"]
 
 # watchfiles is an optional dependency — degrade gracefully if missing
 try:
@@ -33,10 +35,8 @@ def _is_watched_file(path: Path) -> bool:
     """Return True if this file change should trigger a reload."""
     if path.name in _WATCHED_NAMES:
         return True
-    if path.suffix in _WATCHED_SUFFIXES:
-        # Context files, skill files, or any .md/.yaml in agent tree
-        return True
-    return False
+    # Context files, skill files, or any .md/.yaml in agent tree
+    return path.suffix in _WATCHED_SUFFIXES
 
 
 def _agent_name_from_path(path: Path, agents_dir: Path) -> str | None:
@@ -86,10 +86,8 @@ class FileWatcher:
         self._stop_event.set()
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
             self._task = None
         log.info("File watcher stopped")
 
@@ -110,7 +108,7 @@ class FileWatcher:
 
     async def _handle_changes(self, changes: set[tuple[Change, str]]) -> None:
         """Process a batch of file changes, reload affected agents."""
-        from .config import discover_agent  # noqa: F811 — deferred to avoid circular
+        from .config import discover_agent
 
         agents_to_reload: dict[str, list[str]] = {}
 

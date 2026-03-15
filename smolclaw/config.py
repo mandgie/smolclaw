@@ -129,7 +129,7 @@ def load_agent_yaml(agent_dir: Path) -> AgentConfig:
     if not yaml_path.exists():
         raise FileNotFoundError(f"No agent.yaml in {agent_dir}")
 
-    with open(yaml_path) as f:
+    with yaml_path.open() as f:
         data = yaml.safe_load(f)
 
     return AgentConfig(**data)
@@ -206,7 +206,7 @@ def load_gateway_config(base_dir: Path) -> GatewayConfig:
     """Load gateway config.yaml, or return defaults."""
     config_path = base_dir / "config.yaml"
     if config_path.exists():
-        with open(config_path) as f:
+        with config_path.open() as f:
             data = yaml.safe_load(f) or {}
         return GatewayConfig(**data)
     return GatewayConfig()

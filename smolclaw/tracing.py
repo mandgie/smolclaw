@@ -11,17 +11,18 @@ of the codebase can call them unconditionally.
 from __future__ import annotations
 
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Generator
+from typing import Any
 
 log = logging.getLogger("smolclaw")
 
 __all__ = [
+    "TRACING_AVAILABLE",
+    "TracingConfig",
     "configure_tracing",
     "get_tracer",
     "span",
-    "TracingConfig",
-    "TRACING_AVAILABLE",
 ]
 
 # ---------------------------------------------------------------------------

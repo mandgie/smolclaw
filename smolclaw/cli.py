@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import platform
@@ -426,10 +427,7 @@ def status(ctx):
     memory_db = base / config.shared_dir / "memory.db"
     if memory_db.exists():
         size_kb = memory_db.stat().st_size / 1024
-        if size_kb > 1024:
-            size_str = f"{size_kb / 1024:.1f} MB"
-        else:
-            size_str = f"{size_kb:.0f} KB"
+        size_str = f"{size_kb / 1024:.1f} MB" if size_kb > 1024 else f"{size_kb:.0f} KB"
         click.echo(f"  Memory: {memory_db} ({size_str})")
     else:
         click.echo("  Memory: (no database yet — created on first gateway start)")
@@ -476,7 +474,7 @@ def config_get(ctx, key):
         click.echo(f"No config.yaml at {config_path}")
         sys.exit(1)
 
-    with open(config_path) as f:
+    with config_path.open() as f:
         data = yaml.safe_load(f) or {}
 
     if key not in data:
@@ -502,14 +500,12 @@ def config_set(ctx, key, value):
         config_path.parent.mkdir(parents=True, exist_ok=True)
         data: dict = {}
     else:
-        with open(config_path) as f:
+        with config_path.open() as f:
             data = yaml.safe_load(f) or {}
 
     # Coerce value to int if possible (for port)
-    try:
+    with contextlib.suppress(ValueError):
         value = int(value)
-    except ValueError:
-        pass
 
     # Validate by creating a config with the new value
     test_data = {**data, key: value}
@@ -839,10 +835,7 @@ def cron_list(ctx, show_all):
         return
 
     jobs = json.loads(jobs_path.read_text())
-    if not show_all:
-        visible = [j for j in jobs if j.get("enabled", True)]
-    else:
-        visible = jobs
+    visible = [j for j in jobs if j.get("enabled", True)] if not show_all else jobs
 
     if not visible:
         click.echo("No jobs found. Use --all to include disabled jobs.")
@@ -1252,7 +1245,7 @@ def logs(ctx, lines, follow):
             time.sleep(0.5)
             current_size = log_path.stat().st_size
             if current_size > offset:
-                with open(log_path, encoding="utf-8") as f:
+                with log_path.open(encoding="utf-8") as f:
                     f.seek(offset)
                     new_text = f.read()
                     if new_text:
@@ -1280,7 +1273,7 @@ def doctor(ctx):
 
     # 1. Python version
     py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    if sys.version_info >= (3, 11):
+    if sys.version_info >= (3, 11):  # noqa: UP036 — runtime check, not dead code
         click.echo(f"  [ok] Python {py_ver}")
         ok_count += 1
     else:

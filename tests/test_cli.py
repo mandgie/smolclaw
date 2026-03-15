@@ -1001,7 +1001,7 @@ class TestDoctorCommand:
         fake_version.major = 3
         fake_version.minor = 10
         fake_version.micro = 0
-        fake_version.__ge__ = lambda self, other: (3, 10) >= other
+        fake_version.__ge__ = lambda self, other: other <= (3, 10)
         with patch("smolclaw.cli.sys") as mock_sys:
             mock_sys.version_info = fake_version
             result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
@@ -1175,7 +1175,7 @@ class TestConfigCommand:
         # Verify it was written
         import yaml
 
-        with open(tmp_base / "config.yaml") as f:
+        with (tmp_base / "config.yaml").open() as f:
             data = yaml.safe_load(f)
         assert data["port"] == 8080
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import html
 import logging
 import os
@@ -221,16 +222,14 @@ class TelegramChannel(Channel):
                 )
                 outbound = await asyncio.wait_for(router.route(msg), timeout=900)
                 await send_response(update, outbound.text)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await update.message.reply_text("Request timed out.")
             except Exception as e:
                 await update.message.reply_text(f"Error: {e}")
             finally:
                 typing_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await typing_task
-                except asyncio.CancelledError:
-                    pass
 
         async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not is_auth(update.effective_user.id):

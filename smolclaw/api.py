@@ -44,9 +44,8 @@ def _extract_user_text(content: Any) -> str:
         for block in content:
             if isinstance(block, str):
                 parts.append(block)
-            elif isinstance(block, dict):
-                if block.get("type") == "text":
-                    parts.append(block.get("text", ""))
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
                 # Skip tool_result blocks
         return " ".join(parts)
     return ""
@@ -78,7 +77,7 @@ def _parse_session_meta(path: Path) -> dict[str, Any] | None:
     first_ts = None
     last_ts = None
 
-    with open(path) as f:
+    with path.open() as f:
         for line in f:
             try:
                 entry = json.loads(line)
@@ -119,7 +118,7 @@ def _parse_session_messages(path: Path) -> list[dict[str, Any]]:
     """Parse a session JSONL into a list of user/assistant messages."""
     messages = []
 
-    with open(path) as f:
+    with path.open() as f:
         for line in f:
             try:
                 entry = json.loads(line)
@@ -343,7 +342,7 @@ def create_app(gateway: Gateway) -> FastAPI:
                 result["stop_reason"] = agent.last_stop_reason
             return result
         except Exception as e:
-            raise HTTPException(500, str(e))
+            raise HTTPException(500, str(e)) from e
 
     @app.post(
         "/api/agents/{name}/new-session",
@@ -532,10 +531,10 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(500, "Scheduler not running")
         try:
             response = await gateway.scheduler.trigger_job(job_id)
-        except KeyError:
-            raise HTTPException(404, f"Job '{job_id}' not found")
+        except KeyError as e:
+            raise HTTPException(404, f"Job '{job_id}' not found") from e
         except ValueError as e:
-            raise HTTPException(400, str(e))
+            raise HTTPException(400, str(e)) from e
         return {"status": "triggered", "job_id": job_id, "response": response}
 
     # --- Hooks ---

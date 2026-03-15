@@ -282,7 +282,7 @@ async def _start_channel_and_get_handlers(
 ) -> tuple[TelegramChannel, dict]:
     """Start a channel with mocked telegram and capture registered handlers."""
     ch = _make_channel(authorized_users=authorized_users)
-    modules, mock_app, _ = _build_telegram_mocks()
+    modules, _mock_app, _ = _build_telegram_mocks()
 
     # Track CommandHandler and MessageHandler calls
     captured = {"command": {}, "message": None}
@@ -322,7 +322,7 @@ def _make_mock_update(
 class TestTelegramHandlers:
     @pytest.mark.asyncio
     async def test_cmd_start_authorized(self):
-        ch, handlers = await _start_channel_and_get_handlers()
+        _ch, handlers = await _start_channel_and_get_handlers()
         update = _make_mock_update(user_id=111)
         context = MagicMock()
 
@@ -335,7 +335,7 @@ class TestTelegramHandlers:
 
     @pytest.mark.asyncio
     async def test_cmd_start_unauthorized(self):
-        ch, handlers = await _start_channel_and_get_handlers(authorized_users=[111])
+        _ch, handlers = await _start_channel_and_get_handlers(authorized_users=[111])
         update = _make_mock_update(user_id=999)
         context = MagicMock()
 
@@ -362,7 +362,7 @@ class TestTelegramHandlers:
 
     @pytest.mark.asyncio
     async def test_cmd_new_unauthorized_ignored(self):
-        ch, handlers = await _start_channel_and_get_handlers(authorized_users=[111])
+        _ch, handlers = await _start_channel_and_get_handlers(authorized_users=[111])
         update = _make_mock_update(user_id=999)
         context = MagicMock()
 
@@ -394,7 +394,7 @@ class TestTelegramHandlers:
 
     @pytest.mark.asyncio
     async def test_handle_message_unauthorized_ignored(self):
-        ch, handlers = await _start_channel_and_get_handlers(authorized_users=[111])
+        _ch, handlers = await _start_channel_and_get_handlers(authorized_users=[111])
         update = _make_mock_update(text="Hi", user_id=999)
         context = MagicMock()
 
@@ -403,7 +403,7 @@ class TestTelegramHandlers:
 
     @pytest.mark.asyncio
     async def test_handle_message_no_text_ignored(self):
-        ch, handlers = await _start_channel_and_get_handlers()
+        _ch, handlers = await _start_channel_and_get_handlers()
         update = MagicMock()
         update.message = None
         context = MagicMock()

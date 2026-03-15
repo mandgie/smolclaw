@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from datetime import datetime
 from pathlib import Path
@@ -337,10 +338,8 @@ class TestSchedulerLoop:
         await asyncio.sleep(0.05)
         scheduler._running = False
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
         router.route.assert_not_called()
 
@@ -358,10 +357,8 @@ class TestSchedulerLoop:
         await asyncio.sleep(0.05)
         scheduler._running = False
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
         job = scheduler.jobs[0]
         assert job.status == "error"
@@ -405,10 +402,8 @@ class TestSchedulerLoop:
         await asyncio.sleep(0.05)
         scheduler._running = False
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
         deliver_mock.assert_called_once()
         call_args = deliver_mock.call_args[0]
@@ -493,10 +488,8 @@ class TestSchedulerLoop:
         await asyncio.sleep(0.05)
         scheduler._running = False
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
         router.route.assert_not_called()
 
@@ -593,10 +586,8 @@ class TestLoopEdgeCases:
         await asyncio.sleep(0.05)
         scheduler._running = False
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
         # The job's next_run should have been recomputed
         job = scheduler.jobs[0]
@@ -633,10 +624,8 @@ class TestLoopEdgeCases:
         await asyncio.sleep(0.05)
         scheduler._running = False
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
         # The job should be disabled
         assert job.enabled is False
@@ -762,10 +751,8 @@ class TestLoopEdgeCases:
         task = asyncio.create_task(sleepy())
         await asyncio.sleep(0.01)
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
         assert task.cancelled()
 

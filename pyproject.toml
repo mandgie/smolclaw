@@ -82,7 +82,16 @@ target-version = "py311"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "PTH", "RUF"]
+ignore = [
+    "RUF001",  # ambiguous unicode — false positives on Swedish text
+    "RUF002",  # ambiguous unicode in docstrings
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "SIM117",  # nested with statements — standard pytest pattern (patch + raises)
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
