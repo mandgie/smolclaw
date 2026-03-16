@@ -17,6 +17,8 @@ Gateway (one process)
 ├── Agent: tars (Opus, Telegram, cross-agent memory)
 ├── Agent: coach (Sonnet, no channel yet, isolated memory)
 ├── Scheduler (reads shared/cron/jobs.json, fires through router)
+├── Hooks (pre/post-route middleware on all messages)
+├── FileWatcher (hot-reload on config/skill changes)
 ├── API (FastAPI on :7890, serves dashboard)
 └── Router (any source → correct agent → response)
 ```
@@ -35,20 +37,22 @@ Gateway (one process)
 ## File Structure
 
 ```
-smolclaw/              # Python package (~3200 lines, 14 modules)
-├── __init__.py        # Version
-├── config.py          # Agent discovery from filesystem, YAML loading, Pydantic models
-├── agent.py           # Agent class: loads identity, builds system prompt, wraps Claude SDK
-├── router.py          # InboundMessage/OutboundMessage routing
-├── channel.py         # Channel base class + adapters + extensible registry (entry points)
-├── memory.py          # Namespaced SQLite memory (FTS5 + vector search)
-├── scheduler.py       # Cron scheduler using croniter, fires through router
-├── gateway.py         # Single process: boots agents, channels, scheduler, API
-├── tracing.py         # Optional OpenTelemetry instrumentation (zero overhead when disabled)
-├── api.py             # FastAPI REST endpoints + dashboard serving
-├── cli.py             # Click CLI: up, add, list, send, cron, add-skill
+smolclaw/              # Python package (~5300 lines, 14 modules)
+├── __init__.py        # Package exports (~50 lines)
+├── cli.py             # Click CLI: up, chat, add, list, send, cron, memory, install (~1565 lines)
+├── memory.py          # Namespaced SQLite memory: FTS5 + sqlite-vec + hybrid RRF (~620 lines)
+├── api.py             # FastAPI REST endpoints + dashboard serving (~577 lines)
+├── channel.py         # Channel base + Telegram/Webhook + extensible registry (~486 lines)
+├── scheduler.py       # Cron scheduler using croniter, fires through router (~402 lines)
+├── gateway.py         # Single process: boots agents, channels, scheduler, API (~336 lines)
+├── agent.py           # Agent class: loads identity, builds system prompt, wraps Claude SDK (~307 lines)
+├── tracing.py         # Optional OpenTelemetry instrumentation (zero overhead when disabled) (~270 lines)
+├── config.py          # Agent discovery from filesystem, YAML loading, Pydantic models (~225 lines)
+├── hooks.py           # Pre/post-route message hooks (middleware) (~198 lines)
+├── router.py          # InboundMessage/OutboundMessage routing with hooks (~161 lines)
+├── watcher.py         # Hot-reload file watcher (watchfiles-based) (~142 lines)
 └── dashboard/
-    └── index.html     # Single-file dark-mode dashboard (Alpine.js-style vanilla JS)
+    └── index.html     # Single-file dark-mode dashboard (vanilla JS)
 
 examples/              # Example two-agent setup (tars + coach)
 ```
@@ -112,7 +116,11 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
 - [x] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
 - [x] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
-- [x] Tests (761 tests, 95% coverage, pytest with mocked Claude SDK)
+- [x] Tests (781 tests, 97% coverage, pytest with mocked Claude SDK)
+- [x] OpenTelemetry tracing (optional, zero overhead when disabled)
+- [x] Message hooks (pre/post-route middleware)
+- [x] Webhook channel adapter (HTTP POST delivery)
+- [x] Extensible channel plugin system (entry-point discovery)
 - [ ] PyPI publish
 
 ## Development
