@@ -35,7 +35,7 @@ Gateway (one process)
 ## File Structure
 
 ```
-smolclaw/              # Python package (~2900 lines, 13 modules)
+smolclaw/              # Python package (~3200 lines, 14 modules)
 ├── __init__.py        # Version
 ├── config.py          # Agent discovery from filesystem, YAML loading, Pydantic models
 ├── agent.py           # Agent class: loads identity, builds system prompt, wraps Claude SDK
