@@ -10,9 +10,10 @@ Run multiple AI agents — each with its own personality, skills, and channels �
 
 Not another enterprise orchestration framework. smolclaw is for people who want a personal AI assistant that runs on their laptop — not a distributed system that needs a DevOps team.
 
-- **~1200 lines of code** — read the whole thing in an afternoon
+- **~3200 lines of code** — read the whole thing in an afternoon
 - **Filesystem-as-config** — folders and markdown files, not Python classes
-- **Batteries included** — Telegram, cron, memory, dashboard, API — all built in
+- **Batteries included** — Telegram, webhooks, cron, memory, hooks, dashboard, API — all built in
+- **Extensible** — register custom channel adapters or distribute them as entry-point plugins
 - **Claude-native** — built on Anthropic's Claude Agent SDK
 
 | | smolclaw | CrewAI | LangGraph | OpenAI Agents SDK |

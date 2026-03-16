@@ -83,6 +83,34 @@ Clears the agent's current session for a fresh start.
 }
 ```
 
+### List Sessions
+
+```
+GET /api/agents/{name}/sessions
+```
+
+**Response:**
+```json
+{
+  "sessions": [
+    {
+      "session_id": "abc123",
+      "message_count": 15,
+      "first_message": "Hello!",
+      "created_at": "2026-03-04T10:30:00"
+    }
+  ]
+}
+```
+
+### Get Session Transcript
+
+```
+GET /api/agents/{name}/sessions/{session_id}
+```
+
+Returns the full conversation transcript for a session.
+
 ## Memory
 
 ### List Facts
@@ -114,6 +142,59 @@ GET /api/agents/{name}/memory/facts
 }
 ```
 
+### Search Memory
+
+```
+GET /api/agents/{name}/memory/search
+```
+
+**Query Parameters:**
+
+| Parameter | Default | Description |
+|---|---|---|
+| `q` | required | Search query text |
+| `limit` | `10` | Maximum results |
+| `mode` | `auto` | Search mode: `auto`, `vector`, or `hybrid` |
+| `cross_agent` | `false` | Include other agents' facts |
+
+**Response:**
+```json
+{
+  "query": "preferences",
+  "mode": "auto",
+  "results": [
+    {
+      "id": 1,
+      "content": "Magnus prefers concise responses",
+      "category": "preferences",
+      "score": 0.95
+    }
+  ]
+}
+```
+
+### Add Fact
+
+```
+POST /api/agents/{name}/memory/facts
+```
+
+**Request:**
+```json
+{
+  "content": "User prefers metric units",
+  "category": "preference"
+}
+```
+
+**Response:**
+```json
+{
+  "id": 42,
+  "status": "created"
+}
+```
+
 ### Delete Fact
 
 ```
@@ -124,6 +205,22 @@ DELETE /api/agents/{name}/memory/facts/{fact_id}
 ```json
 {
   "status": "deleted"
+}
+```
+
+### Memory Stats
+
+```
+GET /api/agents/{name}/memory/stats
+```
+
+**Response:**
+```json
+{
+  "facts": 42,
+  "chunks": 156,
+  "vec_facts": 42,
+  "vec_chunks": 156
 }
 ```
 
@@ -199,6 +296,23 @@ DELETE /api/cron/jobs/{job_id}
 ```json
 {
   "status": "removed"
+}
+```
+
+## Hooks
+
+### List Hooks
+
+```
+GET /api/hooks
+```
+
+**Response:**
+```json
+{
+  "pre_route": ["rate-limiter", "logger"],
+  "post_route": ["footer"],
+  "total": 3
 }
 ```
 

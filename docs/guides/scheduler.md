@@ -70,6 +70,27 @@ Shows a table with job ID, agent, schedule, status, and next run time.
 smolclaw cron remove morning-briefing
 ```
 
+## Enable / Disable Jobs
+
+Pause a job without removing it:
+
+```bash
+smolclaw cron disable morning-briefing
+smolclaw cron enable morning-briefing
+```
+
+Disabled jobs are skipped during scheduling but retain their configuration and history.
+
+## Manual Triggering
+
+Run a job immediately for testing, without waiting for its schedule:
+
+```bash
+smolclaw cron run morning-briefing
+```
+
+This sends the job's prompt through the gateway API and delivers the response through the configured delivery channel (e.g., Telegram).
+
 ## Job Storage
 
 Jobs are stored in `~/.smolclaw/shared/cron/jobs.json` with runtime state:

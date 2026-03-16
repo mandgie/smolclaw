@@ -44,6 +44,7 @@ nav:
       - Channels: guides/channels.md
       - Memory: guides/memory.md
       - Scheduler: guides/scheduler.md
+      - Hooks: guides/hooks.md
   - Reference:
       - CLI: reference/cli.md
       - REST API: reference/api.md

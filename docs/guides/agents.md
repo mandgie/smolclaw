@@ -77,9 +77,10 @@ The system prompt is built automatically by concatenating these files (in order)
 3. **`agents.md`** — operational rules, tool access, responsibilities
 4. **`skills/*/SKILL.md`** — all skill files from the skills directory
 5. **`context/*.md`** — all context files
-6. **Runtime section** — today's date, agent name, model, workspace path
+6. **Peer agents** — names and models of other agents in the gateway
+7. **Runtime section** — today's date, agent name, model, workspace path
 
-Change a file, restart the gateway, and the agent updates.
+With [hot-reload](../architecture.md) enabled (requires `pip install smolclaw[watch]`), changes to any of these files take effect immediately — no restart needed. The gateway watches for file changes and automatically rebuilds the system prompt.
 
 ## Adding an Agent
 

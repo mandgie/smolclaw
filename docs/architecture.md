@@ -7,7 +7,7 @@ smolclaw is deliberately simple:
 - **Single process** — no microservices, no Docker, no message queues
 - **Filesystem-as-config** — folders and markdown files define agents, not code
 - **Everything routes through one bus** — Telegram, API, CLI, cron — same path
-- **~1200 lines** — small enough to read, understand, and extend
+- **~3200 lines** — small enough to read, understand, and extend
 
 ## System Overview
 
@@ -28,7 +28,15 @@ Gateway (single async process)
 │   └── InboundMessage → Agent.send() → OutboundMessage
 │
 ├── Channels
-│   └── TelegramChannel (polling, per-agent)
+│   ├── TelegramChannel (polling, per-agent)
+│   ├── WebhookChannel (HTTP POST delivery)
+│   └── Custom channels (entry-point plugins)
+│
+├── Hooks
+│   ├── Pre-route (modify/redirect/short-circuit)
+│   └── Post-route (transform responses)
+│
+├── FileWatcher (hot-reload on config/skill changes)
 │
 ├── Scheduler
 │   └── Cron jobs → InboundMessage → Router
@@ -43,10 +51,13 @@ Gateway (single async process)
 Every message — regardless of source — follows the same path:
 
 ```
-Source (Telegram / API / CLI / Cron)
+Source (Telegram / Webhook / API / CLI / Cron)
   │
   ▼
 InboundMessage { agent, text, source, chat_id }
+  │
+  ▼
+Pre-route hooks (modify, redirect, or short-circuit)
   │
   ▼
 Router.route()
@@ -58,6 +69,9 @@ Agent.send(text)  →  Claude SDK  →  Claude API
 OutboundMessage { agent, text, source, chat_id }
   │
   ▼
+Post-route hooks (transform response)
+  │
+  ▼
 Response callback (send to Telegram / return to API / print to CLI)
 ```
 
@@ -65,15 +79,18 @@ Response callback (send to Telegram / return to API / print to CLI)
 
 | Module | Lines | Responsibility |
 |---|---|---|
-| `gateway.py` | ~150 | Process orchestrator — boots everything, manages lifecycle |
-| `agent.py` | ~110 | Wraps Claude SDK — identity, prompt assembly, sessions |
-| `router.py` | ~50 | Message routing — source → agent → response callback |
-| `channel.py` | ~180 | Channel adapters — Telegram with polling, typing, formatting |
-| `memory.py` | ~85 | SQLite memory — facts, chunks, namespaced, WAL mode |
-| `scheduler.py` | ~140 | Cron engine — croniter, job state, fires through router |
-| `api.py` | ~120 | REST API — FastAPI endpoints, Pydantic models |
-| `config.py` | ~95 | Agent discovery — reads filesystem, builds AgentInfo |
-| `cli.py` | ~420 | CLI — Click commands for all operations |
+| `cli.py` | ~1565 | CLI — Click commands for all operations |
+| `memory.py` | ~620 | Memory — SQLite + FTS5 + sqlite-vec vector search + hybrid RRF |
+| `api.py` | ~577 | REST API — FastAPI endpoints, Pydantic models, dashboard |
+| `channel.py` | ~486 | Channel adapters — Telegram, Webhook, extensible registry |
+| `scheduler.py` | ~402 | Cron engine — croniter, job state, delivery, fires through router |
+| `gateway.py` | ~336 | Process orchestrator — boots everything, manages lifecycle |
+| `agent.py` | ~307 | Wraps Claude SDK — identity, prompt assembly, sessions, MCP |
+| `tracing.py` | ~270 | Optional OpenTelemetry instrumentation (zero overhead when off) |
+| `config.py` | ~225 | Agent discovery — reads filesystem, builds AgentInfo |
+| `hooks.py` | ~198 | Pre/post-route message hooks (middleware) |
+| `router.py` | ~161 | Message routing with hooks — source → agent → response |
+| `watcher.py` | ~142 | Hot-reload file watcher (watchfiles-based) |
 
 ## Key Design Decisions
 
@@ -109,7 +126,5 @@ Each agent's Claude SDK session has its working directory set to the agent's fol
 ## What's Intentionally Missing
 
 - **No distributed execution** — single process, single machine
-- **No plugin system** — extend by editing source or adding skills
-- **No authentication on API** — designed for local use on your laptop
 - **No multi-model routing** — each agent has one model, period
-- **No vector search (yet)** — memory uses LIKE queries, sqlite-vec planned
+- **No WebSocket on dashboard** — polling every 10s, works fine for personal use

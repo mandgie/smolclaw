@@ -129,7 +129,19 @@ Send a one-shot message to an agent.
 smolclaw send <agent> <message>
 ```
 
-Starts a temporary gateway, routes the message, prints the response, and exits.
+Uses the running gateway API when available, falls back to starting a temporary gateway.
+
+---
+
+### `chat`
+
+Start an interactive REPL with an agent.
+
+```bash
+smolclaw chat <agent>
+```
+
+Opens a persistent conversation session. Type messages and see responses inline. Session state is preserved between runs (use `/new` to reset).
 
 ---
 
@@ -230,6 +242,38 @@ smolclaw cron add --agent NAME --schedule EXPR --prompt TEXT [OPTIONS]
 
 ---
 
+### `cron run`
+
+Manually trigger a scheduled job (for testing/debugging).
+
+```bash
+smolclaw cron run <job_id>
+```
+
+Sends the job's prompt through the gateway API and delivers the response via the configured channel.
+
+---
+
+### `cron enable`
+
+Enable a disabled job.
+
+```bash
+smolclaw cron enable <job_id>
+```
+
+---
+
+### `cron disable`
+
+Disable a job without removing it.
+
+```bash
+smolclaw cron disable <job_id>
+```
+
+---
+
 ### `cron remove`
 
 Remove a scheduled job.
@@ -237,3 +281,87 @@ Remove a scheduled job.
 ```bash
 smolclaw cron remove <job_id>
 ```
+
+---
+
+### `memory stats`
+
+Show memory statistics for an agent.
+
+```bash
+smolclaw memory stats <agent>
+```
+
+---
+
+### `memory list`
+
+List stored facts.
+
+```bash
+smolclaw memory list <agent>
+```
+
+---
+
+### `memory search`
+
+Search agent memory.
+
+```bash
+smolclaw memory search <agent> <query>
+```
+
+---
+
+### `memory add`
+
+Add a fact to an agent's memory.
+
+```bash
+smolclaw memory add <agent> <fact>
+```
+
+---
+
+### `memory delete`
+
+Delete a specific fact.
+
+```bash
+smolclaw memory delete <agent> <fact_id>
+```
+
+---
+
+### `install`
+
+Generate and load a macOS LaunchAgent for auto-start on login.
+
+```bash
+smolclaw install
+```
+
+Creates a `com.smolclaw.gateway.plist` and bootstraps it with `launchctl`.
+
+---
+
+### `uninstall`
+
+Remove the macOS LaunchAgent.
+
+```bash
+smolclaw uninstall
+```
+
+---
+
+### `update`
+
+Check for and install smolclaw updates.
+
+```bash
+smolclaw update
+```
+
+Checks the latest GitHub release version and installs it if newer.
