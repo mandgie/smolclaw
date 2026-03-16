@@ -12,6 +12,7 @@ from click.testing import CliRunner
 
 from smolclaw.cli import (
     _clear_session_file,
+    _get_latest_version,
     _is_editable_install,
     _is_gateway_running,
     _load_session_id,
@@ -2251,3 +2252,373 @@ class TestMain:
         """main() should invoke the cli group."""
         with patch("smolclaw.cli.cli"):
             main()
+
+
+class TestGetLatestVersion:
+    """Tests for _get_latest_version() — direct unit tests of the network function."""
+
+    def test_release_api_success(self):
+        """GitHub release API returns version."""
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"tag_name": "v0.2.0"}).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            ver, source = _get_latest_version()
+        assert ver == "0.2.0"
+        assert source == "release"
+
+    def test_release_api_fails_pyproject_fallback(self):
+        """When release API fails, falls back to pyproject.toml on main."""
+        import urllib.error
+
+        pyproject_content = b'[project]\nversion = "0.3.1"\n'
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = pyproject_content
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        def side_effect(req, **kwargs):
+            if "releases" in (req.full_url if hasattr(req, "full_url") else req):
+                raise urllib.error.HTTPError("url", 404, "Not Found", {}, None)
+            return mock_resp
+
+        with patch("urllib.request.urlopen", side_effect=side_effect):
+            ver, source = _get_latest_version()
+        assert ver == "0.3.1"
+        assert source == "main"
+
+    def test_both_fail_returns_none(self):
+        """When both release API and pyproject.toml fail, returns (None, '')."""
+        import urllib.error
+
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError("no network"),
+        ):
+            ver, source = _get_latest_version()
+        assert ver is None
+        assert source == ""
+
+    def test_release_api_empty_tag(self):
+        """Release API with empty tag falls through to pyproject fallback."""
+        import urllib.error
+
+        mock_resp_release = MagicMock()
+        mock_resp_release.read.return_value = json.dumps({"tag_name": ""}).encode()
+        mock_resp_release.__enter__ = lambda s: s
+        mock_resp_release.__exit__ = MagicMock(return_value=False)
+
+        call_count = 0
+
+        def side_effect(req, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return mock_resp_release  # Empty tag
+            raise urllib.error.URLError("no pyproject")
+
+        with patch("urllib.request.urlopen", side_effect=side_effect):
+            ver, source = _get_latest_version()
+        assert ver is None
+        assert source == ""
+
+
+class TestIsEditableInstallEdgeCases:
+    """Extra edge cases for _is_editable_install."""
+
+    def test_exception_returns_false(self):
+        """Any exception during metadata lookup returns False."""
+        with patch("importlib.metadata.distribution", side_effect=RuntimeError("boom")):
+            assert _is_editable_install() is False
+
+
+class TestIsGatewayRunningEdgeCases:
+    """Edge cases for _is_gateway_running."""
+
+    def test_config_load_exception_returns_false(self, tmp_path: Path):
+        """Config load failure returns False."""
+        with patch("smolclaw.config.load_gateway_config", side_effect=Exception("bad config")):
+            assert _is_gateway_running(tmp_path) is False
+
+    def test_gateway_running_returns_true(self, tmp_base: Path):
+        """Successful API probe returns True."""
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            assert _is_gateway_running(tmp_base) is True
+
+
+class TestRestartGatewayEdgeCases:
+    """Edge cases for _restart_gateway."""
+
+    def test_launchctl_load_failure(self, tmp_base: Path):
+        """Launchctl load failure returns error message."""
+        plist_file = tmp_base / "test.plist"
+        plist_file.write_text("plist content")
+
+        def mock_run_side_effect(*args, **kwargs):
+            cmd = args[0]
+            result = MagicMock()
+            if "unload" in cmd:
+                result.returncode = 0
+            else:
+                result.returncode = 1
+                result.stderr = "Load failed: already loaded"
+            return result
+
+        with (
+            patch("smolclaw.cli._plist_path", return_value=plist_file),
+            patch("smolclaw.cli.subprocess.run", side_effect=mock_run_side_effect),
+        ):
+            msg = _restart_gateway(tmp_base)
+        assert "failed" in msg.lower()
+
+
+class TestCronRunConfigReading:
+    """Tests for cron run reading port and api_key from config.yaml."""
+
+    def test_cron_run_reads_custom_port(self, tmp_base: Path):
+        """cron run uses custom port from config.yaml."""
+        import urllib.error
+
+        # Write config with custom port
+        (tmp_base / "config.yaml").write_text("host: 127.0.0.1\nport: 7890\napi_port: 9999\n")
+
+        runner = CliRunner()
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError("Connection refused"),
+        ) as mock_open:
+            result = runner.invoke(cli, ["--home", str(tmp_base), "cron", "run", "test-job"])
+
+        assert result.exit_code == 1
+        # Verify URL uses port 9999
+        call_args = mock_open.call_args[0][0]
+        assert "9999" in call_args.full_url
+
+    def test_cron_run_reads_api_key(self, tmp_base: Path):
+        """cron run includes auth header when api_key is configured."""
+        (tmp_base / "config.yaml").write_text(
+            "host: 127.0.0.1\nport: 7890\napi_key: secret-key-123\n"
+        )
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps(
+            {"status": "triggered", "job_id": "j", "response": "ok"}
+        ).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        runner = CliRunner()
+        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            result = runner.invoke(cli, ["--home", str(tmp_base), "cron", "run", "test-job"])
+
+        assert result.exit_code == 0
+        req = mock_open.call_args[0][0]
+        assert req.get_header("Authorization") == "Bearer secret-key-123"
+
+    def test_cron_run_bad_config_yaml(self, tmp_base: Path):
+        """cron run handles malformed config.yaml gracefully."""
+        import urllib.error
+
+        (tmp_base / "config.yaml").write_text("not: valid: yaml: [[[")
+
+        runner = CliRunner()
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError("Connection refused"),
+        ):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "cron", "run", "test-job"])
+
+        # Should still attempt (falls back to default port), not crash
+        assert result.exit_code == 1
+        assert "Gateway not running" in result.output
+
+
+class TestCronListEdgeCases:
+    """Edge cases for cron list command."""
+
+    def test_cron_list_all_disabled_no_flag(self, tmp_base: Path):
+        """All jobs disabled without --all shows 'No jobs found'."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs = [
+            {
+                "id": "disabled-job",
+                "agent": "tars",
+                "schedule": "0 8 * * *",
+                "enabled": False,
+                "status": "disabled",
+            }
+        ]
+        jobs_path.write_text(json.dumps(jobs))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "cron", "list"])
+        assert result.exit_code == 0
+        assert "No jobs found" in result.output
+        assert "--all" in result.output
+
+    def test_cron_list_with_timestamps(self, tmp_base: Path):
+        """Jobs with last_run and next_run timestamps get trimmed."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs = [
+            {
+                "id": "timed-job",
+                "agent": "tars",
+                "schedule": "0 8 * * *",
+                "enabled": True,
+                "status": "ok",
+                "last_run": "2026-03-16T10:00:00.123456",
+                "next_run": "2026-03-17T08:00:00.654321",
+            }
+        ]
+        jobs_path.write_text(json.dumps(jobs))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "cron", "list"])
+        assert result.exit_code == 0
+        assert "timed-job" in result.output
+        # Trimmed to seconds (first 19 chars)
+        assert "2026-03-16T10:00:00" in result.output
+        assert "2026-03-17T08:00:00" in result.output
+        # Microseconds should be trimmed
+        assert ".123456" not in result.output
+
+
+class TestDoctorPortEdgeCases:
+    """Edge cases for doctor port checking."""
+
+    def test_doctor_port_socket_exception(self, tmp_base: Path, agent_dir: Path):
+        """Socket exception during port check shows 'could not check'."""
+        runner = CliRunner()
+        with patch("socket.socket") as mock_sock:
+            mock_sock.return_value.connect_ex.side_effect = OSError("network error")
+            mock_sock.return_value.settimeout = MagicMock()
+            result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+
+        assert result.exit_code == 0
+        assert "could not check" in result.output
+
+    def test_doctor_all_good(self, tmp_base: Path, agent_dir: Path):
+        """doctor with healthy setup shows 'all good'."""
+        # Create memory DB so that check passes
+        from smolclaw.memory import Memory
+
+        db_path = tmp_base / "shared" / "memory.db"
+        Memory(db_path, agent="test")
+
+        runner = CliRunner()
+        # Patch socket to return "not in use" (non-zero connect_ex)
+        with patch("socket.socket") as mock_sock:
+            mock_sock.return_value.connect_ex.return_value = 1  # Port not in use
+            mock_sock.return_value.settimeout = MagicMock()
+            mock_sock.return_value.close = MagicMock()
+            result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+
+        assert result.exit_code == 0
+        assert "all good" in result.output
+
+
+class TestStatusSdkExtrasEdgeCases:
+    """Edge cases for SDK extras display in status command."""
+
+    def test_status_max_turns_and_output_format(self, tmp_base: Path):
+        """status shows max_turns and structured_output when configured."""
+        agent = tmp_base / "agents" / "limited"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: limited\nmodel: claude-sonnet-4-6\n"
+            "max_turns: 10\n"
+            "output_format:\n  type: json_object\n"
+        )
+        (agent / "soul.md").write_text("Limited agent")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "max_turns=10" in result.output
+        assert "structured_output" in result.output
+
+    def test_status_mcp_string(self, tmp_base: Path):
+        """status shows mcp=<string> when mcp_servers is a string path."""
+        agent = tmp_base / "agents" / "mcpbot"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: mcpbot\nmodel: claude-sonnet-4-6\nmcp_servers: /path/to/config.json\n"
+        )
+        (agent / "soul.md").write_text("MCP agent")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "status"])
+        assert result.exit_code == 0
+        assert "mcp=/path/to/config.json" in result.output
+
+
+class TestMemoryStatsVec:
+    """Tests for memory stats vec_facts/vec_chunks display."""
+
+    def test_memory_stats_with_vec_info(self, tmp_path: Path):
+        """When vec_facts is present, stats shows vector counts."""
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+
+        # Mock stats() to return vec info
+        with patch("smolclaw.memory.Memory.stats") as mock_stats:
+            mock_stats.return_value = {
+                "facts": 3,
+                "total_facts": 3,
+                "chunks": 0,
+                "total_chunks": 0,
+                "vec_enabled": True,
+                "vec_facts": 3,
+                "vec_chunks": 0,
+            }
+            result = runner.invoke(cli, ["--home", str(base), "memory", "stats", "tars"])
+
+        assert result.exit_code == 0
+        assert "Vec facts:  3" in result.output
+        assert "Vec chunks: 0" in result.output
+
+
+class TestLogsReadError:
+    """Tests for logs command error handling."""
+
+    def test_logs_read_oserror(self, tmp_path: Path):
+        """OSError reading log file shows error message."""
+        log_file = tmp_path / "smolclaw.log"
+        log_file.write_text("content", encoding="utf-8")
+
+        runner = CliRunner()
+        with patch.object(Path, "read_text", side_effect=OSError("Permission denied")):
+            result = runner.invoke(cli, ["--home", str(tmp_path), "logs"])
+
+        assert result.exit_code == 0
+        assert "Error reading log file" in result.output
+
+
+class TestMemorySearchTruncation:
+    """Tests for memory search result content truncation."""
+
+    def test_search_long_content_truncated(self, tmp_path: Path):
+        """Search results with content > 60 chars get truncated."""
+        base = _setup_agent_with_memory(tmp_path)
+
+        # Add a fact with very long content containing a searchable word
+        from smolclaw.memory import Memory
+
+        db_path = base / "shared" / "memory.db"
+        mem = Memory(db_path, agent="tars")
+        long_text = "searchterm " + "padding " * 20
+        mem.add_fact(long_text, category="test")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "search", "tars", "searchterm"])
+        assert result.exit_code == 0
+        assert "..." in result.output
