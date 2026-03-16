@@ -3,7 +3,7 @@
 __version__ = "0.1.0"
 
 from .agent import Agent
-from .channel import TelegramChannel, WebhookChannel
+from .channel import SlackChannel, TelegramChannel, WebhookChannel
 from .config import AgentConfig, AgentInfo, GatewayConfig, MemoryConfig
 from .gateway import Gateway
 from .hooks import HookContext, HookRegistry, PostRouteHook, PreRouteHook
@@ -32,6 +32,7 @@ __all__ = [
     "PreRouteHook",
     "Router",
     "Scheduler",
+    "SlackChannel",
     "TelegramChannel",
     "TracingConfig",
     "WebhookChannel",

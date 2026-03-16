@@ -15,7 +15,7 @@ from .router import InboundMessage, Router
 
 log = logging.getLogger("smolclaw")
 
-__all__ = ["Channel", "TelegramChannel", "WebhookChannel", "create_channel"]
+__all__ = ["Channel", "SlackChannel", "TelegramChannel", "WebhookChannel", "create_channel"]
 
 
 class Channel(ABC):
@@ -365,9 +365,180 @@ class WebhookChannel(Channel):
             log.error(f"[{self.agent_name}] Webhook POST to {self._url} failed: {e}")
 
 
+# --- Slack Channel ---
+
+MAX_SLACK_LENGTH = 4000
+
+
+class SlackChannel(Channel):
+    """Slack bot channel adapter using Socket Mode (WebSocket).
+
+    Bidirectional channel: receives messages via Slack's Socket Mode API and
+    sends responses back. Requires the ``slack-sdk`` optional dependency with
+    aiohttp for async Socket Mode support.
+
+    Needs two tokens:
+    - Bot token (xoxb-...) for sending messages via Web API
+    - App-level token (xapp-...) for Socket Mode WebSocket connection
+
+    Config in agent.yaml::
+
+        channels:
+          slack:
+            token_env: SLACK_BOT_TOKEN       # xoxb-... bot token
+            app_token_env: SLACK_APP_TOKEN   # xapp-... app-level token
+            authorized_users: ["U12345"]     # Slack user IDs (strings), empty = allow all
+    """
+
+    channel_type = "slack"
+
+    def __init__(self, agent_name: str, config: ChannelConfig, router: Router):
+        """Initialize the Slack channel with bot and app-level tokens."""
+        super().__init__(agent_name, config, router)
+        self._token = os.environ.get(config.token_env, "")
+        self._app_token = os.environ.get(config.app_token_env, "")
+        self._authorized = {str(u) for u in config.authorized_users}
+        self._web_client = None
+        self._socket_client = None
+
+    def _is_authorized(self, user_id: str) -> bool:
+        if not self._authorized:
+            return True
+        return user_id in self._authorized
+
+    async def start(self) -> None:
+        """Connect to Slack via Socket Mode and register event handlers."""
+        try:
+            from slack_sdk.socket_mode.aiohttp import SocketModeClient
+            from slack_sdk.web.async_client import AsyncWebClient
+        except ImportError:
+            log.error(
+                f"[{self.agent_name}] Slack: slack-sdk not installed. "
+                f"Install with: pip install smolclaw[slack]"
+            )
+            return
+
+        if not self._token:
+            log.error(f"[{self.agent_name}] Slack: no bot token in env var {self.config.token_env}")
+            return
+        if not self._app_token:
+            log.error(
+                f"[{self.agent_name}] Slack: no app token in env var {self.config.app_token_env}"
+            )
+            return
+
+        self._web_client = AsyncWebClient(token=self._token)
+
+        self._socket_client = SocketModeClient(
+            app_token=self._app_token,
+            web_client=self._web_client,
+        )
+        self._socket_client.socket_mode_request_listeners.append(self._handle_request)
+
+        log.info(f"[{self.agent_name}] Slack channel starting (Socket Mode)")
+        await self._socket_client.connect()
+
+    async def _handle_request(self, client: object, req: object) -> None:
+        """Handle incoming Socket Mode requests (events, interactions, etc.)."""
+        from slack_sdk.socket_mode.response import SocketModeResponse
+
+        # Acknowledge immediately to avoid Slack retries
+        response = SocketModeResponse(envelope_id=req.envelope_id)  # type: ignore[attr-defined]
+        await client.send_socket_mode_response(response)  # type: ignore[attr-defined]
+
+        if req.type != "events_api":  # type: ignore[attr-defined]
+            return
+
+        event = req.payload.get("event", {})  # type: ignore[attr-defined]
+
+        # Only handle user messages (not bot messages, edits, joins, etc.)
+        if event.get("type") != "message" or event.get("subtype"):
+            return
+
+        user_id = event.get("user", "")
+        text = event.get("text", "")
+        channel = event.get("channel", "")
+
+        if not text or not user_id:
+            return
+        if not self._is_authorized(user_id):
+            return
+
+        try:
+            msg = InboundMessage(
+                agent=self.agent_name,
+                text=text,
+                source="slack",
+                chat_id=channel,
+            )
+            outbound = await asyncio.wait_for(self.router.route(msg), timeout=900)
+            for chunk in _split_slack_message(outbound.text):
+                await self._web_client.chat_postMessage(channel=channel, text=chunk)
+        except TimeoutError:
+            await self._web_client.chat_postMessage(channel=channel, text="Request timed out.")
+        except Exception as e:
+            log.error(f"[{self.agent_name}] Slack message handling failed: {e}")
+            await self._web_client.chat_postMessage(channel=channel, text=f"Error: {e}")
+
+    async def stop(self) -> None:
+        """Disconnect the Socket Mode client."""
+        if self._socket_client:
+            log.info(f"[{self.agent_name}] Slack channel stopping")
+            await self._socket_client.disconnect()
+            self._socket_client = None
+            self._web_client = None
+
+    async def send(self, chat_id: str, text: str) -> None:
+        """Send a message to a Slack channel (for cron delivery etc.)."""
+        if not self._web_client:
+            return
+        for chunk in _split_slack_message(text):
+            try:
+                await self._web_client.chat_postMessage(channel=chat_id, text=chunk)
+            except Exception as e:
+                log.error(f"[{self.agent_name}] Slack send to {chat_id} failed: {e}")
+
+
+def _split_slack_message(text: str, max_len: int = MAX_SLACK_LENGTH) -> list[str]:
+    """Split a message into chunks that fit Slack's message limit.
+
+    Splits on paragraph boundaries (double newline), then single newlines
+    for oversized paragraphs.
+    """
+    if len(text) <= max_len:
+        return [text]
+
+    chunks: list[str] = []
+    current = ""
+
+    for paragraph in text.split("\n\n"):
+        if len(current) + len(paragraph) + 2 > max_len:
+            if current:
+                chunks.append(current.strip())
+                current = ""
+            if len(paragraph) > max_len:
+                for line in paragraph.split("\n"):
+                    if len(current) + len(line) + 1 > max_len:
+                        if current:
+                            chunks.append(current.strip())
+                        current = line + "\n"
+                    else:
+                        current += line + "\n"
+            else:
+                current = paragraph + "\n\n"
+        else:
+            current += paragraph + "\n\n"
+
+    if current.strip():
+        chunks.append(current.strip())
+
+    return chunks if chunks else [text[:max_len]]
+
+
 # --- Channel Factory ---
 
 CHANNEL_TYPES: dict[str, type[Channel]] = {
+    "slack": SlackChannel,
     "telegram": TelegramChannel,
     "webhook": WebhookChannel,
 }

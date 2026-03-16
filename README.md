@@ -22,6 +22,7 @@ Run multiple AI agents — each with its own personality, skills, and channels �
 - **Filesystem-as-config** — Drop a folder, get an agent. `soul.md` for personality, `agent.yaml` for model/channels, `skills/` for capabilities.
 - **Single gateway process** — All agents, channels, scheduler, and API run in one async process. No microservices, no Docker, no infra.
 - **Telegram integration** — Each agent gets its own Telegram bot with typing indicators, markdown rendering, and user authorization.
+- **Slack integration** — Connect agents to Slack via Socket Mode (WebSocket). No public URL needed. `pip install smolclaw[slack]`.
 - **Webhook delivery** — POST agent responses to any HTTP endpoint (Slack incoming webhooks, Discord, custom APIs). Zero dependencies.
 - **Cron scheduler** — Schedule jobs with cron expressions, deliver results to Telegram. Jobs route through the same message bus as everything else.
 - **Semantic memory** — Shared SQLite database with per-agent isolation, FTS5 full-text search, and optional vector search via sqlite-vec with hybrid retrieval (RRF).
@@ -98,7 +99,7 @@ You are TARS, a personal virtual assistant. Inspired by Interstellar.
 | **Config** | Markdown files | Python classes | Python code | Python decorators |
 | **Agents defined as** | Folders with `.md` files | Python code | Graph nodes | Python classes |
 | **Multi-model** | Per-agent model selection | Per-agent | Per-node | OpenAI only |
-| **Channels** | Telegram built-in, API | No built-in | No built-in | No built-in |
+| **Channels** | Telegram, Slack, Webhook, API | No built-in | No built-in | No built-in |
 | **Scheduler** | Built-in cron | No built-in | No built-in | No built-in |
 | **Dashboard** | Built-in | Studio (paid) | LangSmith (paid) | No built-in |
 | **Memory** | Built-in SQLite | External | External | External |
@@ -226,7 +227,7 @@ smolclaw/              # Python package (~2900 lines)
 ├── gateway.py         # Single-process orchestrator
 ├── agent.py           # Agent class (loads identity, wraps Claude SDK)
 ├── router.py          # Message routing
-├── channel.py         # Channel adapters (Telegram)
+├── channel.py         # Channel adapters (Telegram, Slack, Webhook)
 ├── memory.py          # Namespaced SQLite memory (FTS5 + vector search)
 ├── scheduler.py       # Cron scheduler (croniter)
 ├── tracing.py         # Optional OpenTelemetry instrumentation
@@ -253,7 +254,8 @@ smolclaw/              # Python package (~2900 lines)
 - [x] Cross-agent awareness (peer agents visible in prompts, API-based messaging)
 - [ ] Multiple Telegram bots (one per agent)
 - [x] Webhook channel (outgoing HTTP POST delivery)
-- [ ] Discord / Slack channel adapters
+- [x] Slack channel adapter (Socket Mode, bidirectional)
+- [ ] Discord channel adapter
 - [ ] PyPI publish
 
 ## Contributing

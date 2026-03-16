@@ -763,9 +763,7 @@ class TestLoopEdgeCases:
 class TestNoSuggestionsSuppression:
     """Tests for the NO_SUGGESTIONS delivery suppression logic."""
 
-    async def _run_job_with_response(
-        self, tmp_base: Path, response_text: str
-    ) -> AsyncMock:
+    async def _run_job_with_response(self, tmp_base: Path, response_text: str) -> AsyncMock:
         """Helper: run a due job that returns response_text, return deliver mock."""
         from smolclaw.router import OutboundMessage
 
@@ -789,9 +787,7 @@ class TestNoSuggestionsSuppression:
         deliver_mock = AsyncMock()
         router = MagicMock()
         router.route = AsyncMock(
-            return_value=OutboundMessage(
-                agent="testagent", text=response_text, source="cron"
-            )
+            return_value=OutboundMessage(agent="testagent", text=response_text, source="cron")
         )
 
         scheduler = Scheduler(jobs_path, tmp_base / "agents", router, deliver_callback=deliver_mock)

@@ -1,4 +1,4 @@
-"""Tests for channel helper functions, TelegramChannel, and WebhookChannel adapters."""
+"""Tests for channel functions, Telegram, Webhook, and Slack adapters."""
 
 from __future__ import annotations
 
@@ -10,8 +10,10 @@ import pytest
 
 from smolclaw.channel import (
     CHANNEL_TYPES,
+    SlackChannel,
     TelegramChannel,
     WebhookChannel,
+    _split_slack_message,
     create_channel,
     md_to_telegram_html,
     split_message,
@@ -582,7 +584,7 @@ class TestCreateChannel:
         config = ChannelConfig(token_env="TEST_TOKEN", authorized_users=[])
         router = Router()
         with pytest.raises(ValueError, match="Unknown channel type"):
-            create_channel("discord", "myagent", config, router)
+            create_channel("carrier_pigeon", "myagent", config, router)
 
     def test_channel_types_registry(self):
         assert "telegram" in CHANNEL_TYPES
@@ -731,3 +733,570 @@ class TestWebhookChannelFactory:
     def test_webhook_in_registry(self):
         assert "webhook" in CHANNEL_TYPES
         assert CHANNEL_TYPES["webhook"] is WebhookChannel
+
+
+# --- Slack Channel ---
+
+
+def _make_slack_channel(
+    token: str = "xoxb-test-token",
+    app_token: str = "xapp-test-token",
+    authorized_users: list[str] | None = None,
+) -> SlackChannel:
+    config = ChannelConfig(
+        token_env="SLACK_BOT_TOKEN",
+        app_token_env="SLACK_APP_TOKEN",
+        authorized_users=authorized_users or [],
+    )
+    router = Router()
+    with patch.dict(
+        "os.environ",
+        {"SLACK_BOT_TOKEN": token, "SLACK_APP_TOKEN": app_token},
+    ):
+        channel = SlackChannel("testagent", config, router)
+    return channel
+
+
+class TestSlackChannelInit:
+    def test_basic_init(self):
+        ch = _make_slack_channel()
+        assert ch.agent_name == "testagent"
+        assert ch.channel_type == "slack"
+        assert ch._token == "xoxb-test-token"
+        assert ch._app_token == "xapp-test-token"
+        assert ch._web_client is None
+        assert ch._socket_client is None
+
+    def test_authorized_users_strings(self):
+        ch = _make_slack_channel(authorized_users=["U111", "U222"])
+        assert ch._authorized == {"U111", "U222"}
+
+    def test_authorized_users_mixed_types(self):
+        """Integer user IDs from YAML should be stringified."""
+        ch = _make_slack_channel(authorized_users=["U111", "12345"])
+        assert "U111" in ch._authorized
+        assert "12345" in ch._authorized
+
+    def test_no_authorized_users(self):
+        ch = _make_slack_channel(authorized_users=[])
+        assert ch._authorized == set()
+
+    def test_missing_token_env(self):
+        config = ChannelConfig(
+            token_env="NONEXISTENT_TOKEN",
+            app_token_env="NONEXISTENT_APP_TOKEN",
+        )
+        router = Router()
+        ch = SlackChannel("testagent", config, router)
+        assert ch._token == ""
+        assert ch._app_token == ""
+
+    def test_repr(self):
+        ch = _make_slack_channel()
+        r = repr(ch)
+        assert "SlackChannel" in r
+        assert "testagent" in r
+
+
+class TestSlackChannelAuth:
+    def test_authorized_when_no_whitelist(self):
+        ch = _make_slack_channel(authorized_users=[])
+        assert ch._is_authorized("U12345") is True
+
+    def test_authorized_user_in_whitelist(self):
+        ch = _make_slack_channel(authorized_users=["U111", "U222"])
+        assert ch._is_authorized("U111") is True
+        assert ch._is_authorized("U222") is True
+
+    def test_unauthorized_user(self):
+        ch = _make_slack_channel(authorized_users=["U111"])
+        assert ch._is_authorized("U999") is False
+
+
+def _build_slack_mocks():
+    """Create mocked slack_sdk modules for testing."""
+    mock_web_client_cls = MagicMock()
+    mock_web_client = AsyncMock()
+    mock_web_client.chat_postMessage = AsyncMock()
+    mock_web_client_cls.return_value = mock_web_client
+
+    mock_socket_client_cls = MagicMock()
+    mock_socket_client = MagicMock()
+    mock_socket_client.connect = AsyncMock()
+    mock_socket_client.disconnect = AsyncMock()
+    mock_socket_client.socket_mode_request_listeners = []
+    mock_socket_client_cls.return_value = mock_socket_client
+
+    mock_response_cls = MagicMock()
+
+    modules = {
+        "slack_sdk": MagicMock(),
+        "slack_sdk.web": MagicMock(),
+        "slack_sdk.web.async_client": MagicMock(AsyncWebClient=mock_web_client_cls),
+        "slack_sdk.socket_mode": MagicMock(),
+        "slack_sdk.socket_mode.aiohttp": MagicMock(SocketModeClient=mock_socket_client_cls),
+        "slack_sdk.socket_mode.response": MagicMock(SocketModeResponse=mock_response_cls),
+        "aiohttp": MagicMock(),
+    }
+
+    return modules, mock_web_client, mock_socket_client, mock_response_cls
+
+
+class TestSlackChannelStart:
+    @pytest.mark.asyncio
+    async def test_start_no_bot_token_returns_early(self):
+        ch = _make_slack_channel(token="")
+        ch._token = ""
+        await ch.start()
+        assert ch._web_client is None
+        assert ch._socket_client is None
+
+    @pytest.mark.asyncio
+    async def test_start_no_app_token_returns_early(self):
+        ch = _make_slack_channel(app_token="")
+        ch._app_token = ""
+        modules, _, _, _ = _build_slack_mocks()
+        with patch.dict("sys.modules", modules):
+            await ch.start()
+        assert ch._socket_client is None
+
+    @pytest.mark.asyncio
+    async def test_start_import_error(self):
+        """start() should log error if slack_sdk is not installed."""
+        ch = _make_slack_channel()
+        # Simulate ImportError by making the import fail
+        with patch.dict("sys.modules", {"slack_sdk.socket_mode.aiohttp": None}):
+            # The import inside start() will raise ImportError
+            await ch.start()
+        assert ch._web_client is None
+
+    @pytest.mark.asyncio
+    async def test_start_connects(self):
+        ch = _make_slack_channel()
+        modules, mock_web, mock_socket, _ = _build_slack_mocks()
+
+        with patch.dict("sys.modules", modules):
+            await ch.start()
+
+        assert ch._web_client is mock_web
+        assert ch._socket_client is mock_socket
+        mock_socket.connect.assert_awaited_once()
+        assert len(mock_socket.socket_mode_request_listeners) == 1
+
+
+class TestSlackChannelStop:
+    @pytest.mark.asyncio
+    async def test_stop_with_no_client(self):
+        ch = _make_slack_channel()
+        await ch.stop()
+        assert ch._socket_client is None
+
+    @pytest.mark.asyncio
+    async def test_stop_disconnects(self):
+        ch = _make_slack_channel()
+        mock_socket = MagicMock()
+        mock_socket.disconnect = AsyncMock()
+        ch._socket_client = mock_socket
+        ch._web_client = MagicMock()
+
+        await ch.stop()
+
+        mock_socket.disconnect.assert_awaited_once()
+        assert ch._socket_client is None
+        assert ch._web_client is None
+
+
+class TestSlackChannelSend:
+    @pytest.mark.asyncio
+    async def test_send_no_client(self):
+        ch = _make_slack_channel()
+        await ch.send("C123", "Hello")  # No-op
+
+    @pytest.mark.asyncio
+    async def test_send_success(self):
+        ch = _make_slack_channel()
+        mock_web = AsyncMock()
+        mock_web.chat_postMessage = AsyncMock()
+        ch._web_client = mock_web
+
+        await ch.send("C12345", "Hello world")
+
+        mock_web.chat_postMessage.assert_awaited_once_with(channel="C12345", text="Hello world")
+
+    @pytest.mark.asyncio
+    async def test_send_splits_long_message(self):
+        ch = _make_slack_channel()
+        mock_web = AsyncMock()
+        mock_web.chat_postMessage = AsyncMock()
+        ch._web_client = mock_web
+
+        long_text = ("A" * 200 + "\n\n") * 30  # >4000 chars
+        await ch.send("C123", long_text)
+
+        assert mock_web.chat_postMessage.await_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_send_error_logged(self):
+        ch = _make_slack_channel()
+        mock_web = AsyncMock()
+        mock_web.chat_postMessage = AsyncMock(side_effect=Exception("network error"))
+        ch._web_client = mock_web
+
+        # Should not raise
+        await ch.send("C123", "Hello")
+
+
+class TestSlackChannelHandleRequest:
+    @pytest.mark.asyncio
+    async def test_handle_message_event(self):
+        """Message events should be routed and responded to."""
+        from smolclaw.router import OutboundMessage
+
+        ch = _make_slack_channel()
+        mock_web = AsyncMock()
+        mock_web.chat_postMessage = AsyncMock()
+        ch._web_client = mock_web
+        ch.router.route = AsyncMock(
+            return_value=OutboundMessage(agent="testagent", text="Hello back!", source="slack")
+        )
+
+        # Build mock request
+        req = MagicMock()
+        req.type = "events_api"
+        req.envelope_id = "env123"
+        req.payload = {
+            "event": {
+                "type": "message",
+                "user": "U111",
+                "text": "Hi there",
+                "channel": "C999",
+            }
+        }
+
+        client = MagicMock()
+        client.send_socket_mode_response = AsyncMock()
+
+        mock_response_cls = MagicMock()
+
+        with patch("smolclaw.channel.SocketModeResponse", mock_response_cls, create=True):
+            with patch.dict(
+                "sys.modules",
+                {"slack_sdk.socket_mode.response": MagicMock(SocketModeResponse=mock_response_cls)},
+            ):
+                await ch._handle_request(client, req)
+
+        # Acknowledged
+        client.send_socket_mode_response.assert_awaited_once()
+
+        # Message was routed
+        ch.router.route.assert_awaited_once()
+        routed_msg = ch.router.route.call_args[0][0]
+        assert routed_msg.text == "Hi there"
+        assert routed_msg.agent == "testagent"
+        assert routed_msg.source == "slack"
+        assert routed_msg.chat_id == "C999"
+
+        # Response sent
+        mock_web.chat_postMessage.assert_awaited_once_with(channel="C999", text="Hello back!")
+
+    @pytest.mark.asyncio
+    async def test_handle_non_events_api_ignored(self):
+        """Non events_api requests should be acknowledged but ignored."""
+        ch = _make_slack_channel()
+        ch.router.route = AsyncMock()
+
+        req = MagicMock()
+        req.type = "slash_commands"
+        req.envelope_id = "env123"
+
+        client = MagicMock()
+        client.send_socket_mode_response = AsyncMock()
+
+        mock_response_cls = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"slack_sdk.socket_mode.response": MagicMock(SocketModeResponse=mock_response_cls)},
+        ):
+            await ch._handle_request(client, req)
+
+        client.send_socket_mode_response.assert_awaited_once()
+        ch.router.route.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_handle_message_subtype_ignored(self):
+        """Message events with subtypes (edits, joins, etc.) should be ignored."""
+        ch = _make_slack_channel()
+        ch.router.route = AsyncMock()
+
+        req = MagicMock()
+        req.type = "events_api"
+        req.envelope_id = "env123"
+        req.payload = {
+            "event": {
+                "type": "message",
+                "subtype": "message_changed",
+                "user": "U111",
+                "text": "edited",
+                "channel": "C999",
+            }
+        }
+
+        client = MagicMock()
+        client.send_socket_mode_response = AsyncMock()
+
+        mock_response_cls = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"slack_sdk.socket_mode.response": MagicMock(SocketModeResponse=mock_response_cls)},
+        ):
+            await ch._handle_request(client, req)
+
+        ch.router.route.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_handle_message_unauthorized_ignored(self):
+        """Messages from unauthorized users should be ignored."""
+        ch = _make_slack_channel(authorized_users=["U111"])
+        ch.router.route = AsyncMock()
+
+        req = MagicMock()
+        req.type = "events_api"
+        req.envelope_id = "env123"
+        req.payload = {
+            "event": {
+                "type": "message",
+                "user": "U999",
+                "text": "Hi",
+                "channel": "C999",
+            }
+        }
+
+        client = MagicMock()
+        client.send_socket_mode_response = AsyncMock()
+
+        mock_response_cls = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"slack_sdk.socket_mode.response": MagicMock(SocketModeResponse=mock_response_cls)},
+        ):
+            await ch._handle_request(client, req)
+
+        ch.router.route.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_handle_message_empty_text_ignored(self):
+        """Messages with empty text should be ignored."""
+        ch = _make_slack_channel()
+        ch.router.route = AsyncMock()
+
+        req = MagicMock()
+        req.type = "events_api"
+        req.envelope_id = "env123"
+        req.payload = {
+            "event": {
+                "type": "message",
+                "user": "U111",
+                "text": "",
+                "channel": "C999",
+            }
+        }
+
+        client = MagicMock()
+        client.send_socket_mode_response = AsyncMock()
+
+        mock_response_cls = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"slack_sdk.socket_mode.response": MagicMock(SocketModeResponse=mock_response_cls)},
+        ):
+            await ch._handle_request(client, req)
+
+        ch.router.route.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_handle_message_no_user_ignored(self):
+        """Messages with no user field should be ignored."""
+        ch = _make_slack_channel()
+        ch.router.route = AsyncMock()
+
+        req = MagicMock()
+        req.type = "events_api"
+        req.envelope_id = "env123"
+        req.payload = {
+            "event": {
+                "type": "message",
+                "text": "Hi",
+                "channel": "C999",
+            }
+        }
+
+        client = MagicMock()
+        client.send_socket_mode_response = AsyncMock()
+
+        mock_response_cls = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"slack_sdk.socket_mode.response": MagicMock(SocketModeResponse=mock_response_cls)},
+        ):
+            await ch._handle_request(client, req)
+
+        ch.router.route.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_handle_message_timeout(self):
+        """Timeout during routing should send error message."""
+        ch = _make_slack_channel()
+        mock_web = AsyncMock()
+        mock_web.chat_postMessage = AsyncMock()
+        ch._web_client = mock_web
+        ch.router.route = AsyncMock(side_effect=asyncio.TimeoutError)
+
+        req = MagicMock()
+        req.type = "events_api"
+        req.envelope_id = "env123"
+        req.payload = {
+            "event": {
+                "type": "message",
+                "user": "U111",
+                "text": "Hi",
+                "channel": "C999",
+            }
+        }
+
+        client = MagicMock()
+        client.send_socket_mode_response = AsyncMock()
+
+        mock_response_cls = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"slack_sdk.socket_mode.response": MagicMock(SocketModeResponse=mock_response_cls)},
+        ):
+            await ch._handle_request(client, req)
+
+        mock_web.chat_postMessage.assert_awaited_once_with(
+            channel="C999", text="Request timed out."
+        )
+
+    @pytest.mark.asyncio
+    async def test_handle_message_error(self):
+        """Errors during routing should send error message."""
+        ch = _make_slack_channel()
+        mock_web = AsyncMock()
+        mock_web.chat_postMessage = AsyncMock()
+        ch._web_client = mock_web
+        ch.router.route = AsyncMock(side_effect=RuntimeError("agent crashed"))
+
+        req = MagicMock()
+        req.type = "events_api"
+        req.envelope_id = "env123"
+        req.payload = {
+            "event": {
+                "type": "message",
+                "user": "U111",
+                "text": "Hi",
+                "channel": "C999",
+            }
+        }
+
+        client = MagicMock()
+        client.send_socket_mode_response = AsyncMock()
+
+        mock_response_cls = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"slack_sdk.socket_mode.response": MagicMock(SocketModeResponse=mock_response_cls)},
+        ):
+            await ch._handle_request(client, req)
+
+        mock_web.chat_postMessage.assert_awaited_once()
+        msg = mock_web.chat_postMessage.call_args[1]["text"]
+        assert "Error" in msg
+
+    @pytest.mark.asyncio
+    async def test_handle_non_message_event_ignored(self):
+        """Non-message events (like reaction_added) should be ignored."""
+        ch = _make_slack_channel()
+        ch.router.route = AsyncMock()
+
+        req = MagicMock()
+        req.type = "events_api"
+        req.envelope_id = "env123"
+        req.payload = {
+            "event": {
+                "type": "reaction_added",
+                "user": "U111",
+                "reaction": "thumbsup",
+            }
+        }
+
+        client = MagicMock()
+        client.send_socket_mode_response = AsyncMock()
+
+        mock_response_cls = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"slack_sdk.socket_mode.response": MagicMock(SocketModeResponse=mock_response_cls)},
+        ):
+            await ch._handle_request(client, req)
+
+        ch.router.route.assert_not_awaited()
+
+
+# --- Slack message splitting ---
+
+
+class TestSplitSlackMessage:
+    def test_short_message_no_split(self):
+        assert _split_slack_message("Hello") == ["Hello"]
+
+    def test_long_message_splits_at_paragraphs(self):
+        text = ("A" * 100 + "\n\n") * 50
+        chunks = _split_slack_message(text, max_len=500)
+        assert len(chunks) > 1
+        for chunk in chunks:
+            assert len(chunk) <= 500
+
+    def test_single_long_paragraph_splits_at_lines(self):
+        text = "\n".join(["Line " + str(i) for i in range(200)])
+        chunks = _split_slack_message(text, max_len=200)
+        assert len(chunks) > 1
+
+    def test_empty_returns_original(self):
+        assert _split_slack_message("") == [""]
+
+    def test_exactly_at_limit(self):
+        text = "A" * 4000
+        assert _split_slack_message(text) == [text]
+
+    def test_preserves_all_content(self):
+        paragraphs = [f"Paragraph {i}" for i in range(20)]
+        text = "\n\n".join(paragraphs)
+        chunks = _split_slack_message(text, max_len=100)
+        rejoined = " ".join(chunks)
+        for p in paragraphs:
+            assert p in rejoined
+
+    def test_single_huge_line_fallback(self):
+        text = "X" * 500
+        chunks = _split_slack_message(text, max_len=100)
+        assert len(chunks) >= 1
+
+
+# --- Slack in channel factory ---
+
+
+class TestSlackChannelFactory:
+    def test_create_slack(self):
+        config = ChannelConfig(
+            token_env="SLACK_TOKEN",
+            app_token_env="SLACK_APP_TOKEN",
+        )
+        router = Router()
+        with patch.dict("os.environ", {"SLACK_TOKEN": "xoxb-test", "SLACK_APP_TOKEN": "xapp-test"}):
+            ch = create_channel("slack", "myagent", config, router)
+        assert isinstance(ch, SlackChannel)
+        assert ch.agent_name == "myagent"
+
+    def test_slack_in_registry(self):
+        assert "slack" in CHANNEL_TYPES
+        assert CHANNEL_TYPES["slack"] is SlackChannel
