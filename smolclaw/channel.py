@@ -15,7 +15,15 @@ from .router import InboundMessage, Router
 
 log = logging.getLogger("smolclaw")
 
-__all__ = ["Channel", "TelegramChannel", "WebhookChannel", "create_channel"]
+__all__ = [
+    "CHANNEL_TYPES",
+    "Channel",
+    "TelegramChannel",
+    "WebhookChannel",
+    "create_channel",
+    "list_channel_types",
+    "register_channel",
+]
 
 
 class Channel(ABC):
@@ -152,12 +160,15 @@ class TelegramChannel(Channel):
         super().__init__(agent_name, config, router)
         self._app = None
         self._token = os.environ.get(config.token_env, "")
-        self._authorized = set(config.authorized_users)
+        # Normalize authorized_users to a set — accept both int and str IDs
+        self._authorized: set[int | str] = set(config.authorized_users)
 
     def _is_authorized(self, user_id: int) -> bool:
+        """Check if a user is authorized (empty set = allow all)."""
         if not self._authorized:
             return True
-        return user_id in self._authorized
+        # Match against both raw int and string representation
+        return user_id in self._authorized or str(user_id) in self._authorized
 
     async def start(self) -> None:
         """Start polling Telegram for messages and register command handlers."""
@@ -365,12 +376,88 @@ class WebhookChannel(Channel):
             log.error(f"[{self.agent_name}] Webhook POST to {self._url} failed: {e}")
 
 
-# --- Channel Factory ---
+# --- Channel Registry ---
 
-CHANNEL_TYPES: dict[str, type[Channel]] = {
+_BUILTIN_CHANNELS: dict[str, type[Channel]] = {
     "telegram": TelegramChannel,
     "webhook": WebhookChannel,
 }
+
+_custom_channels: dict[str, type[Channel]] = {}
+
+# Backward-compatible alias — prefer register_channel() / list_channel_types() for new code.
+CHANNEL_TYPES = _BUILTIN_CHANNELS
+
+
+def register_channel(name: str, cls: type[Channel]) -> None:
+    """Register a custom channel type.
+
+    Third-party packages can call this to add new channel adapters
+    (e.g. Discord, Slack, WhatsApp) without modifying smolclaw core.
+
+    Args:
+        name: Channel type name (used in agent.yaml ``channels:`` section).
+        cls: A :class:`Channel` subclass implementing ``start``, ``stop``, ``send``.
+
+    Raises:
+        TypeError: If *cls* is not a :class:`Channel` subclass.
+        ValueError: If *name* conflicts with a built-in channel type.
+
+    Example::
+
+        from smolclaw.channel import Channel, register_channel
+
+        class MyChannel(Channel):
+            channel_type = "my_platform"
+            async def start(self): ...
+            async def stop(self): ...
+            async def send(self, chat_id, text): ...
+
+        register_channel("my_platform", MyChannel)
+    """
+    if not (isinstance(cls, type) and issubclass(cls, Channel)):
+        raise TypeError(f"Expected a Channel subclass, got {cls!r}")
+    if name in _BUILTIN_CHANNELS:
+        raise ValueError(
+            f"Cannot override built-in channel '{name}'. "
+            f"Choose a different name for your custom channel."
+        )
+    _custom_channels[name] = cls
+    log.info(f"Registered custom channel type: {name}")
+
+
+def _discover_entrypoint_channels() -> dict[str, type[Channel]]:
+    """Discover channel plugins via ``smolclaw.channels`` entry points.
+
+    Third-party packages declare entry points in their ``pyproject.toml``::
+
+        [project.entry-points."smolclaw.channels"]
+        discord = "smolclaw_discord:DiscordChannel"
+
+    Returns:
+        Mapping of channel-type name to Channel subclass.
+    """
+    from importlib.metadata import entry_points
+
+    discovered: dict[str, type[Channel]] = {}
+    eps = entry_points(group="smolclaw.channels")
+    for ep in eps:
+        try:
+            cls = ep.load()
+            if isinstance(cls, type) and issubclass(cls, Channel):
+                discovered[ep.name] = cls
+                log.debug(f"Discovered channel plugin: {ep.name} → {cls.__name__}")
+            else:
+                log.warning(f"Channel entry point '{ep.name}' is not a Channel subclass, skipping")
+        except Exception as e:
+            log.warning(f"Failed to load channel entry point '{ep.name}': {e}")
+    return discovered
+
+
+def list_channel_types() -> list[str]:
+    """Return all available channel type names (built-in + custom + plugins)."""
+    all_types = {**_BUILTIN_CHANNELS, **_custom_channels, **_discover_entrypoint_channels()}
+    return sorted(all_types)
 
 
 def create_channel(
@@ -379,8 +466,21 @@ def create_channel(
     config: ChannelConfig,
     router: Router,
 ) -> Channel:
-    """Create a channel adapter by type name."""
-    cls = CHANNEL_TYPES.get(channel_type)
+    """Create a channel adapter by type name.
+
+    Resolution order:
+    1. Built-in channels (telegram, webhook)
+    2. Channels registered via :func:`register_channel`
+    3. Channels discovered via ``smolclaw.channels`` entry points
+    """
+    cls = _BUILTIN_CHANNELS.get(channel_type)
     if not cls:
-        raise ValueError(f"Unknown channel type: {channel_type}. Available: {list(CHANNEL_TYPES)}")
+        cls = _custom_channels.get(channel_type)
+    if not cls:
+        # Try entry-point discovery as last resort
+        ep_channels = _discover_entrypoint_channels()
+        cls = ep_channels.get(channel_type)
+    if not cls:
+        available = list_channel_types()
+        raise ValueError(f"Unknown channel type: {channel_type}. Available: {available}")
     return cls(agent_name, config, router)

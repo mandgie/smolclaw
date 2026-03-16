@@ -3,7 +3,13 @@
 __version__ = "0.1.0"
 
 from .agent import Agent
-from .channel import TelegramChannel, WebhookChannel
+from .channel import (
+    TelegramChannel,
+    WebhookChannel,
+    create_channel,
+    list_channel_types,
+    register_channel,
+)
 from .config import AgentConfig, AgentInfo, GatewayConfig, MemoryConfig
 from .gateway import Gateway
 from .hooks import HookContext, HookRegistry, PostRouteHook, PreRouteHook
@@ -37,6 +43,9 @@ __all__ = [
     "WebhookChannel",
     "__version__",
     "configure_tracing",
+    "create_channel",
+    "list_channel_types",
+    "register_channel",
     "serialize_f32",
     "span",
 ]

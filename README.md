@@ -23,6 +23,7 @@ Run multiple AI agents — each with its own personality, skills, and channels �
 - **Single gateway process** — All agents, channels, scheduler, and API run in one async process. No microservices, no Docker, no infra.
 - **Telegram integration** — Each agent gets its own Telegram bot with typing indicators, markdown rendering, and user authorization.
 - **Webhook delivery** — POST agent responses to any HTTP endpoint (Slack incoming webhooks, Discord, custom APIs). Zero dependencies.
+- **Extensible channels** — Register custom channel adapters via `register_channel()` or distribute them as plugins via entry points. Third-party packages just work.
 - **Cron scheduler** — Schedule jobs with cron expressions, deliver results to Telegram. Jobs route through the same message bus as everything else.
 - **Semantic memory** — Shared SQLite database with per-agent isolation, FTS5 full-text search, and optional vector search via sqlite-vec with hybrid retrieval (RRF).
 - **Hot-reload** — Change a skill, soul, or config file and the agent updates live. No restart needed.
@@ -202,6 +203,47 @@ Health (`/api/health`) and dashboard (`/`) are always public. When no `api_key` 
 
 A built-in dark-mode dashboard runs at `http://localhost:7890` when the gateway starts. Shows agent status, config, and lets you send messages.
 
+## Custom Channels
+
+smolclaw supports three ways to add channel adapters:
+
+### 1. Programmatic registration
+
+```python
+from smolclaw.channel import Channel, register_channel
+
+class WhatsAppChannel(Channel):
+    channel_type = "whatsapp"
+
+    async def start(self): ...
+    async def stop(self): ...
+    async def send(self, chat_id: str, text: str): ...
+
+register_channel("whatsapp", WhatsAppChannel)
+```
+
+### 2. Entry-point plugins
+
+Third-party packages declare channel adapters in their `pyproject.toml`:
+
+```toml
+[project.entry-points."smolclaw.channels"]
+whatsapp = "smolclaw_whatsapp:WhatsAppChannel"
+```
+
+Once installed, the channel is automatically available in `agent.yaml`:
+
+```yaml
+channels:
+  whatsapp:
+    token_env: WHATSAPP_TOKEN
+    authorized_users: ["+46701234567"]
+```
+
+### 3. Built-in channels
+
+`telegram` and `webhook` are included out of the box.
+
 ## Development
 
 ```bash
@@ -254,7 +296,7 @@ smolclaw/              # Python package (~3200 lines)
 - [x] Cross-agent awareness (peer agents visible in prompts, API-based messaging)
 - [ ] Multiple Telegram bots (one per agent)
 - [x] Webhook channel (outgoing HTTP POST delivery)
-- [ ] Discord / Slack channel adapters
+- [ ] Discord / Slack channel adapters (branches ready, pending review)
 - [ ] PyPI publish
 
 ## Contributing

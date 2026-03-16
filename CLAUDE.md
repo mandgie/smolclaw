@@ -40,7 +40,7 @@ smolclaw/              # Python package (~3200 lines, 14 modules)
 ├── config.py          # Agent discovery from filesystem, YAML loading, Pydantic models
 ├── agent.py           # Agent class: loads identity, builds system prompt, wraps Claude SDK
 ├── router.py          # InboundMessage/OutboundMessage routing
-├── channel.py         # Channel base class + TelegramChannel + WebhookChannel adapters
+├── channel.py         # Channel base class + adapters + extensible registry (entry points)
 ├── memory.py          # Namespaced SQLite memory (FTS5 + vector search)
 ├── scheduler.py       # Cron scheduler using croniter, fires through router
 ├── gateway.py         # Single process: boots agents, channels, scheduler, API
@@ -112,7 +112,7 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
 - [x] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
 - [x] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
-- [x] Tests (668 tests, 95% coverage, pytest with mocked Claude SDK)
+- [x] Tests (761 tests, 95% coverage, pytest with mocked Claude SDK)
 - [ ] PyPI publish
 
 ## Development

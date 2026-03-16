@@ -10,10 +10,15 @@ import pytest
 
 from smolclaw.channel import (
     CHANNEL_TYPES,
+    Channel,
     TelegramChannel,
     WebhookChannel,
+    _custom_channels,
+    _discover_entrypoint_channels,
     create_channel,
+    list_channel_types,
     md_to_telegram_html,
+    register_channel,
     split_message,
 )
 from smolclaw.config import ChannelConfig
@@ -151,7 +156,7 @@ class TestSplitMessage:
 
 def _make_channel(
     token: str = "test-token",
-    authorized_users: list[int] | None = None,
+    authorized_users: list[int | str] | None = None,
 ) -> TelegramChannel:
     config = ChannelConfig(
         token_env="TEST_BOT_TOKEN",
@@ -731,3 +736,264 @@ class TestWebhookChannelFactory:
     def test_webhook_in_registry(self):
         assert "webhook" in CHANNEL_TYPES
         assert CHANNEL_TYPES["webhook"] is WebhookChannel
+
+
+# --- Channel Plugin Registry ---
+
+
+class _DummyChannel(Channel):
+    """Minimal Channel subclass for testing the plugin registry."""
+
+    channel_type = "dummy"
+
+    async def start(self):
+        pass
+
+    async def stop(self):
+        pass
+
+    async def send(self, chat_id, text):
+        pass
+
+
+class TestRegisterChannel:
+    """Tests for the register_channel() API."""
+
+    def setup_method(self):
+        """Clear custom channels before each test."""
+        _custom_channels.clear()
+
+    def teardown_method(self):
+        """Ensure custom channels are clean after each test."""
+        _custom_channels.clear()
+
+    def test_register_custom_channel(self):
+        register_channel("dummy", _DummyChannel)
+        assert "dummy" in _custom_channels
+        assert _custom_channels["dummy"] is _DummyChannel
+
+    def test_register_not_a_class_raises(self):
+        with pytest.raises(TypeError, match="Expected a Channel subclass"):
+            register_channel("bad", "not_a_class")  # type: ignore[arg-type]
+
+    def test_register_non_channel_class_raises(self):
+        class NotAChannel:
+            pass
+
+        with pytest.raises(TypeError, match="Expected a Channel subclass"):
+            register_channel("bad", NotAChannel)  # type: ignore[arg-type]
+
+    def test_register_builtin_name_raises(self):
+        with pytest.raises(ValueError, match="Cannot override built-in channel"):
+            register_channel("telegram", _DummyChannel)
+
+    def test_register_builtin_webhook_raises(self):
+        with pytest.raises(ValueError, match="Cannot override built-in channel"):
+            register_channel("webhook", _DummyChannel)
+
+    def test_register_then_create(self):
+        register_channel("dummy", _DummyChannel)
+        config = ChannelConfig()
+        router = Router()
+        ch = create_channel("dummy", "agent1", config, router)
+        assert isinstance(ch, _DummyChannel)
+        assert ch.agent_name == "agent1"
+
+    def test_register_overrides_same_custom(self):
+        """Registering the same name twice replaces the previous entry."""
+        register_channel("dummy", _DummyChannel)
+
+        class AnotherDummy(Channel):
+            channel_type = "dummy2"
+
+            async def start(self):
+                pass
+
+            async def stop(self):
+                pass
+
+            async def send(self, chat_id, text):
+                pass
+
+        register_channel("dummy", AnotherDummy)
+        assert _custom_channels["dummy"] is AnotherDummy
+
+
+class TestListChannelTypes:
+    """Tests for list_channel_types()."""
+
+    def setup_method(self):
+        _custom_channels.clear()
+
+    def teardown_method(self):
+        _custom_channels.clear()
+
+    def test_builtins_listed(self):
+        types = list_channel_types()
+        assert "telegram" in types
+        assert "webhook" in types
+
+    def test_custom_included(self):
+        register_channel("dummy", _DummyChannel)
+        types = list_channel_types()
+        assert "dummy" in types
+
+    def test_sorted_output(self):
+        register_channel("zzz_channel", _DummyChannel)
+        types = list_channel_types()
+        assert types == sorted(types)
+
+    @patch("importlib.metadata.entry_points")
+    def test_entrypoint_channels_included(self, mock_ep):
+        """Entry-point discovered channels appear in list_channel_types()."""
+        ep = MagicMock()
+        ep.name = "ep_channel"
+        ep.load.return_value = _DummyChannel
+        mock_ep.return_value = [ep]
+
+        types = list_channel_types()
+        assert "ep_channel" in types
+
+
+class TestDiscoverEntrypointChannels:
+    """Tests for entry-point based channel discovery."""
+
+    @patch("importlib.metadata.entry_points")
+    def test_discovers_valid_channel(self, mock_ep):
+        ep = MagicMock()
+        ep.name = "ep_test"
+        ep.load.return_value = _DummyChannel
+        mock_ep.return_value = [ep]
+
+        result = _discover_entrypoint_channels()
+        assert "ep_test" in result
+        assert result["ep_test"] is _DummyChannel
+
+    @patch("importlib.metadata.entry_points")
+    def test_skips_non_channel_class(self, mock_ep):
+        ep = MagicMock()
+        ep.name = "bad_ep"
+        ep.load.return_value = "not_a_channel"
+        mock_ep.return_value = [ep]
+
+        result = _discover_entrypoint_channels()
+        assert "bad_ep" not in result
+
+    @patch("importlib.metadata.entry_points")
+    def test_handles_load_error(self, mock_ep):
+        ep = MagicMock()
+        ep.name = "broken_ep"
+        ep.load.side_effect = ImportError("missing module")
+        mock_ep.return_value = [ep]
+
+        result = _discover_entrypoint_channels()
+        assert "broken_ep" not in result
+
+    @patch("importlib.metadata.entry_points")
+    def test_empty_entry_points(self, mock_ep):
+        mock_ep.return_value = []
+        result = _discover_entrypoint_channels()
+        assert result == {}
+
+    @patch("importlib.metadata.entry_points")
+    def test_create_channel_falls_through_to_entrypoints(self, mock_ep):
+        """create_channel() discovers entry-point channels when not built-in or custom."""
+        _custom_channels.clear()
+        ep = MagicMock()
+        ep.name = "ep_channel"
+        ep.load.return_value = _DummyChannel
+        mock_ep.return_value = [ep]
+
+        config = ChannelConfig()
+        router = Router()
+        ch = create_channel("ep_channel", "agent1", config, router)
+        assert isinstance(ch, _DummyChannel)
+
+
+class TestCreateChannelResolution:
+    """Test create_channel resolution order: builtin → custom → entrypoints."""
+
+    def setup_method(self):
+        _custom_channels.clear()
+
+    def teardown_method(self):
+        _custom_channels.clear()
+
+    def test_builtin_takes_precedence(self):
+        """Built-in channels are resolved first."""
+        config = ChannelConfig(token_env="TEST_BOT_TOKEN")
+        router = Router()
+        with patch.dict("os.environ", {"TEST_BOT_TOKEN": "tok"}):
+            ch = create_channel("telegram", "a", config, router)
+        assert isinstance(ch, TelegramChannel)
+
+    def test_custom_takes_precedence_over_entrypoints(self):
+        """Custom-registered channels are tried before entry points."""
+        register_channel("mytype", _DummyChannel)
+
+        config = ChannelConfig()
+        router = Router()
+        with patch("importlib.metadata.entry_points") as mock_ep:
+            # Even if an entry point exists, custom should win
+            ep = MagicMock()
+            ep.name = "mytype"
+            ep.load.return_value = TelegramChannel
+            mock_ep.return_value = [ep]
+
+            ch = create_channel("mytype", "a", config, router)
+            assert isinstance(ch, _DummyChannel)
+
+    def test_unknown_type_with_no_entrypoints_raises(self):
+        config = ChannelConfig()
+        router = Router()
+        with patch("importlib.metadata.entry_points", return_value=[]):
+            with pytest.raises(ValueError, match="Unknown channel type"):
+                create_channel("nonexistent", "a", config, router)
+
+
+# --- Multi-Platform Auth (string user IDs) ---
+
+
+class TestMultiPlatformAuth:
+    """Test that authorized_users supports both int and str IDs."""
+
+    def test_string_user_ids_in_config(self):
+        config = ChannelConfig(authorized_users=["U07RRK42KNJ", "U07SM1VDVSL"])
+        assert config.authorized_users == ["U07RRK42KNJ", "U07SM1VDVSL"]
+
+    def test_mixed_int_str_user_ids(self):
+        config = ChannelConfig(authorized_users=[12345, "U07RRK42KNJ"])
+        assert config.authorized_users == [12345, "U07RRK42KNJ"]
+
+    def test_telegram_auth_with_int_users(self):
+        ch = _make_channel(authorized_users=[111, 222])
+        assert ch._is_authorized(111) is True
+        assert ch._is_authorized(999) is False
+
+    def test_telegram_auth_with_string_users(self):
+        """String user IDs should match when the int is passed as string."""
+        ch = _make_channel(authorized_users=["111", "222"])
+        # Integer user_id 111 should match string "111" in authorized set
+        assert ch._is_authorized(111) is True
+        assert ch._is_authorized(999) is False
+
+    def test_telegram_auth_empty_allows_all(self):
+        ch = _make_channel(authorized_users=[])
+        assert ch._is_authorized(99999) is True
+
+
+class TestChannelConfigAppToken:
+    """Test the app_token_env field for dual-token auth."""
+
+    def test_default_empty(self):
+        config = ChannelConfig()
+        assert config.app_token_env == ""
+
+    def test_set_app_token(self):
+        config = ChannelConfig(app_token_env="SLACK_APP_TOKEN")
+        assert config.app_token_env == "SLACK_APP_TOKEN"
+
+    def test_both_tokens(self):
+        config = ChannelConfig(token_env="SLACK_BOT_TOKEN", app_token_env="SLACK_APP_TOKEN")
+        assert config.token_env == "SLACK_BOT_TOKEN"
+        assert config.app_token_env == "SLACK_APP_TOKEN"
