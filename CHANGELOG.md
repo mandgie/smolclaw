@@ -22,6 +22,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `[all]`, `[otel]`, `[otel-otlp]`, `[discord]`, `[slack]` optional dependency extras
 
 ### Fixed
+- **Disabled jobs lost on restart** — `load_jobs()` filtered out disabled and promptless jobs from `self.jobs`, then `save_jobs()` wrote only that filtered list back to disk — permanently deleting disabled jobs. Now all valid jobs are loaded (disabled ones are kept but not scheduled).
+- **Atomic file writes for jobs.json** — `save_jobs()` now writes to a temp file and renames, preventing file corruption if the process crashes mid-write.
 - **Telegram auth with string user IDs** — `authorized_users` now correctly handles both int and string IDs in the polling handler (previously, the inner auth check only matched ints, ignoring string IDs added for multi-platform support)
 - **`trigger_job` now suppresses NO_SUGGESTIONS** — manual job triggers via `smolclaw cron run` filter the NO_SUGGESTIONS sentinel, consistent with the scheduled loop (previously delivered the sentinel text to Telegram)
 - Replaced deprecated `asyncio.get_event_loop()` with `get_running_loop()` in scheduler crash recovery
@@ -32,7 +34,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `ChannelConfig.app_token_env` field added for dual-token auth patterns (Slack Socket Mode)
 - Comprehensive documentation overhaul — all 10 docs files synced with current ~5300-line, 14-module codebase
 - CI now tests with `[all]` extras to cover sqlite-vec and watchfiles code paths
-- 807 tests, 98% coverage (up from 524 at v0.1.0)
+- 809 tests, 98% coverage (up from 524 at v0.1.0)
 
 ## [0.1.0] — 2026-03-07
 

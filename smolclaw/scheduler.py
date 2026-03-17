@@ -6,6 +6,8 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
+import tempfile
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from pathlib import Path
@@ -128,7 +130,11 @@ class Scheduler:
         return f"Scheduler(jobs={len(self.jobs)}, running={self._running})"
 
     def load_jobs(self) -> None:
-        """Load jobs from jobs.json."""
+        """Load jobs from jobs.json.
+
+        All valid jobs are loaded, including disabled ones, to avoid data loss
+        when ``save_jobs()`` persists the list back to disk.
+        """
         if not self.jobs_path.exists():
             self.jobs = []
             return
@@ -152,8 +158,10 @@ class Scheduler:
                 log.warning(f"Scheduler: skipping malformed job: {e}")
                 continue
 
+            # Compute next_run only for schedulable jobs (enabled + has prompt).
+            # Disabled and promptless jobs are still kept so save_jobs() doesn't
+            # silently drop them from the file.
             if job.enabled and job.prompt:
-                # Validate or compute next_run
                 if job.next_run:
                     try:
                         datetime.fromisoformat(job.next_run)
@@ -165,17 +173,37 @@ class Scheduler:
                         job.next_run = job.compute_next_run().isoformat()
                 else:
                     job.next_run = job.compute_next_run().isoformat()
-                self.jobs.append(job)
-        log.info(f"Scheduler: loaded {len(self.jobs)} jobs")
+
+            self.jobs.append(job)
+
+        enabled_count = sum(1 for j in self.jobs if j.enabled and j.prompt)
+        log.info(f"Scheduler: loaded {len(self.jobs)} jobs ({enabled_count} schedulable)")
         # Persist computed next_run values so CLI/disk stays in sync
-        if self.jobs:
+        if any(j.enabled and j.prompt for j in self.jobs):
             self.save_jobs()
 
     def save_jobs(self) -> None:
-        """Persist jobs back to jobs.json."""
+        """Persist jobs back to jobs.json.
+
+        Uses atomic write (write-to-temp + rename) to avoid corrupting the file
+        if the process crashes mid-write.
+        """
         self.jobs_path.parent.mkdir(parents=True, exist_ok=True)
         data = [j.to_dict() for j in self.jobs]
-        self.jobs_path.write_text(json.dumps(data, indent=2))
+        content = json.dumps(data, indent=2)
+
+        # Atomic write: temp file in same directory → os.replace()
+        try:
+            fd, tmp_path = tempfile.mkstemp(dir=str(self.jobs_path.parent), suffix=".tmp")
+            try:
+                os.write(fd, content.encode("utf-8"))
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            Path(tmp_path).replace(self.jobs_path)
+        except OSError:
+            # Fallback to direct write if atomic fails (e.g. cross-device)
+            self.jobs_path.write_text(content)
 
     async def start(self) -> None:
         """Start the scheduler loop."""
@@ -227,7 +255,7 @@ class Scheduler:
             now = datetime.now()
 
             for job in self.jobs:
-                if not job.enabled or not job.next_run:
+                if not job.enabled or not job.prompt or not job.next_run:
                     continue
 
                 # Per-job isolation: a bad next_run string must not kill the loop

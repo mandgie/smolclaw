@@ -174,8 +174,8 @@ class TestScheduler:
         scheduler.load_jobs()
         assert scheduler.jobs == []
 
-    def test_load_jobs_skips_disabled(self, tmp_base: Path):
-        """Disabled jobs are excluded from the loaded list."""
+    def test_load_jobs_keeps_disabled(self, tmp_base: Path):
+        """Disabled jobs are loaded (to avoid data loss) but not schedulable."""
         jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
         jobs_path.write_text(
             json.dumps(
@@ -193,7 +193,11 @@ class TestScheduler:
         router = MagicMock()
         scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
         scheduler.load_jobs()
-        assert scheduler.jobs == []
+        assert len(scheduler.jobs) == 1
+        assert scheduler.jobs[0].id == "disabled-job"
+        assert not scheduler.jobs[0].enabled
+        # Disabled job should NOT have next_run computed
+        assert scheduler.jobs[0].next_run == ""
 
     def test_load_jobs_skips_invalid_schedule(self, tmp_base: Path):
         """Jobs with invalid cron schedules are skipped with a warning."""
@@ -238,8 +242,8 @@ class TestScheduler:
         scheduler.load_jobs()
         assert scheduler.jobs == []
 
-    def test_load_jobs_skips_empty_prompt(self, tmp_base: Path):
-        """Jobs with no prompt are excluded."""
+    def test_load_jobs_keeps_empty_prompt(self, tmp_base: Path):
+        """Jobs with no prompt are loaded (to avoid data loss) but not schedulable."""
         jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
         jobs_path.write_text(
             json.dumps(
@@ -256,7 +260,83 @@ class TestScheduler:
         router = MagicMock()
         scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
         scheduler.load_jobs()
-        assert scheduler.jobs == []
+        assert len(scheduler.jobs) == 1
+        assert scheduler.jobs[0].id == "no-prompt"
+        assert scheduler.jobs[0].prompt == ""
+        # Promptless job should NOT have next_run computed
+        assert scheduler.jobs[0].next_run == ""
+
+    def test_disabled_jobs_survive_save_roundtrip(self, tmp_base: Path):
+        """Disabled jobs are preserved across load → save → load cycles."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        original_data = [
+            {
+                "id": "active-job",
+                "agent": "testagent",
+                "schedule": "0 8 * * *",
+                "prompt": "Hello",
+                "enabled": True,
+            },
+            {
+                "id": "disabled-job",
+                "agent": "testagent",
+                "schedule": "0 9 * * *",
+                "prompt": "Disabled hello",
+                "enabled": False,
+            },
+            {
+                "id": "no-prompt-job",
+                "agent": "testagent",
+                "schedule": "0 10 * * *",
+                "prompt": "",
+                "enabled": True,
+            },
+        ]
+        jobs_path.write_text(json.dumps(original_data))
+
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+
+        # All 3 jobs should be loaded
+        assert len(scheduler.jobs) == 3
+
+        # Verify the file still contains all 3 after save
+        saved = json.loads(jobs_path.read_text())
+        saved_ids = {j["id"] for j in saved}
+        assert saved_ids == {"active-job", "disabled-job", "no-prompt-job"}
+
+        # Second load should also find all 3
+        scheduler2 = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler2.load_jobs()
+        assert len(scheduler2.jobs) == 3
+
+    def test_save_jobs_atomic_write(self, tmp_base: Path):
+        """save_jobs() uses atomic write (temp file + rename)."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.write_text("[]")
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.jobs = [
+            Job(
+                {
+                    "id": "test",
+                    "agent": "testagent",
+                    "schedule": "0 8 * * *",
+                    "prompt": "Hello",
+                }
+            )
+        ]
+        scheduler.save_jobs()
+
+        # Verify content is valid JSON and correct
+        saved = json.loads(jobs_path.read_text())
+        assert len(saved) == 1
+        assert saved[0]["id"] == "test"
+
+        # Verify no temp files left behind
+        tmp_files = list(tmp_base.joinpath("shared", "cron").glob("*.tmp"))
+        assert tmp_files == []
 
 
 class TestSchedulerLoop:
