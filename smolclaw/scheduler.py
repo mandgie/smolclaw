@@ -432,6 +432,45 @@ class Scheduler:
 
         return outbound.text
 
+    def enable_job(self, job_id: str) -> bool:
+        """Enable a disabled job so it will be scheduled.
+
+        Args:
+            job_id: The ID of the job to enable.
+
+        Returns:
+            True if the job was found and enabled, False if not found.
+        """
+        job = next((j for j in self.jobs if j.id == job_id), None)
+        if job is None:
+            return False
+
+        job.enabled = True
+        # Compute next_run if the job has a prompt (now schedulable)
+        if job.prompt and not job.next_run:
+            job.next_run = job.compute_next_run().isoformat()
+        self.save_jobs()
+        log.info(f"Scheduler: enabled job '{job_id}'")
+        return True
+
+    def disable_job(self, job_id: str) -> bool:
+        """Disable a job so it won't be scheduled (but remains in the job list).
+
+        Args:
+            job_id: The ID of the job to disable.
+
+        Returns:
+            True if the job was found and disabled, False if not found.
+        """
+        job = next((j for j in self.jobs if j.id == job_id), None)
+        if job is None:
+            return False
+
+        job.enabled = False
+        self.save_jobs()
+        log.info(f"Scheduler: disabled job '{job_id}'")
+        return True
+
     def list_jobs(self) -> list[dict]:
         """List all jobs as dicts."""
         return [j.to_dict() for j in self.jobs]

@@ -527,6 +527,42 @@ class TestTriggerJobApi:
         resp = client.post("/api/cron/jobs/any/trigger")
         assert resp.status_code == 500
 
+    # --- Enable / Disable ---
+
+    def test_enable_job_success(self, client, mock_gateway):
+        mock_gateway.scheduler.enable_job = MagicMock(return_value=True)
+        resp = client.post("/api/cron/jobs/my-job/enable")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "enabled"
+        mock_gateway.scheduler.enable_job.assert_called_once_with("my-job")
+
+    def test_enable_job_not_found(self, client, mock_gateway):
+        mock_gateway.scheduler.enable_job = MagicMock(return_value=False)
+        resp = client.post("/api/cron/jobs/nope/enable")
+        assert resp.status_code == 404
+
+    def test_disable_job_success(self, client, mock_gateway):
+        mock_gateway.scheduler.disable_job = MagicMock(return_value=True)
+        resp = client.post("/api/cron/jobs/my-job/disable")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "disabled"
+        mock_gateway.scheduler.disable_job.assert_called_once_with("my-job")
+
+    def test_disable_job_not_found(self, client, mock_gateway):
+        mock_gateway.scheduler.disable_job = MagicMock(return_value=False)
+        resp = client.post("/api/cron/jobs/nope/disable")
+        assert resp.status_code == 404
+
+    def test_enable_job_no_scheduler(self, client, mock_gateway):
+        mock_gateway.scheduler = None
+        resp = client.post("/api/cron/jobs/any/enable")
+        assert resp.status_code == 500
+
+    def test_disable_job_no_scheduler(self, client, mock_gateway):
+        mock_gateway.scheduler = None
+        resp = client.post("/api/cron/jobs/any/disable")
+        assert resp.status_code == 500
+
 
 # --- Health & Dashboard ---
 

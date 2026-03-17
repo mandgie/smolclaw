@@ -537,6 +537,32 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(400, str(e)) from e
         return {"status": "triggered", "job_id": job_id, "response": response}
 
+    @app.post(
+        "/api/cron/jobs/{job_id}/enable",
+        response_model=StatusResponse,
+        dependencies=[Depends(_require_auth)],
+    )
+    async def enable_job(job_id: str) -> dict[str, str]:
+        """Enable a disabled cron job."""
+        if not gateway.scheduler:
+            raise HTTPException(500, "Scheduler not running")
+        if not gateway.scheduler.enable_job(job_id):
+            raise HTTPException(404, f"Job '{job_id}' not found")
+        return {"status": "enabled"}
+
+    @app.post(
+        "/api/cron/jobs/{job_id}/disable",
+        response_model=StatusResponse,
+        dependencies=[Depends(_require_auth)],
+    )
+    async def disable_job(job_id: str) -> dict[str, str]:
+        """Disable a cron job without removing it."""
+        if not gateway.scheduler:
+            raise HTTPException(500, "Scheduler not running")
+        if not gateway.scheduler.disable_job(job_id):
+            raise HTTPException(404, f"Job '{job_id}' not found")
+        return {"status": "disabled"}
+
     # --- Hooks ---
 
     @app.get("/api/hooks", dependencies=[Depends(_require_auth)])

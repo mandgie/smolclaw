@@ -67,6 +67,8 @@ from smolclaw import TracingConfig, configure_tracing, span, TRACING_AVAILABLE
         - stop
         - add_job
         - remove_job
+        - enable_job
+        - disable_job
         - list_jobs
 
 ## Hooks

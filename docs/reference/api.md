@@ -299,6 +299,32 @@ DELETE /api/cron/jobs/{job_id}
 }
 ```
 
+### Enable Job
+
+```
+POST /api/cron/jobs/{job_id}/enable
+```
+
+**Response:**
+```json
+{
+  "status": "enabled"
+}
+```
+
+### Disable Job
+
+```
+POST /api/cron/jobs/{job_id}/disable
+```
+
+**Response:**
+```json
+{
+  "status": "disabled"
+}
+```
+
 ## Hooks
 
 ### List Hooks

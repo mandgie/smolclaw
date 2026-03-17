@@ -1156,3 +1156,84 @@ class TestTriggerJobNoSuggestionsSuppression:
 
         assert result == "Here is your briefing!"
         deliver_cb.assert_called_once()
+
+
+class TestEnableDisableJob:
+    """Tests for enable_job() and disable_job() methods."""
+
+    @pytest.fixture()
+    def scheduler_with_jobs(self, tmp_base: Path):
+        """Create a scheduler with one enabled and one disabled job."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "active-job",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Morning check",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "paused-job",
+                        "agent": "testagent",
+                        "schedule": "0 22 * * *",
+                        "prompt": "Night check",
+                        "enabled": False,
+                    },
+                ]
+            )
+        )
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+        return scheduler
+
+    def test_disable_job(self, scheduler_with_jobs: Scheduler):
+        """Disabling a job sets enabled=False and persists."""
+        result = scheduler_with_jobs.disable_job("active-job")
+        assert result is True
+
+        job = next(j for j in scheduler_with_jobs.jobs if j.id == "active-job")
+        assert job.enabled is False
+
+        # Verify persisted to disk
+        saved = json.loads(scheduler_with_jobs.jobs_path.read_text())
+        saved_job = next(j for j in saved if j["id"] == "active-job")
+        assert saved_job["enabled"] is False
+
+    def test_enable_job(self, scheduler_with_jobs: Scheduler):
+        """Enabling a disabled job sets enabled=True and computes next_run."""
+        result = scheduler_with_jobs.enable_job("paused-job")
+        assert result is True
+
+        job = next(j for j in scheduler_with_jobs.jobs if j.id == "paused-job")
+        assert job.enabled is True
+        assert job.next_run != ""  # next_run should be computed
+
+        # Verify persisted to disk
+        saved = json.loads(scheduler_with_jobs.jobs_path.read_text())
+        saved_job = next(j for j in saved if j["id"] == "paused-job")
+        assert saved_job["enabled"] is True
+
+    def test_enable_not_found(self, scheduler_with_jobs: Scheduler):
+        """Enabling a non-existent job returns False."""
+        assert scheduler_with_jobs.enable_job("nonexistent") is False
+
+    def test_disable_not_found(self, scheduler_with_jobs: Scheduler):
+        """Disabling a non-existent job returns False."""
+        assert scheduler_with_jobs.disable_job("nonexistent") is False
+
+    def test_enable_already_enabled(self, scheduler_with_jobs: Scheduler):
+        """Enabling an already-enabled job succeeds (idempotent)."""
+        assert scheduler_with_jobs.enable_job("active-job") is True
+        job = next(j for j in scheduler_with_jobs.jobs if j.id == "active-job")
+        assert job.enabled is True
+
+    def test_disable_already_disabled(self, scheduler_with_jobs: Scheduler):
+        """Disabling an already-disabled job succeeds (idempotent)."""
+        assert scheduler_with_jobs.disable_job("paused-job") is True
+        job = next(j for j in scheduler_with_jobs.jobs if j.id == "paused-job")
+        assert job.enabled is False

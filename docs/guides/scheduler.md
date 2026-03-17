@@ -81,6 +81,13 @@ smolclaw cron enable morning-briefing
 
 Disabled jobs are skipped during scheduling but retain their configuration and history.
 
+You can also enable/disable via the REST API:
+
+```bash
+curl -s -X POST localhost:7890/api/cron/jobs/morning-briefing/disable
+curl -s -X POST localhost:7890/api/cron/jobs/morning-briefing/enable
+```
+
 ## Manual Triggering
 
 Run a job immediately for testing, without waiting for its schedule:

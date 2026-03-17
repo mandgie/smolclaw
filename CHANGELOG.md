@@ -18,6 +18,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Cross-agent awareness** — agents see peer agents in system prompt with API-based messaging
 - **Smart send** — `smolclaw send` uses running gateway API when available, falls back to temporary gateway
 - **Memory APIs** — search (`GET /api/agents/{name}/memory/search`), add-fact (`POST .../facts`), stats (`GET .../stats`), and CLI commands (`smolclaw memory search/list/stats/add/delete`)
+- **Job enable/disable API** — `POST /api/cron/jobs/{id}/enable` and `.../disable` endpoints for managing job state at runtime via the API (previously CLI-only). Also adds `Scheduler.enable_job()` and `disable_job()` methods.
 - **Codecov CI integration** — coverage reports uploaded on every push/PR
 - `[all]`, `[otel]`, `[otel-otlp]`, `[discord]`, `[slack]` optional dependency extras
 
@@ -34,7 +35,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `ChannelConfig.app_token_env` field added for dual-token auth patterns (Slack Socket Mode)
 - Comprehensive documentation overhaul — all 10 docs files synced with current ~5300-line, 14-module codebase
 - CI now tests with `[all]` extras to cover sqlite-vec and watchfiles code paths
-- 809 tests, 98% coverage (up from 524 at v0.1.0)
+- 821 tests, 98% coverage (up from 524 at v0.1.0)
 
 ## [0.1.0] — 2026-03-07
 
