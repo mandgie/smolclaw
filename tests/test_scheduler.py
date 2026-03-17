@@ -965,3 +965,114 @@ class TestTriggerJob:
 
         with pytest.raises(ValueError, match="no prompt"):
             await scheduler.trigger_job("empty-prompt")
+
+
+class TestIsNoSuggestions:
+    """Tests for the _is_no_suggestions static helper."""
+
+    def test_exact_match(self):
+        assert Scheduler._is_no_suggestions("NO_SUGGESTIONS") is True
+
+    def test_lowercase(self):
+        assert Scheduler._is_no_suggestions("no_suggestions") is True
+
+    def test_spaces_instead_of_underscore(self):
+        assert Scheduler._is_no_suggestions("NO SUGGESTIONS") is True
+
+    def test_mixed_case_and_spaces(self):
+        assert Scheduler._is_no_suggestions("No Suggestions") is True
+
+    def test_leading_trailing_whitespace(self):
+        assert Scheduler._is_no_suggestions("  NO_SUGGESTIONS  ") is True
+
+    def test_on_any_line(self):
+        assert Scheduler._is_no_suggestions("Some narration\nNO_SUGGESTIONS") is True
+
+    def test_normal_text(self):
+        assert Scheduler._is_no_suggestions("Here is your briefing!") is False
+
+    def test_empty_string(self):
+        assert Scheduler._is_no_suggestions("") is False
+
+    def test_none_text(self):
+        assert Scheduler._is_no_suggestions(None) is False
+
+    def test_substring_not_matched(self):
+        """'NO_SUGGESTIONS_FOUND' should not trigger suppression."""
+        assert Scheduler._is_no_suggestions("NO_SUGGESTIONS_FOUND for query") is False
+
+
+class TestTriggerJobNoSuggestionsSuppression:
+    """trigger_job should suppress NO_SUGGESTIONS delivery, same as the loop."""
+
+    async def test_trigger_job_suppresses_no_suggestions(self, tmp_base: Path):
+        from smolclaw.router import OutboundMessage
+
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "suppress-trigger",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Check stuff",
+                        "enabled": True,
+                        "delivery": "telegram",
+                        "delivery_chat_id": "99999",
+                    }
+                ]
+            )
+        )
+
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(agent="testagent", text="NO_SUGGESTIONS", source="cron")
+        )
+        deliver_cb = AsyncMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router, deliver_callback=deliver_cb)
+        scheduler.load_jobs()
+
+        result = await scheduler.trigger_job("suppress-trigger")
+
+        # Response text is returned...
+        assert result == "NO_SUGGESTIONS"
+        # ...but delivery is suppressed
+        deliver_cb.assert_not_called()
+
+    async def test_trigger_job_delivers_normal_response(self, tmp_base: Path):
+        from smolclaw.router import OutboundMessage
+
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "deliver-trigger",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Check stuff",
+                        "enabled": True,
+                        "delivery": "telegram",
+                        "delivery_chat_id": "99999",
+                    }
+                ]
+            )
+        )
+
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(
+                agent="testagent", text="Here is your briefing!", source="cron"
+            )
+        )
+        deliver_cb = AsyncMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router, deliver_callback=deliver_cb)
+        scheduler.load_jobs()
+
+        result = await scheduler.trigger_job("deliver-trigger")
+
+        assert result == "Here is your briefing!"
+        deliver_cb.assert_called_once()

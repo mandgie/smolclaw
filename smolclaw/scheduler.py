@@ -268,14 +268,7 @@ class Scheduler:
                             # Deliver to channel if configured.
                             # Suppress delivery when the agent responds with
                             # NO_SUGGESTIONS (convention: nothing needs attention).
-                            # Check any line, not just entire text — models
-                            # sometimes narrate before the keyword.
-                            _text = (outbound.text or "").strip()
-                            _suppress = any(
-                                ln.strip().upper().replace("_", " ") == "NO SUGGESTIONS"
-                                for ln in _text.splitlines()
-                            )
-                            if _suppress:
+                            if self._is_no_suggestions(outbound.text):
                                 log.info(
                                     f"Scheduler: job '{job.id}' returned "
                                     f"NO_SUGGESTIONS — skipping delivery"
@@ -320,6 +313,18 @@ class Scheduler:
                 await asyncio.sleep(30)
             except asyncio.CancelledError:
                 return
+
+    @staticmethod
+    def _is_no_suggestions(text: str) -> bool:
+        """Check if a response is the NO_SUGGESTIONS sentinel.
+
+        Models sometimes narrate before writing the keyword, so we check
+        each line independently (case-insensitive, underscores normalized).
+        """
+        return any(
+            ln.strip().upper().replace("_", " ") == "NO SUGGESTIONS"
+            for ln in (text or "").strip().splitlines()
+        )
 
     async def _deliver(self, job: Job, text: str) -> None:
         """Deliver job output to a channel via the registered callback."""
@@ -386,8 +391,10 @@ class Scheduler:
             )
             outbound = await self.router.route(message)
 
-            # Deliver to channel if configured
-            if job.delivery and job.delivery_chat_id:
+            # Deliver to channel if configured (suppress NO_SUGGESTIONS)
+            if self._is_no_suggestions(outbound.text):
+                log.info(f"Scheduler: job '{job.id}' returned NO_SUGGESTIONS — skipping delivery")
+            elif job.delivery and job.delivery_chat_id:
                 await self._deliver(job, outbound.text)
 
             job.last_run = datetime.now().isoformat()

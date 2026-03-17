@@ -6,32 +6,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
-- **Message hooks** — Pre-route and post-route hook system at the router level. Hooks can modify messages, transform responses, short-circuit routing, redirect to different agents, or run side effects like logging. HookRegistry with named hooks, error isolation, and GET /api/hooks endpoint. 100% test coverage.
-- **Manual job trigger** — `smolclaw cron run <job_id>` to manually trigger a scheduled job via the running gateway. Also adds `POST /api/cron/jobs/{job_id}/trigger` API endpoint. Useful for debugging cron jobs without waiting for the schedule.
+- **Extensible channel plugin system** — `register_channel()` for programmatic registration, entry-point discovery via `smolclaw.channels` for third-party packages. Resolution order: built-in → custom → entry points. `list_channel_types()` for enumeration.
+- **Webhook channel** — Outgoing HTTP POST channel for delivering messages to Slack webhooks, Discord, or custom APIs. Zero dependencies.
+- **Message hooks** — Pre-route and post-route hook system at the router level. Hooks can modify messages, transform responses, short-circuit routing, redirect to different agents, or run side effects like logging. HookRegistry with named hooks, error isolation, and GET /api/hooks endpoint.
+- **Manual job trigger** — `smolclaw cron run <job_id>` to manually trigger a scheduled job via the running gateway. Also adds `POST /api/cron/jobs/{job_id}/trigger` API endpoint.
 - **Dashboard agent detail view** — click an agent card → Details tab shows config, memory stats, skills, peers, soul, operational rules, and context files in collapsible sections
 - **Enhanced agent detail API** — `GET /api/agents/{name}` now returns full soul, agents_md, skill names, config details, peers, and context file content
-- **OpenTelemetry tracing** — optional OTEL instrumentation for message routing, LLM calls, memory operations, and cron jobs. Zero overhead when disabled. Install with `pip install smolclaw[otel]`. Follows GenAI semantic conventions.
+- **OpenTelemetry tracing** — optional OTEL instrumentation for message routing, LLM calls, memory operations, and cron jobs. Zero overhead when disabled. `pip install smolclaw[otel]`. Follows GenAI semantic conventions.
 - **API key authentication** — optional Bearer token auth for the REST API. Set `api_key` in config.yaml. Health and dashboard remain public. Uses constant-time comparison.
 - **py.typed marker** — PEP 561 typed package marker for downstream type checking
 - **Cross-agent awareness** — agents see peer agents in system prompt with API-based messaging
 - **Smart send** — `smolclaw send` uses running gateway API when available, falls back to temporary gateway
-- **Memory search API** — `GET /api/agents/{name}/memory/search` with auto/vector/hybrid modes
-- **Memory add-fact API** — `POST /api/agents/{name}/memory/facts` for programmatic fact ingestion
-- **Memory stats API** — `GET /api/agents/{name}/memory/stats` for monitoring
-- **CLI memory commands** — `smolclaw memory search/list/stats/add/delete` for managing agent memory from the terminal
-- Doctor edge case tests (Python version, Claude CLI, packages, memory DB, port conflicts)
-- `[all]` optional dependency extra — `pip install smolclaw[all]` for all features
-- `[otel]` and `[otel-otlp]` optional extras for OpenTelemetry tracing
+- **Memory APIs** — search (`GET /api/agents/{name}/memory/search`), add-fact (`POST .../facts`), stats (`GET .../stats`), and CLI commands (`smolclaw memory search/list/stats/add/delete`)
+- **Codecov CI integration** — coverage reports uploaded on every push/PR
+- `[all]`, `[otel]`, `[otel-otlp]`, `[discord]`, `[slack]` optional dependency extras
 
 ### Fixed
-- Replaced deprecated `asyncio.get_event_loop()` with `get_running_loop()` in scheduler crash recovery callback
-- Scheduler crash recovery now handles missing event loop gracefully
+- **Telegram auth with string user IDs** — `authorized_users` now correctly handles both int and string IDs in the polling handler (previously, the inner auth check only matched ints, ignoring string IDs added for multi-platform support)
+- **`trigger_job` now suppresses NO_SUGGESTIONS** — manual job triggers via `smolclaw cron run` filter the NO_SUGGESTIONS sentinel, consistent with the scheduled loop (previously delivered the sentinel text to Telegram)
+- Replaced deprecated `asyncio.get_event_loop()` with `get_running_loop()` in scheduler crash recovery
+- **Graceful config error handling** — malformed YAML, non-mapping agent.yaml, and unreadable skill/context files now produce clear error messages instead of crashing the gateway
 
 ### Changed
+- `ChannelConfig.authorized_users` broadened to `list[int | str]` for multi-platform support (Slack/Discord string user IDs)
+- `ChannelConfig.app_token_env` field added for dual-token auth patterns (Slack Socket Mode)
+- Comprehensive documentation overhaul — all 10 docs files synced with current ~5300-line, 14-module codebase
 - CI now tests with `[all]` extras to cover sqlite-vec and watchfiles code paths
-- Updated README — REST API examples section, accurate line counts, roadmap updated
-- Updated CLAUDE.md TODO — marked cron delivery, tests, and cross-agent as done
-- Test coverage improved: scheduler 89%→97%, tracing 88%→93%, memory 91%→98%. 630 tests, 96% overall.
+- 807 tests, 98% coverage (up from 524 at v0.1.0)
 
 ## [0.1.0] — 2026-03-07
 

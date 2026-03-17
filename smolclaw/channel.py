@@ -188,10 +188,7 @@ class TelegramChannel(Channel):
 
         agent_name = self.agent_name
         router = self.router
-        authorized = self._authorized
-
-        def is_auth(user_id: int) -> bool:
-            return not authorized or user_id in authorized
+        is_auth = self._is_authorized
 
         async def send_response(update: Update, text: str):
             html_text = md_to_telegram_html(text)
