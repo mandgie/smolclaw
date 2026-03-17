@@ -132,15 +132,31 @@ class GatewayConfig(BaseModel):
 
 
 def load_agent_yaml(agent_dir: Path) -> AgentConfig:
-    """Load and validate agent.yaml from an agent directory."""
+    """Load and validate agent.yaml from an agent directory.
+
+    Raises:
+        FileNotFoundError: If agent.yaml doesn't exist.
+        ValueError: If YAML is malformed or config fields are invalid.
+    """
     yaml_path = agent_dir / "agent.yaml"
     if not yaml_path.exists():
         raise FileNotFoundError(f"No agent.yaml in {agent_dir}")
 
-    with yaml_path.open() as f:
-        data = yaml.safe_load(f)
+    try:
+        with yaml_path.open() as f:
+            data = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in {yaml_path}: {e}") from e
 
-    return AgentConfig(**data)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"agent.yaml in {agent_dir} must be a YAML mapping, got {type(data).__name__}"
+        )
+
+    try:
+        return AgentConfig(**data)
+    except Exception as e:
+        raise ValueError(f"Invalid config in {yaml_path}: {e}") from e
 
 
 def load_text_file(path: Path) -> str:
@@ -151,7 +167,11 @@ def load_text_file(path: Path) -> str:
 
 
 def discover_skills(agent_dir: Path) -> list[str]:
-    """Scan skills/ folder and load all SKILL.md files."""
+    """Scan skills/ folder and load all SKILL.md files.
+
+    Gracefully skips skills that can't be read (e.g. permission errors,
+    broken symlinks) and logs a warning instead of crashing.
+    """
     skills_dir = agent_dir / "skills"
     if not skills_dir.exists():
         return []
@@ -160,19 +180,28 @@ def discover_skills(agent_dir: Path) -> list[str]:
     for skill_dir in sorted(skills_dir.iterdir()):
         skill_file = skill_dir / "SKILL.md"
         if skill_file.exists():
-            skills.append(skill_file.read_text().strip())
+            try:
+                skills.append(skill_file.read_text().strip())
+            except OSError as e:
+                log.warning(f"Failed to read skill {skill_dir.name}: {e}")
     return skills
 
 
 def load_context_files(agent_dir: Path) -> dict[str, str]:
-    """Load all .md files from context/ folder."""
+    """Load all .md files from context/ folder.
+
+    Gracefully skips files that can't be read and logs a warning.
+    """
     context_dir = agent_dir / "context"
     if not context_dir.exists():
         return {}
 
     files = {}
     for md_file in sorted(context_dir.glob("*.md")):
-        files[md_file.stem] = md_file.read_text().strip()
+        try:
+            files[md_file.stem] = md_file.read_text().strip()
+        except OSError as e:
+            log.warning(f"Failed to read context file {md_file.name}: {e}")
     return files
 
 
@@ -211,13 +240,34 @@ def discover_all_agents(base_dir: Path) -> dict[str, AgentInfo]:
 
 
 def load_gateway_config(base_dir: Path) -> GatewayConfig:
-    """Load gateway config.yaml, or return defaults."""
+    """Load gateway config.yaml, or return defaults.
+
+    Returns default config if the file doesn't exist.
+    Raises ValueError with a helpful message if the file is malformed.
+    """
     config_path = base_dir / "config.yaml"
-    if config_path.exists():
+    if not config_path.exists():
+        return GatewayConfig()
+
+    try:
         with config_path.open() as f:
             data = yaml.safe_load(f) or {}
+    except yaml.YAMLError as e:
+        log.error(f"Invalid YAML in {config_path}: {e}")
+        log.warning("Using default gateway configuration")
+        return GatewayConfig()
+
+    if not isinstance(data, dict):
+        log.error(f"config.yaml must be a YAML mapping, got {type(data).__name__}")
+        log.warning("Using default gateway configuration")
+        return GatewayConfig()
+
+    try:
         return GatewayConfig(**data)
-    return GatewayConfig()
+    except Exception as e:
+        log.error(f"Invalid gateway config in {config_path}: {e}")
+        log.warning("Using default gateway configuration")
+        return GatewayConfig()
 
 
 def load_shared_user_md(base_dir: Path) -> str:

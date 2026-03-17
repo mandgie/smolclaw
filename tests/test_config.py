@@ -173,9 +173,33 @@ class TestLoaders:
         assert cfg.model == "claude-sonnet-4-6"
 
     def test_load_agent_yaml_missing(self, tmp_path: Path):
-        import pytest
-
         with pytest.raises(FileNotFoundError):
+            load_agent_yaml(tmp_path)
+
+    def test_load_agent_yaml_malformed_yaml(self, tmp_path: Path):
+        (tmp_path / "agent.yaml").write_text("name: test\n  bad_indent: oops")
+        with pytest.raises(ValueError, match="Invalid YAML"):
+            load_agent_yaml(tmp_path)
+
+    def test_load_agent_yaml_not_a_mapping(self, tmp_path: Path):
+        (tmp_path / "agent.yaml").write_text("- item1\n- item2\n")
+        with pytest.raises(ValueError, match="must be a YAML mapping"):
+            load_agent_yaml(tmp_path)
+
+    def test_load_agent_yaml_invalid_field(self, tmp_path: Path):
+        (tmp_path / "agent.yaml").write_text("name: test\nport: not_valid_field\n")
+        # Unknown fields are silently ignored by Pydantic, but type errors are caught
+        cfg = load_agent_yaml(tmp_path)
+        assert cfg.name == "test"
+
+    def test_load_agent_yaml_invalid_effort(self, tmp_path: Path):
+        (tmp_path / "agent.yaml").write_text("name: test\neffort: ultra\n")
+        with pytest.raises(ValueError, match="Invalid config"):
+            load_agent_yaml(tmp_path)
+
+    def test_load_agent_yaml_none_content(self, tmp_path: Path):
+        (tmp_path / "agent.yaml").write_text("")
+        with pytest.raises(ValueError, match="must be a YAML mapping"):
             load_agent_yaml(tmp_path)
 
     def test_discover_skills_empty(self, agent_dir: Path):
@@ -197,6 +221,44 @@ class TestLoaders:
         files = load_context_files(agent_dir)
         assert "extra" in files
         assert files["extra"] == "Extra context here."
+
+    def test_discover_skills_unreadable_file(self, agent_dir: Path):
+        """A skill with an unreadable SKILL.md should be skipped, not crash."""
+        from unittest.mock import patch
+
+        skill_dir = agent_dir / "skills" / "broken"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("# Broken Skill")
+
+        with patch.object(Path, "read_text", side_effect=OSError("Permission denied")):
+            skills = discover_skills(agent_dir)
+        # Should return empty list — the broken skill was skipped
+        assert skills == []
+
+    def test_load_context_files_unreadable_file(self, agent_dir: Path):
+        """A context file that can't be read should be skipped, not crash."""
+        from unittest.mock import patch
+
+        (agent_dir / "context" / "good.md").write_text("Good content")
+
+        original_read = Path.read_text
+
+        def selective_fail(self, *args, **kwargs):
+            if "good" in str(self):
+                raise OSError("Permission denied")
+            return original_read(self, *args, **kwargs)
+
+        with patch.object(Path, "read_text", selective_fail):
+            files = load_context_files(agent_dir)
+        assert "good" not in files
+
+    def test_discover_skills_no_skills_dir(self, tmp_path: Path):
+        """Agent with no skills/ directory returns empty list."""
+        assert discover_skills(tmp_path) == []
+
+    def test_load_context_files_no_context_dir(self, tmp_path: Path):
+        """Agent with no context/ directory returns empty dict."""
+        assert load_context_files(tmp_path) == {}
 
 
 class TestDiscovery:
@@ -242,3 +304,27 @@ class TestGatewayConfig:
 
     def test_load_shared_user_md_missing(self, tmp_path: Path):
         assert load_shared_user_md(tmp_path) == ""
+
+    def test_load_gateway_config_malformed_yaml(self, tmp_path: Path):
+        """Malformed YAML in config.yaml should return defaults, not crash."""
+        (tmp_path / "config.yaml").write_text("host: 127.0.0.1\n  bad: indent")
+        cfg = load_gateway_config(tmp_path)
+        assert cfg == GatewayConfig()
+
+    def test_load_gateway_config_not_a_mapping(self, tmp_path: Path):
+        """config.yaml with a list should return defaults, not crash."""
+        (tmp_path / "config.yaml").write_text("- item1\n- item2\n")
+        cfg = load_gateway_config(tmp_path)
+        assert cfg == GatewayConfig()
+
+    def test_load_gateway_config_invalid_port(self, tmp_path: Path):
+        """config.yaml with an invalid port should return defaults, not crash."""
+        (tmp_path / "config.yaml").write_text("port: 99999\n")
+        cfg = load_gateway_config(tmp_path)
+        assert cfg == GatewayConfig()
+
+    def test_load_gateway_config_empty_file(self, tmp_path: Path):
+        """Empty config.yaml should return defaults."""
+        (tmp_path / "config.yaml").write_text("")
+        cfg = load_gateway_config(tmp_path)
+        assert cfg == GatewayConfig()
