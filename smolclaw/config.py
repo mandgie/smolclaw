@@ -17,6 +17,7 @@ __all__ = [
     "ChannelConfig",
     "GatewayConfig",
     "MemoryConfig",
+    "SkillInfo",
     "discover_agent",
     "discover_all_agents",
     "load_gateway_config",
@@ -86,6 +87,16 @@ class AgentConfig(BaseModel):
 # --- Runtime Agent Info (discovered from filesystem) ---
 
 
+class SkillInfo(BaseModel):
+    """Skill metadata extracted from SKILL.md frontmatter (progressive disclosure level 1)."""
+
+    name: str
+    description: str
+    path: Path  # Path to the SKILL.md file for on-demand loading
+
+    model_config = {"arbitrary_types_allowed": True}
+
+
 class AgentInfo(BaseModel):
     """Complete agent information discovered from the filesystem."""
 
@@ -93,7 +104,7 @@ class AgentInfo(BaseModel):
     path: Path
     soul: str = ""
     agents_md: str = ""
-    skills: list[str] = Field(default_factory=list)
+    skills: list[SkillInfo] = Field(default_factory=list)
     context_files: dict[str, str] = Field(default_factory=dict)
 
     model_config = {"arbitrary_types_allowed": True}
@@ -166,8 +177,30 @@ def load_text_file(path: Path) -> str:
     return ""
 
 
-def discover_skills(agent_dir: Path) -> list[str]:
-    """Scan skills/ folder and load all SKILL.md files.
+def _parse_skill_frontmatter(content: str) -> dict[str, str]:
+    """Extract YAML frontmatter from a SKILL.md file.
+
+    Returns a dict with parsed frontmatter fields, or empty dict if
+    no valid frontmatter is found.
+    """
+    if not content.startswith("---"):
+        return {}
+    end = content.find("---", 3)
+    if end == -1:
+        return {}
+    try:
+        data = yaml.safe_load(content[3:end])
+        return data if isinstance(data, dict) else {}
+    except yaml.YAMLError:
+        return {}
+
+
+def discover_skills(agent_dir: Path) -> list[SkillInfo]:
+    """Scan skills/ folder and extract metadata from SKILL.md frontmatter.
+
+    Uses progressive disclosure: only name and description are loaded at
+    discovery time. The full skill body is loaded on-demand by the agent
+    when it decides to activate a skill.
 
     Gracefully skips skills that can't be read (e.g. permission errors,
     broken symlinks) and logs a warning instead of crashing.
@@ -176,12 +209,21 @@ def discover_skills(agent_dir: Path) -> list[str]:
     if not skills_dir.exists():
         return []
 
-    skills = []
+    skills: list[SkillInfo] = []
     for skill_dir in sorted(skills_dir.iterdir()):
         skill_file = skill_dir / "SKILL.md"
         if skill_file.exists():
             try:
-                skills.append(skill_file.read_text().strip())
+                content = skill_file.read_text().strip()
+                fm = _parse_skill_frontmatter(content)
+                name = fm.get("name", skill_dir.name)
+                description = fm.get("description", "")
+                if not description:
+                    log.warning(
+                        f"Skill {skill_dir.name} has no description in frontmatter — "
+                        "it will be listed but the agent won't know when to use it"
+                    )
+                skills.append(SkillInfo(name=name, description=description, path=skill_file))
             except OSError as e:
                 log.warning(f"Failed to read skill {skill_dir.name}: {e}")
     return skills

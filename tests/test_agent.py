@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from smolclaw.config import AgentConfig, AgentInfo, MemoryConfig
+from smolclaw.config import AgentConfig, AgentInfo, MemoryConfig, SkillInfo
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -21,7 +21,7 @@ def _make_info(
     model: str = "claude-sonnet-4-6",
     soul: str = "You are a test agent.",
     agents_md: str = "Be helpful.",
-    skills: list[str] | None = None,
+    skills: list[SkillInfo] | None = None,
     context_files: dict[str, str] | None = None,
     tmp_path: Path | None = None,
 ) -> AgentInfo:
@@ -126,7 +126,13 @@ class TestBuildSystemPrompt:
         info = _make_info(
             soul="# SOUL\nI am TARS.",
             agents_md="# AGENTS\nRule one.",
-            skills=["# Skill: git\nGit commands."],
+            skills=[
+                SkillInfo(
+                    name="git-ops",
+                    description="Git operations and branch management.",
+                    path=Path("/tmp/fake-agent/skills/git-ops/SKILL.md"),
+                ),
+            ],
             context_files={"notes.md": "Some notes here."},
         )
         agent = Agent(info, user_md="# User\nMagnus")
@@ -135,7 +141,9 @@ class TestBuildSystemPrompt:
         assert "# User\nMagnus" in prompt
         assert "# SOUL\nI am TARS." in prompt
         assert "# AGENTS\nRule one." in prompt
-        assert "# Skill: git" in prompt
+        assert "Available Skills" in prompt
+        assert "**git-ops**" in prompt
+        assert "Git operations and branch management." in prompt
         assert "--- notes.md ---\nSome notes here." in prompt
         assert "Agent: testagent" in prompt
         assert "Model: claude-sonnet-4-6" in prompt

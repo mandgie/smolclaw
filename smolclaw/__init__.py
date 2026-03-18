@@ -10,7 +10,7 @@ from .channel import (
     list_channel_types,
     register_channel,
 )
-from .config import AgentConfig, AgentInfo, GatewayConfig, MemoryConfig
+from .config import AgentConfig, AgentInfo, GatewayConfig, MemoryConfig, SkillInfo
 from .gateway import Gateway
 from .hooks import HookContext, HookRegistry, PostRouteHook, PreRouteHook
 from .memory import Memory, serialize_f32
@@ -38,6 +38,7 @@ __all__ = [
     "PreRouteHook",
     "Router",
     "Scheduler",
+    "SkillInfo",
     "TelegramChannel",
     "TracingConfig",
     "WebhookChannel",

@@ -26,6 +26,7 @@ Gateway (one process)
 ## Key Design Decisions
 
 - **Filesystem-as-config**: skills in folder = enabled, soul.md exists = loaded. No config bloat.
+- **Progressive skill disclosure**: follows the [Agent Skills spec](https://agentskills.io/specification). Only `name` + `description` from SKILL.md frontmatter are loaded into the system prompt at startup (~100 tokens per skill). The agent reads the full SKILL.md on-demand when it decides to activate a skill.
 - **agent.yaml is identity only**: model, channels, memory settings. No skills, no jobs.
 - **Jobs in separate store**: `shared/cron/jobs.json` — has runtime state (last_run, failures, etc.)
 - **Cron routes through same message bus**: scheduled jobs are just another InboundMessage.
@@ -73,6 +74,11 @@ examples/              # Example two-agent setup (tars + coach)
         ├── soul.md          # Personality
         ├── agents.md        # Operational rules
         ├── skills/          # Agent-specific (or symlinks to shared)
+        │   └── <skill>/
+        │       ├── SKILL.md       # Required: YAML frontmatter (name, description) + instructions
+        │       ├── scripts/       # Optional: executable code
+        │       ├── references/    # Optional: detailed docs
+        │       └── assets/        # Optional: templates, resources
         ├── prompts/         # Cron job prompt templates
         ├── context/         # Extra .md files loaded into prompt
         ├── channels/        # *.env files with tokens
@@ -88,7 +94,8 @@ examples/              # Example two-agent setup (tars + coach)
 ## What Works
 
 - [x] Agent discovery from filesystem
-- [x] System prompt assembly (USER.md + soul.md + agents.md + skills + context)
+- [x] System prompt assembly (USER.md + soul.md + agents.md + skill index + context)
+- [x] Progressive skill disclosure (Agent Skills spec — metadata at startup, full SKILL.md on-demand)
 - [x] Claude SDK integration with session resume
 - [x] Telegram channel adapter (polling, typing indicators, markdown→HTML)
 - [x] Message routing (any source → agent → response)

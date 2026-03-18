@@ -93,9 +93,18 @@ class Agent:
         if self.info.agents_md:
             parts.append(self.info.agents_md)
 
-        # Skills
-        for skill in self.info.skills:
-            parts.append(skill)
+        # Skills (progressive disclosure: metadata only, read SKILL.md to activate)
+        if self.info.skills:
+            skill_lines = ["--- Available Skills ---"]
+            skill_lines.append(
+                "Skills are available for you to use. To activate a skill, "
+                "read its SKILL.md file for full instructions."
+            )
+            skill_lines.append("")
+            for skill in self.info.skills:
+                skill_lines.append(f"- **{skill.name}**: {skill.description}")
+                skill_lines.append(f"  Path: {skill.path}")
+            parts.append("\n".join(skill_lines))
 
         # Context files
         for name, content in self.info.context_files.items():

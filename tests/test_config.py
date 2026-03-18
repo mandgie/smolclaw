@@ -12,6 +12,7 @@ from smolclaw.config import (
     ChannelConfig,
     GatewayConfig,
     MemoryConfig,
+    SkillInfo,
     discover_agent,
     discover_all_agents,
     discover_skills,
@@ -205,13 +206,32 @@ class TestLoaders:
     def test_discover_skills_empty(self, agent_dir: Path):
         assert discover_skills(agent_dir) == []
 
-    def test_discover_skills_with_skill(self, agent_dir: Path):
+    def test_discover_skills_with_frontmatter(self, agent_dir: Path):
+        skill_dir = agent_dir / "skills" / "git-ops"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\n"
+            "name: git-ops\n"
+            "description: Git operations and branch management.\n"
+            "---\n\n"
+            "# Git Ops\nFull instructions here."
+        )
+        skills = discover_skills(agent_dir)
+        assert len(skills) == 1
+        assert isinstance(skills[0], SkillInfo)
+        assert skills[0].name == "git-ops"
+        assert skills[0].description == "Git operations and branch management."
+        assert skills[0].path == skill_dir / "SKILL.md"
+
+    def test_discover_skills_without_frontmatter(self, agent_dir: Path):
+        """Skills without YAML frontmatter use directory name as fallback."""
         skill_dir = agent_dir / "skills" / "myskill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("# My Skill\nDo stuff.")
         skills = discover_skills(agent_dir)
         assert len(skills) == 1
-        assert "My Skill" in skills[0]
+        assert skills[0].name == "myskill"
+        assert skills[0].description == ""
 
     def test_load_context_files_empty(self, agent_dir: Path):
         assert load_context_files(agent_dir) == {}
