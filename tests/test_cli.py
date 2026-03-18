@@ -2513,8 +2513,12 @@ class TestDoctorPortEdgeCases:
         Memory(db_path, agent="test")
 
         runner = CliRunner()
-        # Patch socket to return "not in use" (non-zero connect_ex)
-        with patch("socket.socket") as mock_sock:
+        # Patch socket to return "not in use" and mock shutil.which so
+        # Claude CLI check passes in CI where it's not installed
+        with (
+            patch("socket.socket") as mock_sock,
+            patch("shutil.which", return_value="/usr/local/bin/claude"),
+        ):
             mock_sock.return_value.connect_ex.return_value = 1  # Port not in use
             mock_sock.return_value.settimeout = MagicMock()
             mock_sock.return_value.close = MagicMock()
