@@ -118,8 +118,32 @@ def md_to_telegram_html(text: str) -> str:
     return result
 
 
+def _hard_split(text: str, max_len: int) -> list[str]:
+    """Split a string that exceeds max_len at character boundaries.
+
+    Tries to break at the last space within max_len for readability.
+    Falls back to hard character-boundary split if no space is found.
+    """
+    pieces: list[str] = []
+    while len(text) > max_len:
+        # Prefer splitting at a space within the last 20% of the chunk
+        split_at = text.rfind(" ", 0, max_len)
+        if split_at < max_len // 2:
+            # No good space found — hard split
+            split_at = max_len
+        pieces.append(text[:split_at].rstrip())
+        text = text[split_at:].lstrip()
+    if text:
+        pieces.append(text)
+    return pieces
+
+
 def split_message(text: str, max_len: int = MAX_TELEGRAM_LENGTH) -> list[str]:
-    """Split long text at paragraph boundaries."""
+    """Split long text at paragraph boundaries.
+
+    Splitting priority: paragraph breaks (\\n\\n) > line breaks (\\n) > spaces > hard cut.
+    Every returned chunk is guaranteed to be ≤ max_len.
+    """
     if len(text) <= max_len:
         return [text]
 
@@ -133,7 +157,13 @@ def split_message(text: str, max_len: int = MAX_TELEGRAM_LENGTH) -> list[str]:
                 current = ""
             if len(paragraph) > max_len:
                 for line in paragraph.split("\n"):
-                    if len(current) + len(line) + 1 > max_len:
+                    if len(line) > max_len:
+                        # Line itself exceeds limit — flush current, then hard-split
+                        if current:
+                            chunks.append(current.strip())
+                            current = ""
+                        chunks.extend(_hard_split(line, max_len))
+                    elif len(current) + len(line) + 1 > max_len:
                         if current:
                             chunks.append(current.strip())
                         current = line + "\n"

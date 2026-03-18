@@ -15,6 +15,7 @@ from smolclaw.channel import (
     WebhookChannel,
     _custom_channels,
     _discover_entrypoint_channels,
+    _hard_split,
     create_channel,
     list_channel_types,
     md_to_telegram_html,
@@ -149,6 +150,88 @@ class TestSplitMessage:
         text = "X" * 500
         chunks = split_message(text, max_len=100)
         assert len(chunks) >= 1
+
+    def test_single_huge_line_respects_max_len(self):
+        """Every chunk must be within max_len, even for a single unbroken line."""
+        text = "X" * 500
+        chunks = split_message(text, max_len=100)
+        assert len(chunks) == 5
+        for chunk in chunks:
+            assert len(chunk) <= 100
+
+    def test_huge_line_with_spaces_splits_at_words(self):
+        """Long lines with spaces should split at word boundaries."""
+        words = ["word"] * 100  # 100 words, ~500 chars with spaces
+        text = " ".join(words)
+        chunks = split_message(text, max_len=100)
+        for chunk in chunks:
+            assert len(chunk) <= 100
+        # All content should be preserved
+        rejoined = " ".join(chunks)
+        assert rejoined.replace("  ", " ").count("word") == 100
+
+    def test_huge_line_inside_paragraph(self):
+        """A paragraph with one normal line and one oversized line."""
+        text = "Short line\n" + "X" * 300
+        chunks = split_message(text, max_len=100)
+        for chunk in chunks:
+            assert len(chunk) <= 100
+        rejoined = " ".join(chunks)
+        assert "Short line" in rejoined
+
+    def test_mixed_paragraphs_and_huge_line(self):
+        """Mix of normal paragraphs and one containing an oversized line."""
+        text = "Normal para 1\n\n" + "Y" * 250 + "\n\nNormal para 2"
+        chunks = split_message(text, max_len=100)
+        for chunk in chunks:
+            assert len(chunk) <= 100
+        rejoined = " ".join(chunks)
+        assert "Normal para 1" in rejoined
+        assert "Normal para 2" in rejoined
+
+    def test_one_over_limit_respects_max_len(self):
+        """Regression: text just over limit must still be split properly."""
+        text = "A" * 4001
+        chunks = split_message(text, max_len=4000)
+        assert len(chunks) == 2
+        for chunk in chunks:
+            assert len(chunk) <= 4000
+
+
+# --- _hard_split ---
+
+
+class TestHardSplit:
+    def test_short_text_no_split(self):
+        assert _hard_split("Hello", 100) == ["Hello"]
+
+    def test_splits_at_character_boundary(self):
+        text = "X" * 250
+        pieces = _hard_split(text, 100)
+        assert len(pieces) == 3
+        for piece in pieces:
+            assert len(piece) <= 100
+
+    def test_prefers_space_boundary(self):
+        text = "aaaa bbbb cccc dddd eeee ffff"  # 29 chars
+        pieces = _hard_split(text, 20)
+        for piece in pieces:
+            assert len(piece) <= 20
+        # Content preserved
+        assert " ".join(pieces) == text
+
+    def test_no_space_hard_cuts(self):
+        text = "A" * 50
+        pieces = _hard_split(text, 20)
+        assert all(len(p) <= 20 for p in pieces)
+        assert "".join(pieces) == text
+
+    def test_empty_string(self):
+        assert _hard_split("", 100) == []
+
+    def test_exact_length(self):
+        text = "A" * 100
+        assert _hard_split(text, 100) == [text]
 
 
 # --- TelegramChannel ---
