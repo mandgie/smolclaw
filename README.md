@@ -178,6 +178,12 @@ curl -s localhost:7890/api/agents/tars/memory/facts \
   -H "Content-Type: application/json" \
   -d '{"content": "User prefers metric units", "category": "preference"}'
 
+# Get / update / delete a fact
+curl -s localhost:7890/api/agents/tars/memory/facts/1 | jq
+curl -s -X PUT localhost:7890/api/agents/tars/memory/facts/1 \
+  -H "Content-Type: application/json" \
+  -d '{"content": "User prefers imperial units"}'
+
 # List agents, health, cron jobs
 curl -s localhost:7890/api/agents | jq
 curl -s localhost:7890/api/health | jq

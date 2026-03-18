@@ -19,6 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Smart send** — `smolclaw send` uses running gateway API when available, falls back to temporary gateway
 - **Memory APIs** — search (`GET /api/agents/{name}/memory/search`), add-fact (`POST .../facts`), stats (`GET .../stats`), and CLI commands (`smolclaw memory search/list/stats/add/delete`)
 - **Job enable/disable API** — `POST /api/cron/jobs/{id}/enable` and `.../disable` endpoints for managing job state at runtime via the API (previously CLI-only). Also adds `Scheduler.enable_job()` and `disable_job()` methods.
+- **Memory CRUD** — complete REST API for facts: `GET /api/agents/{name}/memory/facts/{id}` (retrieve), `PUT .../facts/{id}` (update content/category with FTS5 + vector re-sync). Also adds `Memory.get_fact()` and `Memory.update_fact()` methods.
 - **Codecov CI integration** — coverage reports uploaded on every push/PR
 - `[all]`, `[otel]`, `[otel-otlp]`, `[discord]`, `[slack]` optional dependency extras
 
@@ -31,6 +32,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **`trigger_job` skipped session cleanup** — manually triggered isolated-mode jobs (`smolclaw cron run`) didn't disconnect the SDK session afterward, leaving stale connections that accumulate CPU and file descriptors. Now mirrors the scheduled loop's cleanup behavior.
 - Replaced deprecated `asyncio.get_event_loop()` with `get_running_loop()` in scheduler crash recovery
 - **Graceful config error handling** — malformed YAML, non-mapping agent.yaml, and unreadable skill/context files now produce clear error messages instead of crashing the gateway
+- **`split_message` oversized line bug** — single lines longer than `max_len` (e.g. very long URLs or code lines) were not split, producing chunks that exceed the Telegram 4000-char limit. Now splits at word boundaries when possible, hard character-boundary as fallback. Every chunk is guaranteed ≤ `max_len`.
 
 ### Changed
 - `ChannelConfig.authorized_users` broadened to `list[int | str]` for multi-platform support (Slack/Discord string user IDs)
@@ -38,7 +40,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Cron job execution timing** — both scheduled and manually triggered jobs now log their execution duration (e.g. "job 'heartbeat' completed in 42.3s")
 - Comprehensive documentation overhaul — all 10 docs files synced with current ~5300-line, 14-module codebase
 - CI now tests with `[all]` extras to cover sqlite-vec and watchfiles code paths
-- 840 tests, 97% coverage (up from 524 at v0.1.0)
+- 872 tests, 97% coverage (up from 524 at v0.1.0)
 
 ## [0.1.0] — 2026-03-07
 
