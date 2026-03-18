@@ -2387,7 +2387,7 @@ class TestCronRunConfigReading:
         import urllib.error
 
         # Write config with custom port
-        (tmp_base / "config.yaml").write_text("host: 127.0.0.1\nport: 7890\napi_port: 9999\n")
+        (tmp_base / "config.yaml").write_text("host: 127.0.0.1\nport: 9999\n")
 
         runner = CliRunner()
         with patch(
@@ -2400,6 +2400,23 @@ class TestCronRunConfigReading:
         # Verify URL uses port 9999
         call_args = mock_open.call_args[0][0]
         assert "9999" in call_args.full_url
+
+    def test_cron_run_reads_custom_host(self, tmp_base: Path):
+        """cron run uses custom host from config.yaml."""
+        import urllib.error
+
+        (tmp_base / "config.yaml").write_text("host: 0.0.0.0\nport: 7890\n")
+
+        runner = CliRunner()
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError("Connection refused"),
+        ) as mock_open:
+            result = runner.invoke(cli, ["--home", str(tmp_base), "cron", "run", "test-job"])
+
+        assert result.exit_code == 1
+        call_args = mock_open.call_args[0][0]
+        assert "0.0.0.0" in call_args.full_url
 
     def test_cron_run_reads_api_key(self, tmp_base: Path):
         """cron run includes auth header when api_key is configured."""
@@ -2438,6 +2455,64 @@ class TestCronRunConfigReading:
         # Should still attempt (falls back to default port), not crash
         assert result.exit_code == 1
         assert "Gateway not running" in result.output
+
+
+class TestIsGatewayRunningHealthEndpoint:
+    """Verify _is_gateway_running uses /api/health (always public, no auth required)."""
+
+    def test_probes_health_endpoint(self, tmp_base: Path):
+        """Gateway check hits /api/health, not an auth-protected endpoint."""
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            result = _is_gateway_running(tmp_base)
+
+        assert result is True
+        call_args = mock_open.call_args[0]
+        assert "/api/health" in call_args[0]
+
+
+class TestTryApiSendAuth:
+    """Verify _try_api_send includes auth headers when api_key is configured."""
+
+    def test_send_includes_auth_header(self, tmp_base: Path):
+        """API send includes Bearer token when api_key is set."""
+        (tmp_base / "config.yaml").write_text(
+            "host: 127.0.0.1\nport: 7890\napi_key: my-secret\n"
+        )
+        # Create a minimal agent so validation passes
+        agent_dir = tmp_base / "agents" / "tars"
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        (agent_dir / "agent.yaml").write_text("name: tars\nmodel: claude-sonnet-4-6\n")
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"response": "hello"}).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            result = _try_api_send(tmp_base, "tars", "hi")
+
+        assert result == "hello"
+        req = mock_open.call_args[0][0]
+        assert req.get_header("Authorization") == "Bearer my-secret"
+
+    def test_send_no_auth_when_no_key(self, tmp_base: Path):
+        """API send omits auth header when no api_key is configured."""
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"response": "hi"}).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            result = _try_api_send(tmp_base, "tars", "hello")
+
+        assert result == "hi"
+        req = mock_open.call_args[0][0]
+        assert req.get_header("Authorization") is None
 
 
 class TestCronListEdgeCases:

@@ -194,7 +194,11 @@ def _is_editable_install() -> bool:
 
 
 def _is_gateway_running(base: Path) -> bool:
-    """Check if the gateway is running by probing the API."""
+    """Check if the gateway is running by probing the health endpoint.
+
+    Uses /api/health which is always public (no auth required), so this
+    works correctly regardless of whether api_key is configured.
+    """
     import urllib.error
     import urllib.request
 
@@ -206,7 +210,7 @@ def _is_gateway_running(base: Path) -> bool:
         return False
 
     try:
-        url = f"http://{config.host}:{config.port}/api/cron/jobs"
+        url = f"http://{config.host}:{config.port}/api/health"
         with urllib.request.urlopen(url, timeout=3) as resp:
             return resp.status == 200
     except (urllib.error.URLError, OSError):
@@ -608,7 +612,10 @@ def list_agents(ctx):
 
 
 def _try_api_send(base: Path, agent_name: str, message: str) -> str | None:
-    """Try sending a message via the running gateway API. Returns response or None."""
+    """Try sending a message via the running gateway API. Returns response or None.
+
+    Includes Authorization header when api_key is configured in config.yaml.
+    """
     import urllib.error
     import urllib.request
 
@@ -619,7 +626,10 @@ def _try_api_send(base: Path, agent_name: str, message: str) -> str | None:
 
     try:
         data = json.dumps({"text": message}).encode()
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        headers = {"Content-Type": "application/json"}
+        if config.api_key:
+            headers["Authorization"] = f"Bearer {config.api_key}"
+        req = urllib.request.Request(url, data=data, headers=headers)
         with urllib.request.urlopen(req, timeout=900) as resp:
             result = json.loads(resp.read())
             return result.get("response", "")
@@ -993,30 +1003,28 @@ def cron_run(ctx, job_id):
 
     base = ctx.obj["base"]
 
-    # Read port from config
+    # Read gateway config (port, host, api_key) once
+    host = "127.0.0.1"
     port = 7890
+    api_key = None
     config_path = base / "config.yaml"
     if config_path.exists():
         import yaml
 
         try:
             cfg = yaml.safe_load(config_path.read_text()) or {}
-            port = cfg.get("api_port", 7890)
+            host = cfg.get("host", host)
+            port = cfg.get("port", port)
+            api_key = cfg.get("api_key")
         except Exception:
             pass
 
-    url = f"http://127.0.0.1:{port}/api/cron/jobs/{job_id}/trigger"
+    url = f"http://{host}:{port}/api/cron/jobs/{job_id}/trigger"
 
     # Build request with optional auth
     headers = {"Content-Type": "application/json"}
-    if config_path.exists():
-        try:
-            cfg = yaml.safe_load(config_path.read_text()) or {}
-            api_key = cfg.get("api_key")
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-        except Exception:
-            pass
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     req = urllib.request.Request(url, data=b"{}", headers=headers, method="POST")
 
