@@ -18,12 +18,18 @@ pip install -e ".[dev]"
 2. Make your changes
 3. Run checks:
    ```bash
-   ruff check smolclaw/
-   ruff format smolclaw/
-   pytest
+   make check          # lint + format + tests (recommended)
+   ```
+   Or run individually:
+   ```bash
+   make lint           # ruff check
+   make format         # ruff format
+   make test           # pytest with coverage
    ```
 4. Commit with a descriptive message (we use [conventional commits](https://www.conventionalcommits.org/))
 5. Open a pull request
+
+Run `make help` to see all available targets.
 
 ## What to Work On
 
