@@ -247,8 +247,38 @@ class Scheduler:
                 await self._task
         log.info("Scheduler: stopped")
 
+    def _compute_sleep(self) -> float:
+        """Compute optimal sleep duration until the next due job.
+
+        Returns the number of seconds to sleep — the minimum of:
+        - Time until the earliest next_run across all enabled jobs
+        - MAX_SLEEP_SECONDS (60s) as a ceiling for responsiveness
+
+        Falls back to MAX_SLEEP_SECONDS when no schedulable jobs exist
+        or all next_run values are unparseable.
+        """
+        max_sleep = 60.0
+        min_sleep = 1.0
+
+        now = datetime.now()
+        nearest = max_sleep
+
+        for job in self.jobs:
+            if not job.enabled or not job.prompt or not job.next_run:
+                continue
+            try:
+                next_dt = datetime.fromisoformat(job.next_run)
+                delta = (next_dt - now).total_seconds()
+                if delta < nearest:
+                    nearest = delta
+            except (ValueError, TypeError):
+                continue  # Bad next_run handled by the main loop
+
+        # Clamp: at least min_sleep to avoid busy-spinning, at most max_sleep
+        return max(min_sleep, min(nearest, max_sleep))
+
     async def _loop(self) -> None:
-        """Main scheduler loop — check every 30 seconds for due jobs."""
+        """Main scheduler loop — sleeps until the next job is due."""
         from .router import InboundMessage
 
         while self._running:
@@ -335,10 +365,10 @@ class Scheduler:
                     job.next_run = job.compute_next_run(after=now).isoformat()
                     self.save_jobs()
 
-            # Sleep between iterations. CancelledError here means clean
-            # shutdown via stop() — the only path that should exit the loop.
+            # Sleep until the next job is due (or max 60s for responsiveness).
+            # CancelledError here means clean shutdown via stop().
             try:
-                await asyncio.sleep(30)
+                await asyncio.sleep(self._compute_sleep())
             except asyncio.CancelledError:
                 return
 

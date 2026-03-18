@@ -1237,3 +1237,128 @@ class TestEnableDisableJob:
         assert scheduler_with_jobs.disable_job("paused-job") is True
         job = next(j for j in scheduler_with_jobs.jobs if j.id == "paused-job")
         assert job.enabled is False
+
+
+class TestComputeSleep:
+    """Tests for _compute_sleep — adaptive sleep until next due job."""
+
+    def _make_scheduler(self, tmp_path: Path) -> Scheduler:
+        jobs_file = tmp_path / "cron" / "jobs.json"
+        jobs_file.parent.mkdir(parents=True)
+        jobs_file.write_text("[]")
+        router = MagicMock()
+        return Scheduler(jobs_file, tmp_path / "agents", router)
+
+    def test_no_jobs_returns_max_sleep(self, tmp_path: Path):
+        """With no jobs, sleep the maximum duration."""
+        scheduler = self._make_scheduler(tmp_path)
+        scheduler.load_jobs()
+        result = scheduler._compute_sleep()
+        assert result == 60.0
+
+    def test_job_due_soon_returns_short_sleep(self, tmp_path: Path):
+        """A job due in 5 seconds should return ~5s sleep."""
+        from datetime import timedelta
+
+        scheduler = self._make_scheduler(tmp_path)
+        scheduler.load_jobs()
+
+        job = Job(
+            {"id": "soon", "agent": "tars", "schedule": "* * * * *", "prompt": "hi"},
+        )
+        job.next_run = (datetime.now() + timedelta(seconds=5)).isoformat()
+        scheduler.jobs.append(job)
+
+        result = scheduler._compute_sleep()
+        assert 1.0 <= result <= 6.0
+
+    def test_job_due_in_past_returns_min_sleep(self, tmp_path: Path):
+        """A job already past due should return min sleep (1s)."""
+        scheduler = self._make_scheduler(tmp_path)
+        scheduler.load_jobs()
+
+        job = Job(
+            {"id": "overdue", "agent": "tars", "schedule": "* * * * *", "prompt": "hi"},
+        )
+        job.next_run = "2020-01-01T00:00:00"
+        scheduler.jobs.append(job)
+
+        result = scheduler._compute_sleep()
+        assert result == 1.0
+
+    def test_job_far_future_capped_at_max(self, tmp_path: Path):
+        """A job due far in the future should cap at 60s."""
+        scheduler = self._make_scheduler(tmp_path)
+        scheduler.load_jobs()
+
+        job = Job(
+            {"id": "far", "agent": "tars", "schedule": "0 8 * * *", "prompt": "hi"},
+        )
+        job.next_run = "2099-01-01T00:00:00"
+        scheduler.jobs.append(job)
+
+        result = scheduler._compute_sleep()
+        assert result == 60.0
+
+    def test_picks_nearest_job(self, tmp_path: Path):
+        """With multiple jobs, sleep until the nearest one."""
+        from datetime import timedelta
+
+        scheduler = self._make_scheduler(tmp_path)
+        scheduler.load_jobs()
+
+        far_job = Job(
+            {"id": "far", "agent": "tars", "schedule": "0 8 * * *", "prompt": "hi"},
+        )
+        far_job.next_run = "2099-01-01T00:00:00"
+
+        near_job = Job(
+            {"id": "near", "agent": "tars", "schedule": "* * * * *", "prompt": "hi"},
+        )
+        near_job.next_run = (datetime.now() + timedelta(seconds=10)).isoformat()
+
+        scheduler.jobs.extend([far_job, near_job])
+
+        result = scheduler._compute_sleep()
+        assert 1.0 <= result <= 11.0
+
+    def test_disabled_jobs_ignored(self, tmp_path: Path):
+        """Disabled jobs should not affect sleep calculation."""
+        scheduler = self._make_scheduler(tmp_path)
+        scheduler.load_jobs()
+
+        job = Job(
+            {"id": "off", "agent": "tars", "schedule": "* * * * *", "prompt": "hi"},
+        )
+        job.next_run = "2020-01-01T00:00:00"  # overdue but disabled
+        job.enabled = False
+        scheduler.jobs.append(job)
+
+        result = scheduler._compute_sleep()
+        assert result == 60.0  # falls back to max because the only job is disabled
+
+    def test_invalid_next_run_ignored(self, tmp_path: Path):
+        """Jobs with unparseable next_run should be skipped gracefully."""
+        scheduler = self._make_scheduler(tmp_path)
+        scheduler.load_jobs()
+
+        job = Job(
+            {"id": "bad", "agent": "tars", "schedule": "* * * * *", "prompt": "hi"},
+        )
+        job.next_run = "not-a-date"
+        scheduler.jobs.append(job)
+
+        result = scheduler._compute_sleep()
+        assert result == 60.0  # gracefully falls back
+
+    def test_promptless_jobs_ignored(self, tmp_path: Path):
+        """Jobs without a prompt should not affect sleep calculation."""
+        scheduler = self._make_scheduler(tmp_path)
+        scheduler.load_jobs()
+
+        job = Job({"id": "noprompt", "agent": "tars", "schedule": "* * * * *"})
+        job.next_run = "2020-01-01T00:00:00"  # overdue but no prompt
+        scheduler.jobs.append(job)
+
+        result = scheduler._compute_sleep()
+        assert result == 60.0
