@@ -1157,6 +1157,122 @@ class TestTriggerJobNoSuggestionsSuppression:
         assert result == "Here is your briefing!"
         deliver_cb.assert_called_once()
 
+    async def test_trigger_job_cleans_up_isolated_session(self, tmp_base: Path):
+        """trigger_job calls agent.new_session() for isolated-mode jobs."""
+        from smolclaw.router import OutboundMessage
+
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "isolated-trigger",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Check stuff",
+                        "enabled": True,
+                        "session_mode": "isolated",
+                    }
+                ]
+            )
+        )
+
+        mock_agent = MagicMock()
+        mock_agent.new_session = AsyncMock()
+
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(
+                agent="testagent", text="Done!", source="cron"
+            )
+        )
+        router.get_agent = MagicMock(return_value=mock_agent)
+
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+
+        await scheduler.trigger_job("isolated-trigger")
+        mock_agent.new_session.assert_called_once()
+
+    async def test_trigger_job_skips_cleanup_for_shared_session(self, tmp_base: Path):
+        """trigger_job does NOT call agent.new_session() for shared-mode jobs."""
+        from smolclaw.router import OutboundMessage
+
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "shared-trigger",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Check stuff",
+                        "enabled": True,
+                        "session_mode": "shared",
+                    }
+                ]
+            )
+        )
+
+        mock_agent = MagicMock()
+        mock_agent.new_session = AsyncMock()
+
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(
+                agent="testagent", text="Done!", source="cron"
+            )
+        )
+        router.get_agent = MagicMock(return_value=mock_agent)
+
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+
+        await scheduler.trigger_job("shared-trigger")
+        mock_agent.new_session.assert_not_called()
+
+    async def test_trigger_job_session_cleanup_failure_ignored(self, tmp_base: Path):
+        """trigger_job doesn't fail if session cleanup raises."""
+        from smolclaw.router import OutboundMessage
+
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "cleanup-fail",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Check stuff",
+                        "enabled": True,
+                        "session_mode": "isolated",
+                    }
+                ]
+            )
+        )
+
+        mock_agent = MagicMock()
+        mock_agent.new_session = AsyncMock(side_effect=RuntimeError("SDK error"))
+
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(
+                agent="testagent", text="Done!", source="cron"
+            )
+        )
+        router.get_agent = MagicMock(return_value=mock_agent)
+
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+
+        # Should not raise even though cleanup fails
+        result = await scheduler.trigger_job("cleanup-fail")
+        assert result == "Done!"
+        mock_agent.new_session.assert_called_once()
+
 
 class TestEnableDisableJob:
     """Tests for enable_job() and disable_job() methods."""
@@ -1237,6 +1353,62 @@ class TestEnableDisableJob:
         assert scheduler_with_jobs.disable_job("paused-job") is True
         job = next(j for j in scheduler_with_jobs.jobs if j.id == "paused-job")
         assert job.enabled is False
+
+    def test_enable_recomputes_stale_next_run(self, scheduler_with_jobs: Scheduler):
+        """Re-enabling a job that has a stale next_run recomputes it to the future."""
+        job = next(j for j in scheduler_with_jobs.jobs if j.id == "paused-job")
+        # Simulate a stale next_run from 3 days ago
+        stale = datetime(2020, 1, 1, 22, 0, 0).isoformat()
+        job.next_run = stale
+
+        scheduler_with_jobs.enable_job("paused-job")
+
+        assert job.enabled is True
+        # next_run must have been recomputed — it should NOT be the stale value
+        assert job.next_run != stale
+        # The recomputed next_run should be in the future
+        next_dt = datetime.fromisoformat(job.next_run)
+        assert next_dt > datetime.now()
+
+    def test_enable_recomputes_even_when_next_run_set(self, scheduler_with_jobs: Scheduler):
+        """enable_job always recomputes next_run, even when it's already set."""
+        job = next(j for j in scheduler_with_jobs.jobs if j.id == "active-job")
+        old_next_run = job.next_run
+
+        # Disable and re-enable — next_run should be freshly computed
+        scheduler_with_jobs.disable_job("active-job")
+        scheduler_with_jobs.enable_job("active-job")
+
+        # next_run should be recomputed (fresh from now, not the old value)
+        assert job.next_run != ""
+        next_dt = datetime.fromisoformat(job.next_run)
+        assert next_dt > datetime.now()
+
+    def test_enable_no_prompt_skips_next_run(self, tmp_base: Path):
+        """enable_job on a job without a prompt doesn't set next_run."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "no-prompt",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "",
+                        "enabled": False,
+                    },
+                ]
+            )
+        )
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.load_jobs()
+
+        scheduler.enable_job("no-prompt")
+        job = next(j for j in scheduler.jobs if j.id == "no-prompt")
+        assert job.enabled is True
+        assert job.next_run == ""  # No prompt → no scheduling
 
 
 class TestComputeSleep:

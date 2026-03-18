@@ -279,6 +279,8 @@ class Scheduler:
 
     async def _loop(self) -> None:
         """Main scheduler loop — sleeps until the next job is due."""
+        import time
+
         from .router import InboundMessage
 
         while self._running:
@@ -310,6 +312,7 @@ class Scheduler:
 
                 if now >= next_dt:
                     log.info(f"Scheduler: firing job '{job.id}' for agent '{job.agent}'")
+                    job_start = time.monotonic()
                     from .tracing import trace_cron_job
 
                     with trace_cron_job(job.id, job.agent):
@@ -360,6 +363,9 @@ class Scheduler:
                                     f"Scheduler: session cleanup for "
                                     f"'{job.agent}' failed (ignored): {e}"
                                 )
+
+                    elapsed = time.monotonic() - job_start
+                    log.info(f"Scheduler: job '{job.id}' completed in {elapsed:.1f}s")
 
                     # Compute next run
                     job.next_run = job.compute_next_run(after=now).isoformat()
@@ -417,6 +423,9 @@ class Scheduler:
     async def trigger_job(self, job_id: str) -> str:
         """Manually trigger a job immediately, returning the response text.
 
+        Mirrors the ``_loop`` behavior: routes the prompt, delivers output,
+        cleans up the SDK session for isolated-mode jobs, and logs timing.
+
         Args:
             job_id: The ID of the job to trigger.
 
@@ -426,6 +435,8 @@ class Scheduler:
         Raises:
             KeyError: If no job with the given ID exists.
         """
+        import time
+
         from .router import InboundMessage
 
         job = next((j for j in self.jobs if j.id == job_id), None)
@@ -436,6 +447,7 @@ class Scheduler:
             raise ValueError(f"Job '{job_id}' has no prompt")
 
         log.info(f"Scheduler: manually triggering job '{job.id}' for agent '{job.agent}'")
+        start = time.monotonic()
 
         from .tracing import trace_cron_job
 
@@ -460,10 +472,27 @@ class Scheduler:
             job.failures = 0
             self.save_jobs()
 
+        # Clean up SDK session for isolated-mode jobs (matches _loop behavior).
+        # Without this, manual triggers leave stale connections that accumulate.
+        if job.session_mode == "isolated":
+            agent = self.router.get_agent(job.agent)
+            if agent:
+                try:
+                    await agent.new_session()
+                except (Exception, asyncio.CancelledError) as e:
+                    log.debug(f"Scheduler: session cleanup for '{job.agent}' failed (ignored): {e}")
+
+        elapsed = time.monotonic() - start
+        log.info(f"Scheduler: job '{job.id}' completed in {elapsed:.1f}s")
+
         return outbound.text
 
     def enable_job(self, job_id: str) -> bool:
         """Enable a disabled job so it will be scheduled.
+
+        Always recomputes ``next_run`` from the current time to avoid stale
+        values causing an unexpected immediate fire (e.g. job was disabled for
+        hours/days and its old ``next_run`` is in the past).
 
         Args:
             job_id: The ID of the job to enable.
@@ -476,8 +505,9 @@ class Scheduler:
             return False
 
         job.enabled = True
-        # Compute next_run if the job has a prompt (now schedulable)
-        if job.prompt and not job.next_run:
+        # Always recompute next_run from now — a stale value from before the
+        # job was disabled would cause immediate firing on re-enable.
+        if job.prompt:
             job.next_run = job.compute_next_run().isoformat()
         self.save_jobs()
         log.info(f"Scheduler: enabled job '{job_id}'")
