@@ -198,6 +198,13 @@ class AddFactRequest(BaseModel):
     category: str = Field("general", description="Fact category for organization")
 
 
+class UpdateFactRequest(BaseModel):
+    """Request body for updating an existing fact."""
+
+    content: str | None = Field(None, min_length=1, description="New fact content")
+    category: str | None = Field(None, description="New fact category")
+
+
 class ClearMemoryResponse(BaseModel):
     """Response from clearing an agent's memory."""
 
@@ -451,6 +458,34 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(400, f"Agent '{name}' has no memory enabled")
         fact_id = agent.memory.add_fact(body.content, category=body.category)
         return {"id": fact_id, "status": "created"}
+
+    @app.get("/api/agents/{name}/memory/facts/{fact_id}", dependencies=[Depends(_require_auth)])
+    async def get_fact(name: str, fact_id: int) -> dict[str, Any]:
+        """Get a specific fact by ID from an agent's memory."""
+        agent = gateway.router.get_agent(name)
+        if not agent:
+            raise HTTPException(404, f"Agent '{name}' not found")
+        if not agent.memory:
+            raise HTTPException(400, f"Agent '{name}' has no memory enabled")
+        fact = agent.memory.get_fact(fact_id)
+        if not fact:
+            raise HTTPException(404, f"Fact {fact_id} not found")
+        return {"fact": fact}
+
+    @app.put("/api/agents/{name}/memory/facts/{fact_id}", dependencies=[Depends(_require_auth)])
+    async def update_fact(name: str, fact_id: int, body: UpdateFactRequest) -> dict[str, str]:
+        """Update a specific fact in an agent's memory."""
+        agent = gateway.router.get_agent(name)
+        if not agent:
+            raise HTTPException(404, f"Agent '{name}' not found")
+        if not agent.memory:
+            raise HTTPException(400, f"Agent '{name}' has no memory enabled")
+        if body.content is None and body.category is None:
+            raise HTTPException(400, "At least one of 'content' or 'category' must be provided")
+        updated = agent.memory.update_fact(fact_id, content=body.content, category=body.category)
+        if not updated:
+            raise HTTPException(404, f"Fact {fact_id} not found")
+        return {"status": "updated"}
 
     @app.delete("/api/agents/{name}/memory/facts/{fact_id}", dependencies=[Depends(_require_auth)])
     async def delete_fact(name: str, fact_id: int) -> dict[str, str]:

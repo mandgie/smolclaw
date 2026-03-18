@@ -369,6 +369,88 @@ class TestAddFact:
         assert resp.status_code == 400
 
 
+class TestGetFact:
+    def test_gets_fact(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        fact_id = agent.memory.add_fact("Get me", category="tech")
+        resp = client.get(f"/api/agents/testagent/memory/facts/{fact_id}")
+        assert resp.status_code == 200
+        fact = resp.json()["fact"]
+        assert fact["id"] == fact_id
+        assert fact["content"] == "Get me"
+        assert fact["category"] == "tech"
+
+    def test_404_unknown_fact(self, client):
+        resp = client.get("/api/agents/testagent/memory/facts/9999")
+        assert resp.status_code == 404
+
+    def test_404_unknown_agent(self, client):
+        resp = client.get("/api/agents/nobody/memory/facts/1")
+        assert resp.status_code == 404
+
+    def test_400_no_memory(self, client, mock_gateway):
+        mock_gateway.agents["testagent"].memory = None
+        resp = client.get("/api/agents/testagent/memory/facts/1")
+        assert resp.status_code == 400
+
+
+class TestUpdateFact:
+    def test_updates_content(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        fact_id = agent.memory.add_fact("Original")
+        resp = client.put(
+            f"/api/agents/testagent/memory/facts/{fact_id}",
+            json={"content": "Updated"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "updated"
+        # Verify update persisted
+        fact = agent.memory.get_fact(fact_id)
+        assert fact["content"] == "Updated"
+
+    def test_updates_category(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        fact_id = agent.memory.add_fact("Content", category="general")
+        resp = client.put(
+            f"/api/agents/testagent/memory/facts/{fact_id}",
+            json={"category": "tech"},
+        )
+        assert resp.status_code == 200
+        fact = agent.memory.get_fact(fact_id)
+        assert fact["category"] == "tech"
+
+    def test_400_no_fields(self, client, mock_gateway):
+        agent = mock_gateway.agents["testagent"]
+        fact_id = agent.memory.add_fact("Content")
+        resp = client.put(
+            f"/api/agents/testagent/memory/facts/{fact_id}",
+            json={},
+        )
+        assert resp.status_code == 400
+
+    def test_404_unknown_fact(self, client):
+        resp = client.put(
+            "/api/agents/testagent/memory/facts/9999",
+            json={"content": "New"},
+        )
+        assert resp.status_code == 404
+
+    def test_404_unknown_agent(self, client):
+        resp = client.put(
+            "/api/agents/nobody/memory/facts/1",
+            json={"content": "New"},
+        )
+        assert resp.status_code == 404
+
+    def test_400_no_memory(self, client, mock_gateway):
+        mock_gateway.agents["testagent"].memory = None
+        resp = client.put(
+            "/api/agents/testagent/memory/facts/1",
+            json={"content": "New"},
+        )
+        assert resp.status_code == 400
+
+
 class TestDeleteFact:
     def test_deletes_fact(self, client, mock_gateway):
         agent = mock_gateway.agents["testagent"]

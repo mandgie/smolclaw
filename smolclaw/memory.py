@@ -530,6 +530,91 @@ class Memory:
         finally:
             conn.close()
 
+    def get_fact(self, fact_id: int) -> dict | None:
+        """Get a single fact by ID (must belong to this agent).
+
+        Returns the fact as a dict, or None if not found.
+        """
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM facts WHERE id = ? AND agent = ?",
+                (fact_id, self.agent),
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def update_fact(
+        self,
+        fact_id: int,
+        content: str | None = None,
+        category: str | None = None,
+    ) -> bool:
+        """Update a fact's content and/or category (must belong to this agent).
+
+        Syncs FTS5 and re-embeds for vector search when content changes.
+        Returns True if the fact was found and updated.
+        """
+        conn = self._connect()
+        try:
+            # Verify the fact belongs to this agent and get old content for FTS sync
+            existing = conn.execute(
+                "SELECT id, content FROM facts WHERE id = ? AND agent = ?",
+                (fact_id, self.agent),
+            ).fetchone()
+            if not existing:
+                return False
+
+            old_content = existing["content"]
+            updates: list[str] = []
+            params: list[str | int] = []
+            if content is not None:
+                updates.append("content = ?")
+                params.append(content)
+            if category is not None:
+                updates.append("category = ?")
+                params.append(category)
+
+            if not updates:
+                return True  # Nothing to update, but fact exists
+
+            params.append(fact_id)
+            conn.execute(
+                f"UPDATE facts SET {', '.join(updates)} WHERE id = ?",
+                params,
+            )
+
+            # Sync FTS5 index: external-content FTS tables don't auto-sync on
+            # UPDATE — manually delete old entry and insert new one.
+            if content is not None:
+                try:
+                    conn.execute(
+                        "INSERT INTO facts_fts(facts_fts, rowid, content) VALUES('delete', ?, ?)",
+                        (fact_id, old_content),
+                    )
+                    conn.execute(
+                        "INSERT INTO facts_fts(rowid, content) VALUES (?, ?)",
+                        (fact_id, content),
+                    )
+                except Exception as e:
+                    log.debug(f"FTS5 sync on update failed (non-fatal): {e}")
+
+            # Re-embed if content changed and vector search is enabled
+            if content is not None and self.vec_enabled:
+                embedding = self._embed(content)
+                if embedding is not None:
+                    conn.execute("DELETE FROM vec_facts WHERE rowid = ?", (fact_id,))
+                    conn.execute(
+                        "INSERT INTO vec_facts (rowid, embedding) VALUES (?, ?)",
+                        (fact_id, embedding),
+                    )
+
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
     def delete_fact(self, fact_id: int) -> bool:
         """Delete a fact by ID (must belong to this agent). Returns True if deleted."""
         conn = self._connect()
