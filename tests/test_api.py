@@ -46,7 +46,8 @@ def mock_gateway(tmp_path: Path):
     agent.info.config.mcp_servers = None
     agent.info.config.memory.enabled = True
     agent.info.config.memory.cross_agent = False
-    agent.info.skills = [SkillInfo(name="skill1", description="A test skill.", path=tmp_path / "skills" / "skill1" / "SKILL.md")]
+    skill_path = tmp_path / "skills" / "skill1" / "SKILL.md"
+    agent.info.skills = [SkillInfo(name="skill1", description="A test skill.", path=skill_path)]
     agent.info.soul = "You are a test agent."
     agent.info.agents_md = "Be helpful."
     agent.info.context_files = {"notes": "some notes"}

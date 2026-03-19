@@ -1183,9 +1183,7 @@ class TestTriggerJobNoSuggestionsSuppression:
 
         router = MagicMock()
         router.route = AsyncMock(
-            return_value=OutboundMessage(
-                agent="testagent", text="Done!", source="cron"
-            )
+            return_value=OutboundMessage(agent="testagent", text="Done!", source="cron")
         )
         router.get_agent = MagicMock(return_value=mock_agent)
 
@@ -1221,9 +1219,7 @@ class TestTriggerJobNoSuggestionsSuppression:
 
         router = MagicMock()
         router.route = AsyncMock(
-            return_value=OutboundMessage(
-                agent="testagent", text="Done!", source="cron"
-            )
+            return_value=OutboundMessage(agent="testagent", text="Done!", source="cron")
         )
         router.get_agent = MagicMock(return_value=mock_agent)
 
@@ -1259,9 +1255,7 @@ class TestTriggerJobNoSuggestionsSuppression:
 
         router = MagicMock()
         router.route = AsyncMock(
-            return_value=OutboundMessage(
-                agent="testagent", text="Done!", source="cron"
-            )
+            return_value=OutboundMessage(agent="testagent", text="Done!", source="cron")
         )
         router.get_agent = MagicMock(return_value=mock_agent)
 
@@ -1373,7 +1367,6 @@ class TestEnableDisableJob:
     def test_enable_recomputes_even_when_next_run_set(self, scheduler_with_jobs: Scheduler):
         """enable_job always recomputes next_run, even when it's already set."""
         job = next(j for j in scheduler_with_jobs.jobs if j.id == "active-job")
-        old_next_run = job.next_run
 
         # Disable and re-enable — next_run should be freshly computed
         scheduler_with_jobs.disable_job("active-job")

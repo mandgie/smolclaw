@@ -220,9 +220,7 @@ class TestMemoryUpdateFact:
 
     def test_update_vec_re_embeds(self, tmp_path: Path):
         """Updating content re-embeds the vector when vec is enabled."""
-        mem = Memory(
-            tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM
-        )
+        mem = Memory(tmp_path / "test.db", agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
         fact_id = mem.add_fact("Original vector content")
         assert mem.stats()["vec_facts"] == 1
 
