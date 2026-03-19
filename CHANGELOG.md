@@ -20,6 +20,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Memory APIs** — search (`GET /api/agents/{name}/memory/search`), add-fact (`POST .../facts`), stats (`GET .../stats`), and CLI commands (`smolclaw memory search/list/stats/add/delete`)
 - **Job enable/disable API** — `POST /api/cron/jobs/{id}/enable` and `.../disable` endpoints for managing job state at runtime via the API (previously CLI-only). Also adds `Scheduler.enable_job()` and `disable_job()` methods.
 - **Memory CRUD** — complete REST API for facts: `GET /api/agents/{name}/memory/facts/{id}` (retrieve), `PUT .../facts/{id}` (update content/category with FTS5 + vector re-sync). Also adds `Memory.get_fact()` and `Memory.update_fact()` methods.
+- **Agent export/import** — `smolclaw export <agent>` creates a portable `.tar.gz` archive with all agent files (config, soul, skills, prompts, context). `smolclaw import <archive>` restores it on any machine. Follows symlinks to include shared skills. Excludes sessions and `.env` secrets by default (`--include-env` to override). Supports `--rename` for importing under a different name.
+- **`--version` CLI flag** — `smolclaw --version` now works alongside the existing `smolclaw version` command (standard Click pattern).
 - **Codecov CI integration** — coverage reports uploaded on every push/PR
 - `[all]`, `[otel]`, `[otel-otlp]`, `[discord]`, `[slack]` optional dependency extras
 
@@ -40,7 +42,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Cron job execution timing** — both scheduled and manually triggered jobs now log their execution duration (e.g. "job 'heartbeat' completed in 42.3s")
 - Comprehensive documentation overhaul — all 10 docs files synced with current ~5300-line, 14-module codebase
 - CI now tests with `[all]` extras to cover sqlite-vec and watchfiles code paths
-- 872 tests, 97% coverage (up from 524 at v0.1.0)
+- 885 tests, 97% coverage (up from 524 at v0.1.0)
+- Publish workflow now gates on CI (lint + tests must pass before PyPI release)
 
 ## [0.1.0] — 2026-03-07
 
