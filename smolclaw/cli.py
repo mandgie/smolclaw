@@ -28,7 +28,14 @@ def get_base_dir(base: str | None = None) -> Path:
     return DEFAULT_BASE
 
 
+def _get_version() -> str:
+    from . import __version__
+
+    return __version__
+
+
 @click.group()
+@click.version_option(version=_get_version(), prog_name="smolclaw")
 @click.option("--home", envvar="SMOLCLAW_HOME", default=None, help="Base directory")
 @click.pass_context
 def cli(ctx, home):
@@ -1192,6 +1199,170 @@ def add_skill(ctx, agent_name, skill_name):
 
     agent_skill.symlink_to(shared_skill)
     click.echo(f"Linked {skill_name} → {agent_name}")
+
+
+@cli.command("export")
+@click.argument("name")
+@click.option("-o", "--output", default=None, help="Output file path (default: <name>.tar.gz)")
+@click.option("--include-env", is_flag=True, help="Include .env files (contains secrets!)")
+@click.pass_context
+def export_agent(ctx, name, output, include_env):
+    """Export an agent as a portable archive (.tar.gz).
+
+    Creates a self-contained archive of an agent's configuration, personality,
+    skills, prompts, and context files. Symlinked skills are resolved (actual
+    files are included). Sessions, __pycache__, and .env files (secrets) are
+    excluded by default.
+
+    Import on another machine with: smolclaw import <archive>
+    """
+    import tarfile
+
+    base = ctx.obj["base"]
+    agent_dir = base / "agents" / name
+
+    if not agent_dir.exists() or not (agent_dir / "agent.yaml").exists():
+        click.echo(f"Agent '{name}' not found at {agent_dir}")
+        sys.exit(1)
+
+    # Determine output path
+    if output is None:
+        output = f"{name}.tar.gz"
+    output_path = Path(output).resolve()
+
+    # Directories and patterns to exclude
+    exclude_dirs = {"sessions", "__pycache__"}
+    exclude_patterns = {".pyc"}
+    if not include_env:
+        exclude_patterns.add(".env")
+
+    def should_exclude(path: Path) -> bool:
+        """Check if a path should be excluded from the archive."""
+        for part in path.parts:
+            if part in exclude_dirs:
+                return True
+        return path.suffix in exclude_patterns
+
+    try:
+        with tarfile.open(str(output_path), "w:gz") as tar:
+            # Walk the agent directory, following symlinks so shared skills
+            # (which are typically symlinked from shared/) get included.
+            for root, _dirs, files in os.walk(agent_dir, followlinks=True):
+                root_path = Path(root)
+                for filename in sorted(files):
+                    file_path = root_path / filename
+                    relative = file_path.relative_to(agent_dir)
+                    if should_exclude(relative):
+                        continue
+                    arcname = f"{name}/{relative}"
+                    tar.add(str(file_path.resolve()), arcname=arcname)
+
+        size_kb = output_path.stat().st_size / 1024
+        click.echo(f"Exported agent '{name}' → {output_path} ({size_kb:.1f} KB)")
+
+        # Summary of what's included
+        file_count = 0
+        with tarfile.open(str(output_path), "r:gz") as tar:
+            file_count = len(tar.getnames())
+        click.echo(f"  {file_count} files")
+        if not include_env:
+            click.echo("  .env files excluded (use --include-env to include)")
+        click.echo(f"\n  Import: smolclaw import {output_path.name}")
+
+    except OSError as e:
+        click.echo(f"Export failed: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command("import")
+@click.argument("archive")
+@click.option("--rename", default=None, help="Import under a different agent name")
+@click.option("--force", is_flag=True, help="Overwrite if agent already exists")
+@click.pass_context
+def import_agent(ctx, archive, rename, force):
+    """Import an agent from a .tar.gz archive.
+
+    Extracts an exported agent into the agents directory. Use --rename to
+    import under a different name.
+    """
+    import tarfile
+
+    base = ctx.obj["base"]
+    archive_path = Path(archive).resolve()
+
+    if not archive_path.exists():
+        click.echo(f"Archive not found: {archive_path}")
+        sys.exit(1)
+
+    try:
+        with tarfile.open(str(archive_path), "r:gz") as tar:
+            # Determine agent name from archive structure
+            names = tar.getnames()
+            if not names:
+                click.echo("Archive is empty.")
+                sys.exit(1)
+
+            # Security: check for path traversal (e.g. ../../etc/passwd)
+            for member_name in names:
+                if member_name.startswith("/") or ".." in member_name:
+                    click.echo(f"Unsafe path in archive: {member_name}")
+                    sys.exit(1)
+
+            # Extract the top-level directory name (= agent name)
+            original_name = names[0].split("/")[0]
+            agent_name = rename or original_name
+
+            agent_dir = base / "agents" / agent_name
+
+            if agent_dir.exists() and not force:
+                click.echo(f"Agent '{agent_name}' already exists. Use --force to overwrite.")
+                sys.exit(1)
+
+            if agent_dir.exists() and force:
+                shutil.rmtree(agent_dir)
+
+            # Extract, remapping the top-level directory if renamed
+            agent_dir.mkdir(parents=True, exist_ok=True)
+            for member in tar.getmembers():
+                # Strip the original top-level directory, remap to agent_name
+                parts = member.name.split("/", 1)
+                if len(parts) < 2:
+                    continue  # Skip the top-level dir entry itself
+                relative = parts[1]
+                if not relative:
+                    continue
+
+                member_copy = tarfile.TarInfo(name=relative)
+                member_copy.size = member.size
+                member_copy.mode = member.mode
+
+                target = agent_dir / relative
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                elif member.isfile():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    fileobj = tar.extractfile(member)
+                    if fileobj:
+                        target.write_bytes(fileobj.read())
+
+            # Update agent name in agent.yaml if renamed
+            if rename and rename != original_name:
+                yaml_path = agent_dir / "agent.yaml"
+                if yaml_path.exists():
+                    content = yaml_path.read_text()
+                    content = content.replace(f"name: {original_name}", f"name: {rename}", 1)
+                    yaml_path.write_text(content)
+
+        click.echo(f"Imported agent '{agent_name}' from {archive_path.name}")
+        click.echo(f"  Location: {agent_dir}")
+        click.echo(f"  Edit: {agent_dir / 'soul.md'}")
+
+    except tarfile.TarError as e:
+        click.echo(f"Failed to read archive: {e}", err=True)
+        sys.exit(1)
+    except OSError as e:
+        click.echo(f"Import failed: {e}", err=True)
+        sys.exit(1)
 
 
 @cli.command()

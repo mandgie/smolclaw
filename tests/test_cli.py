@@ -2480,9 +2480,7 @@ class TestTryApiSendAuth:
 
     def test_send_includes_auth_header(self, tmp_base: Path):
         """API send includes Bearer token when api_key is set."""
-        (tmp_base / "config.yaml").write_text(
-            "host: 127.0.0.1\nport: 7890\napi_key: my-secret\n"
-        )
+        (tmp_base / "config.yaml").write_text("host: 127.0.0.1\nport: 7890\napi_key: my-secret\n")
         # Create a minimal agent so validation passes
         agent_dir = tmp_base / "agents" / "tars"
         agent_dir.mkdir(parents=True, exist_ok=True)
@@ -2701,3 +2699,272 @@ class TestMemorySearchTruncation:
         result = runner.invoke(cli, ["--home", str(base), "memory", "search", "tars", "searchterm"])
         assert result.exit_code == 0
         assert "..." in result.output
+
+
+# ---------------------------------------------------------------------------
+# Export / Import
+# ---------------------------------------------------------------------------
+
+
+class TestExport:
+    """Tests for the export command."""
+
+    def _create_agent(self, base: Path, name: str = "tars") -> Path:
+        """Create a minimal agent for export testing."""
+        agent_dir = base / "agents" / name
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        (agent_dir / "agent.yaml").write_text(f"name: {name}\nmodel: claude-sonnet-4-6\n")
+        (agent_dir / "soul.md").write_text(f"# {name}\nTest soul.\n")
+        (agent_dir / "agents.md").write_text(f"# {name} rules\n")
+        # Create subdirectories
+        (agent_dir / "skills" / "mskill").mkdir(parents=True, exist_ok=True)
+        (agent_dir / "skills" / "mskill" / "SKILL.md").write_text("---\nname: mskill\n---\n")
+        (agent_dir / "prompts").mkdir(exist_ok=True)
+        (agent_dir / "prompts" / "test.md").write_text("Test prompt\n")
+        (agent_dir / "context").mkdir(exist_ok=True)
+        (agent_dir / "context" / "COMPANY.md").write_text("# Company\n")
+        (agent_dir / "channels").mkdir(exist_ok=True)
+        (agent_dir / "channels" / "telegram.env").write_text("TOKEN=secret123\n")
+        (agent_dir / "sessions").mkdir(exist_ok=True)
+        (agent_dir / "sessions" / "cli.json").write_text('{"session_id": "abc"}\n')
+        return agent_dir
+
+    def test_export_basic(self, tmp_base: Path, tmp_path: Path):
+        """Export creates a .tar.gz with agent files."""
+        import tarfile
+
+        self._create_agent(tmp_base)
+        out = tmp_path / "tars.tar.gz"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "export", "tars", "-o", str(out)])
+
+        assert result.exit_code == 0
+        assert out.exists()
+        assert "Exported agent 'tars'" in result.output
+
+        # Verify contents
+        with tarfile.open(str(out), "r:gz") as tar:
+            names = tar.getnames()
+            assert "tars/agent.yaml" in names
+            assert "tars/soul.md" in names
+            assert "tars/skills/mskill/SKILL.md" in names
+            assert "tars/prompts/test.md" in names
+            assert "tars/context/COMPANY.md" in names
+
+    def test_export_excludes_sessions(self, tmp_base: Path, tmp_path: Path):
+        """Sessions directory is excluded from export."""
+        import tarfile
+
+        self._create_agent(tmp_base)
+        out = tmp_path / "tars.tar.gz"
+
+        runner = CliRunner()
+        runner.invoke(cli, ["--home", str(tmp_base), "export", "tars", "-o", str(out)])
+
+        with tarfile.open(str(out), "r:gz") as tar:
+            names = tar.getnames()
+            assert not any("sessions" in n for n in names)
+
+    def test_export_excludes_env_by_default(self, tmp_base: Path, tmp_path: Path):
+        """Env files (secrets) are excluded by default."""
+        import tarfile
+
+        self._create_agent(tmp_base)
+        out = tmp_path / "tars.tar.gz"
+
+        runner = CliRunner()
+        runner.invoke(cli, ["--home", str(tmp_base), "export", "tars", "-o", str(out)])
+
+        with tarfile.open(str(out), "r:gz") as tar:
+            names = tar.getnames()
+            assert not any(".env" in n for n in names)
+
+    def test_export_includes_env_with_flag(self, tmp_base: Path, tmp_path: Path):
+        """--include-env flag includes .env files."""
+        import tarfile
+
+        self._create_agent(tmp_base)
+        out = tmp_path / "tars.tar.gz"
+
+        runner = CliRunner()
+        runner.invoke(
+            cli, ["--home", str(tmp_base), "export", "tars", "--include-env", "-o", str(out)]
+        )
+
+        with tarfile.open(str(out), "r:gz") as tar:
+            names = tar.getnames()
+            assert any(".env" in n for n in names)
+
+    def test_export_nonexistent_agent(self, tmp_base: Path):
+        """Export of missing agent shows error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "export", "ghost"])
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+    def test_export_default_output_name(self, tmp_base: Path):
+        """Default output is <name>.tar.gz in cwd."""
+        self._create_agent(tmp_base)
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["--home", str(tmp_base), "export", "tars"])
+            assert result.exit_code == 0
+            assert Path("tars.tar.gz").exists()
+
+    def test_export_resolves_symlinks(self, tmp_base: Path, tmp_path: Path):
+        """Symlinked skills are resolved (actual files included)."""
+        import tarfile
+
+        self._create_agent(tmp_base)
+
+        # Create a shared skill and symlink it
+        shared_skill = tmp_base / "shared" / "skills" / "remote-skill"
+        shared_skill.mkdir(parents=True, exist_ok=True)
+        (shared_skill / "SKILL.md").write_text("---\nname: remote-skill\n---\nRemote!\n")
+
+        agent_skill = tmp_base / "agents" / "tars" / "skills" / "remote-skill"
+        agent_skill.symlink_to(shared_skill)
+
+        out = tmp_path / "tars.tar.gz"
+        runner = CliRunner()
+        runner.invoke(cli, ["--home", str(tmp_base), "export", "tars", "-o", str(out)])
+
+        with tarfile.open(str(out), "r:gz") as tar:
+            names = tar.getnames()
+            assert "tars/skills/remote-skill/SKILL.md" in names
+            # Read the actual content (should be resolved, not a broken link)
+            member = tar.getmember("tars/skills/remote-skill/SKILL.md")
+            content = tar.extractfile(member).read().decode()
+            assert "Remote!" in content
+
+
+class TestImport:
+    """Tests for the import command."""
+
+    def _make_archive(self, tmp_path: Path, name: str = "tars") -> Path:
+        """Create a test .tar.gz archive for import testing."""
+        import tarfile
+
+        archive = tmp_path / f"{name}.tar.gz"
+        with tarfile.open(str(archive), "w:gz") as tar:
+            # agent.yaml
+            content = f"name: {name}\nmodel: claude-sonnet-4-6\n".encode()
+            info = tarfile.TarInfo(name=f"{name}/agent.yaml")
+            info.size = len(content)
+            tar.addfile(info, fileobj=__import__("io").BytesIO(content))
+
+            # soul.md
+            soul = f"# {name}\nImported agent.\n".encode()
+            info = tarfile.TarInfo(name=f"{name}/soul.md")
+            info.size = len(soul)
+            tar.addfile(info, fileobj=__import__("io").BytesIO(soul))
+
+            # skills/mskill/SKILL.md
+            skill = b"---\nname: mskill\n---\nA skill.\n"
+            info = tarfile.TarInfo(name=f"{name}/skills/mskill/SKILL.md")
+            info.size = len(skill)
+            tar.addfile(info, fileobj=__import__("io").BytesIO(skill))
+
+        return archive
+
+    def test_import_basic(self, tmp_base: Path, tmp_path: Path):
+        """Import creates agent directory from archive."""
+        archive = self._make_archive(tmp_path, "tars")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "import", str(archive)])
+
+        assert result.exit_code == 0
+        assert "Imported agent 'tars'" in result.output
+
+        agent_dir = tmp_base / "agents" / "tars"
+        assert (agent_dir / "agent.yaml").exists()
+        assert (agent_dir / "soul.md").exists()
+        assert (agent_dir / "skills" / "mskill" / "SKILL.md").exists()
+
+    def test_import_with_rename(self, tmp_base: Path, tmp_path: Path):
+        """Import with --rename creates agent under new name."""
+        archive = self._make_archive(tmp_path, "tars")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--home", str(tmp_base), "import", str(archive), "--rename", "jarvis"]
+        )
+
+        assert result.exit_code == 0
+        assert "Imported agent 'jarvis'" in result.output
+
+        agent_dir = tmp_base / "agents" / "jarvis"
+        assert (agent_dir / "agent.yaml").exists()
+        # Verify name was updated in agent.yaml
+        content = (agent_dir / "agent.yaml").read_text()
+        assert "name: jarvis" in content
+
+    def test_import_existing_agent_without_force(self, tmp_base: Path, tmp_path: Path):
+        """Import refuses to overwrite existing agent without --force."""
+        archive = self._make_archive(tmp_path, "tars")
+
+        # Create existing agent
+        agent_dir = tmp_base / "agents" / "tars"
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        (agent_dir / "agent.yaml").write_text("name: tars\n")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "import", str(archive)])
+        assert result.exit_code == 1
+        assert "already exists" in result.output
+
+    def test_import_existing_with_force(self, tmp_base: Path, tmp_path: Path):
+        """Import with --force overwrites existing agent."""
+        archive = self._make_archive(tmp_path, "tars")
+
+        # Create existing agent
+        agent_dir = tmp_base / "agents" / "tars"
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        (agent_dir / "agent.yaml").write_text("name: tars\n")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "import", str(archive), "--force"])
+        assert result.exit_code == 0
+        assert "Imported agent 'tars'" in result.output
+
+    def test_import_missing_archive(self, tmp_base: Path):
+        """Import with nonexistent file shows error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "import", "/tmp/nonexistent.tar.gz"])
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+    def test_roundtrip_export_import(self, tmp_base: Path, tmp_path: Path):
+        """Export then import produces identical agent."""
+        # Create agent
+        agent_dir = tmp_base / "agents" / "tars"
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        (agent_dir / "agent.yaml").write_text("name: tars\nmodel: claude-opus-4-6\n")
+        (agent_dir / "soul.md").write_text("# TARS\nHumor: 60%\n")
+        (agent_dir / "prompts").mkdir(exist_ok=True)
+        (agent_dir / "prompts" / "brief.md").write_text("Morning briefing.\n")
+
+        archive = tmp_path / "tars.tar.gz"
+        runner = CliRunner()
+
+        # Export
+        result = runner.invoke(cli, ["--home", str(tmp_base), "export", "tars", "-o", str(archive)])
+        assert result.exit_code == 0
+
+        # Remove original
+        import shutil as _shutil
+
+        _shutil.rmtree(agent_dir)
+        assert not agent_dir.exists()
+
+        # Import
+        result = runner.invoke(cli, ["--home", str(tmp_base), "import", str(archive)])
+        assert result.exit_code == 0
+
+        # Verify roundtrip
+        assert (agent_dir / "agent.yaml").read_text() == "name: tars\nmodel: claude-opus-4-6\n"
+        assert (agent_dir / "soul.md").read_text() == "# TARS\nHumor: 60%\n"
+        assert (agent_dir / "prompts" / "brief.md").read_text() == "Morning briefing.\n"

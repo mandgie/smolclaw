@@ -155,6 +155,8 @@ smolclaw memory list <agent>         # List stored facts
 smolclaw memory search <agent> "q"   # Search memory
 smolclaw memory add <agent> "fact"   # Add a fact
 smolclaw memory delete <agent> <id>  # Delete a fact
+smolclaw export <agent>              # Export agent as portable .tar.gz
+smolclaw import <archive>            # Import agent from .tar.gz archive
 smolclaw add-skill <agent> <skill>   # Symlink shared skill to agent
 smolclaw install                     # Auto-start on login (macOS LaunchAgent)
 smolclaw version                     # Show version
