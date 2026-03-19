@@ -37,7 +37,14 @@ Run multiple AI agents — each with its own personality, skills, and channels �
 ## Quick Start
 
 ```bash
+# With uv (recommended)
+uv pip install smolclaw
+
+# Or with pip
 pip install smolclaw
+```
+
+```bash
 smolclaw init --agent tars
 # Edit ~/.smolclaw/agents/tars/soul.md — give your agent a personality
 smolclaw up
@@ -104,7 +111,7 @@ You are TARS, a personal virtual assistant. Inspired by Interstellar.
 | **Scheduler** | Built-in cron | No built-in | No built-in | No built-in |
 | **Dashboard** | Built-in | Studio (paid) | LangSmith (paid) | No built-in |
 | **Memory** | Built-in SQLite | External | External | External |
-| **Code size** | ~5300 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
+| **Code size** | ~6000 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
 | **Focus** | Personal assistant | Enterprise teams | Workflows | General agents |
 
 **smolclaw is opinionated:** one process, filesystem-as-config, batteries-included. If you want a personal AI assistant that just works — start here.
@@ -263,14 +270,17 @@ channels:
 ```bash
 git clone https://github.com/mandgie/smolclaw.git
 cd smolclaw
+
+# With uv (recommended — fast, handles venv automatically)
+uv sync --extra dev
+uv run pytest
+uv run ruff check smolclaw/
+
+# Or with pip
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-
-# Run tests
 pytest
-
-# Lint
 ruff check smolclaw/
 ruff format --check smolclaw/
 ```
@@ -278,7 +288,7 @@ ruff format --check smolclaw/
 ## Project Structure
 
 ```
-smolclaw/              # Python package (~5300 lines)
+smolclaw/              # Python package (~6000 lines)
 ├── gateway.py         # Single-process orchestrator
 ├── agent.py           # Agent class (loads identity, wraps Claude SDK)
 ├── router.py          # Message routing

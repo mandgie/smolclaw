@@ -8,6 +8,10 @@
 ## Installation
 
 ```bash
+# With uv (recommended)
+uv pip install smolclaw
+
+# Or with pip
 pip install smolclaw
 ```
 
@@ -16,6 +20,11 @@ For development:
 ```bash
 git clone https://github.com/mandgie/smolclaw.git
 cd smolclaw
+
+# With uv (recommended — fast, manages venv automatically)
+uv sync --extra dev
+
+# Or with pip
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"

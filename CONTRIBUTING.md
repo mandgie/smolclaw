@@ -7,6 +7,11 @@ Thanks for your interest in contributing! smolclaw is a small project and every 
 ```bash
 git clone https://github.com/mandgie/smolclaw.git
 cd smolclaw
+
+# With uv (recommended — fast, manages venv automatically)
+uv sync --extra dev
+
+# Or with pip
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
