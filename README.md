@@ -154,6 +154,9 @@ smolclaw memory stats <agent>        # Memory statistics
 smolclaw memory list <agent>         # List stored facts
 smolclaw memory search <agent> "q"   # Search memory
 smolclaw memory add <agent> "fact"   # Add a fact
+smolclaw memory get <agent> <id>     # Show a single fact
+smolclaw memory update <agent> <id> \
+  --content "new text" -c category   # Update a fact
 smolclaw memory delete <agent> <id>  # Delete a fact
 smolclaw export <agent>              # Export agent as portable .tar.gz
 smolclaw import <archive>            # Import agent from .tar.gz archive
@@ -307,8 +310,8 @@ smolclaw/              # Python package (~5300 lines)
 - [x] Cross-agent awareness (peer agents visible in prompts, API-based messaging)
 - [ ] Multiple Telegram bots (one per agent)
 - [x] Webhook channel (outgoing HTTP POST delivery)
-- [ ] Discord / Slack channel adapters (branches ready, pending review)
-- [ ] PyPI publish
+- [ ] Discord / Slack channel adapters
+- [x] PyPI publish (v0.1.0 on PyPI)
 
 ## Contributing
 

@@ -123,12 +123,12 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
 - [x] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
 - [x] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
-- [x] Tests (885 tests, 97% coverage, pytest with mocked Claude SDK)
+- [x] Tests (893 tests, 97% coverage, pytest with mocked Claude SDK)
 - [x] OpenTelemetry tracing (optional, zero overhead when disabled)
 - [x] Message hooks (pre/post-route middleware)
 - [x] Webhook channel adapter (HTTP POST delivery)
 - [x] Extensible channel plugin system (entry-point discovery)
-- [ ] PyPI publish
+- [x] PyPI publish (v0.1.0 on PyPI)
 
 ## Development
 

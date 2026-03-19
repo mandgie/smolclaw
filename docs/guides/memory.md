@@ -153,6 +153,12 @@ smolclaw memory search tars "user preferences"
 # Add a fact
 smolclaw memory add tars "User prefers dark mode"
 
+# View a single fact
+smolclaw memory get tars 42
+
+# Update a fact
+smolclaw memory update tars 42 --content "User prefers light mode" -c preference
+
 # Delete a fact
 smolclaw memory delete tars 42
 ```

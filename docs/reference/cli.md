@@ -324,6 +324,26 @@ smolclaw memory add <agent> <fact>
 
 ---
 
+### `memory get`
+
+Show a single fact by ID.
+
+```bash
+smolclaw memory get <agent> <fact_id>
+```
+
+---
+
+### `memory update`
+
+Update a fact's content and/or category.
+
+```bash
+smolclaw memory update <agent> <fact_id> --content "new text" -c category
+```
+
+---
+
 ### `memory delete`
 
 Delete a specific fact.

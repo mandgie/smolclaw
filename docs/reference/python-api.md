@@ -49,6 +49,8 @@ from smolclaw import TracingConfig, configure_tracing, span, TRACING_AVAILABLE
         - vector_search_facts
         - hybrid_search_facts
         - list_facts
+        - get_fact
+        - update_fact
         - delete_fact
         - add_chunk
         - search_chunks
