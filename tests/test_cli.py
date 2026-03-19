@@ -995,6 +995,71 @@ class TestDoctorCommand:
         assert result.exit_code == 0
         assert "missing soul.md" in result.output
 
+    def test_doctor_claude_auth_check(self, tmp_base: Path, agent_dir: Path):
+        """doctor should check Claude CLI auth when CLI is found."""
+        runner = CliRunner()
+        with patch("shutil.which", return_value="/usr/local/bin/claude"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(
+                    stdout='{"loggedIn": true}', stderr=""
+                )
+                result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "Claude CLI authenticated" in result.output
+
+    def test_doctor_claude_auth_not_logged_in(self, tmp_base: Path, agent_dir: Path):
+        """doctor flags when Claude CLI is not authenticated."""
+        runner = CliRunner()
+        with patch("shutil.which", return_value="/usr/local/bin/claude"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(
+                    stdout='{"loggedIn": false}', stderr=""
+                )
+                result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "not authenticated" in result.output
+
+    def test_doctor_optional_extras(self, tmp_base: Path, agent_dir: Path):
+        """doctor should list optional dependencies with their purpose."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        # Should mention at least some optional deps
+        assert "optional" in result.output.lower()
+
+    def test_doctor_cron_jobs(self, tmp_base: Path, agent_dir: Path):
+        """doctor should check cron jobs when jobs.json exists."""
+        import json
+
+        cron_dir = tmp_base / "shared" / "cron"
+        cron_dir.mkdir(parents=True, exist_ok=True)
+        jobs = [
+            {"id": "test-job", "agent": "testagent", "enabled": True, "failures": 0},
+            {"id": "disabled-job", "agent": "testagent", "enabled": False, "failures": 0},
+        ]
+        (cron_dir / "jobs.json").write_text(json.dumps(jobs))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "2 jobs (1 enabled)" in result.output
+
+    def test_doctor_cron_jobs_with_failures(self, tmp_base: Path, agent_dir: Path):
+        """doctor should flag cron jobs with failures."""
+        import json
+
+        cron_dir = tmp_base / "shared" / "cron"
+        cron_dir.mkdir(parents=True, exist_ok=True)
+        jobs = [
+            {"id": "failing-job", "agent": "testagent", "enabled": True, "failures": 3},
+        ]
+        (cron_dir / "jobs.json").write_text(json.dumps(jobs))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "with failures" in result.output
+
     def test_doctor_old_python(self, tmp_base: Path, agent_dir: Path):
         """doctor flags Python < 3.11."""
         runner = CliRunner()
@@ -1044,7 +1109,7 @@ class TestDoctorCommand:
         assert "Memory DB error" in result.output
 
     def test_doctor_port_in_use(self, tmp_base: Path, agent_dir: Path):
-        """doctor flags when the configured port is already in use."""
+        """doctor reports when the configured port is in use (gateway running)."""
         import socket
 
         # Bind and listen on a socket to simulate a service occupying a port
@@ -1063,7 +1128,7 @@ class TestDoctorCommand:
             runner = CliRunner()
             result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
             assert result.exit_code == 0
-            assert f"Port {port} already in use" in result.output
+            assert f"Port {port} in use (gateway running)" in result.output
         finally:
             sock.close()
 

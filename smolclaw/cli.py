@@ -1506,11 +1506,31 @@ def doctor(ctx):
         click.echo(f"  [!!] Python {py_ver} — requires 3.11+")
         issues.append("Python 3.11+ required")
 
-    # 2. Claude CLI
+    # 2. Claude CLI + auth
     claude_path = shutil.which("claude")
     if claude_path:
         click.echo(f"  [ok] Claude CLI found: {claude_path}")
         ok_count += 1
+
+        # Check Claude auth status
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                [claude_path, "auth", "status"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            output = result.stdout + result.stderr
+            if "loggedIn" in output and "true" in output.lower():
+                click.echo("  [ok] Claude CLI authenticated")
+                ok_count += 1
+            else:
+                click.echo("  [!!] Claude CLI not authenticated")
+                issues.append("Run 'claude auth login' to authenticate")
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            click.echo("  [--] Could not check Claude auth status")
     else:
         click.echo("  [!!] Claude CLI not found in PATH")
         issues.append("Install Claude CLI: npm install -g @anthropic-ai/claude-code")
@@ -1532,13 +1552,20 @@ def doctor(ctx):
             issues.append(f"pip install {pkg_name}")
 
     # 4. Optional dependencies
-    for pkg_name, import_name in [("fastapi", "fastapi"), ("uvicorn", "uvicorn")]:
+    optional_deps = [
+        ("fastapi", "fastapi", "API server"),
+        ("uvicorn", "uvicorn", "API server"),
+        ("discord.py", "discord", "Discord channel — pip install smolclaw[discord]"),
+        ("watchfiles", "watchfiles", "hot-reload"),
+        ("sqlite-vec", "sqlite_vec", "vector search — pip install smolclaw[all]"),
+    ]
+    for pkg_name, import_name, purpose in optional_deps:
         try:
             __import__(import_name)
-            click.echo(f"  [ok] {pkg_name} (optional)")
+            click.echo(f"  [ok] {pkg_name} (optional — {purpose})")
             ok_count += 1
         except ImportError:
-            click.echo(f"  [--] {pkg_name} not installed (optional — needed for API server)")
+            click.echo(f"  [--] {pkg_name} not installed (optional — {purpose})")
 
     # 5. Home directory
     if base.exists():
@@ -1586,7 +1613,31 @@ def doctor(ctx):
     else:
         click.echo("  [--] Memory DB not created yet (created on first gateway start)")
 
-    # 8. Port availability
+    # 8. Cron jobs
+    jobs_path = base / "shared" / "cron" / "jobs.json"
+    if jobs_path.exists():
+        try:
+            import json
+
+            jobs_data = json.loads(jobs_path.read_text())
+            total = len(jobs_data)
+            enabled = sum(1 for j in jobs_data if j.get("enabled", True))
+            failing = sum(1 for j in jobs_data if j.get("failures", 0) > 0)
+            status_parts = [f"{total} jobs ({enabled} enabled)"]
+            if failing:
+                status_parts.append(f"{failing} with failures")
+                click.echo(f"  [!!] Cron: {', '.join(status_parts)}")
+                issues.append(f"{failing} cron job(s) have recorded failures")
+            else:
+                click.echo(f"  [ok] Cron: {', '.join(status_parts)}")
+                ok_count += 1
+        except (json.JSONDecodeError, OSError) as e:
+            click.echo(f"  [!!] Cron jobs.json error: {e}")
+            issues.append(f"Cron config issue: {e}")
+    else:
+        click.echo("  [--] No cron jobs configured")
+
+    # 9. Port availability
     from .config import load_gateway_config
 
     if base.exists():
@@ -1599,10 +1650,8 @@ def doctor(ctx):
             result = sock.connect_ex((config.host, config.port))
             sock.close()
             if result == 0:
-                click.echo(f"  [!!] Port {config.port} already in use")
-                issues.append(
-                    f"Port {config.port} in use — change in config.yaml or stop the process"
-                )
+                click.echo(f"  [ok] Port {config.port} in use (gateway running)")
+                ok_count += 1
             else:
                 click.echo(f"  [ok] Port {config.port} available")
                 ok_count += 1
