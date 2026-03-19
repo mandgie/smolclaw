@@ -2232,6 +2232,105 @@ class TestMemoryCli:
         assert result.exit_code != 0
         assert "not found" in result.output
 
+    def test_memory_get(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "get", "tars", "1"])
+        assert result.exit_code == 0
+        assert "ID:" in result.output
+        assert "Category:" in result.output
+        assert "Content:" in result.output
+
+    def test_memory_get_not_found(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "get", "tars", "999"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+    def test_memory_update_content(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(base), "memory", "update", "tars", "1", "--content", "Updated fact"],
+        )
+        assert result.exit_code == 0
+        assert "Updated fact #1" in result.output
+        assert "content" in result.output
+
+    def test_memory_update_category(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(base), "memory", "update", "tars", "1", "-c", "work"],
+        )
+        assert result.exit_code == 0
+        assert "Updated fact #1" in result.output
+        assert "work" in result.output
+
+    def test_memory_update_both(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--home",
+                str(base),
+                "memory",
+                "update",
+                "tars",
+                "1",
+                "--content",
+                "New content",
+                "-c",
+                "decision",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "content" in result.output
+        assert "decision" in result.output
+
+    def test_memory_update_nothing(self, tmp_path: Path):
+        """Update with no --content or --category should fail."""
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(base), "memory", "update", "tars", "1"])
+        assert result.exit_code != 0
+        assert "Nothing to update" in result.output
+
+    def test_memory_update_not_found(self, tmp_path: Path):
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(base), "memory", "update", "tars", "999", "--content", "x"],
+        )
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+    def test_memory_get_then_update_roundtrip(self, tmp_path: Path):
+        """Get a fact, update it, get it again to verify the change."""
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+
+        # Get original
+        result = runner.invoke(cli, ["--home", str(base), "memory", "get", "tars", "1"])
+        assert result.exit_code == 0
+
+        # Update content
+        result = runner.invoke(
+            cli,
+            ["--home", str(base), "memory", "update", "tars", "1", "--content", "I love tea now"],
+        )
+        assert result.exit_code == 0
+
+        # Get updated
+        result = runner.invoke(cli, ["--home", str(base), "memory", "get", "tars", "1"])
+        assert result.exit_code == 0
+        assert "tea" in result.output
+
     def test_memory_list_long_content_truncated(self, tmp_path: Path):
         """Long fact content gets truncated in list output."""
         from smolclaw.memory import Memory

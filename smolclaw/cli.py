@@ -1163,6 +1163,53 @@ def memory_add(ctx, agent_name, content, category):
     click.echo(f"Added fact #{fact_id} to '{agent_name}' [{category}]")
 
 
+@memory.command("get")
+@click.argument("agent_name")
+@click.argument("fact_id", type=int)
+@click.pass_context
+def memory_get(ctx, agent_name, fact_id):
+    """Show a single fact by ID."""
+    base = ctx.obj["base"]
+    mem = _open_memory(base, agent_name)
+    fact = mem.get_fact(fact_id)
+    if not fact:
+        click.echo(f"Fact #{fact_id} not found (or belongs to another agent).")
+        sys.exit(1)
+
+    click.echo(f"\n  ID:        {fact['id']}")
+    click.echo(f"  Agent:     {fact.get('agent', agent_name)}")
+    click.echo(f"  Category:  {fact.get('category', 'general')}")
+    click.echo(f"  Created:   {fact.get('created_at', 'unknown')}")
+    click.echo(f"  Content:   {fact['content']}\n")
+
+
+@memory.command("update")
+@click.argument("agent_name")
+@click.argument("fact_id", type=int)
+@click.option("--content", default=None, help="New content for the fact")
+@click.option("-c", "--category", default=None, help="New category")
+@click.pass_context
+def memory_update(ctx, agent_name, fact_id, content, category):
+    """Update a fact's content and/or category."""
+    if content is None and category is None:
+        click.echo("Nothing to update — provide --content and/or --category.")
+        sys.exit(1)
+
+    base = ctx.obj["base"]
+    mem = _open_memory(base, agent_name)
+
+    if mem.update_fact(fact_id, content=content, category=category):
+        parts = []
+        if content is not None:
+            parts.append("content")
+        if category is not None:
+            parts.append(f"category → {category}")
+        click.echo(f"Updated fact #{fact_id}: {', '.join(parts)}")
+    else:
+        click.echo(f"Fact #{fact_id} not found (or belongs to another agent).")
+        sys.exit(1)
+
+
 @memory.command("delete")
 @click.argument("agent_name")
 @click.argument("fact_id", type=int)
