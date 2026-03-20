@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-03-20
+
 ### Added
 - **Dashboard WebSocket live updates** — Dashboard now connects via WebSocket (`/ws`) for instant updates instead of 10-second polling. Job completions, agent config changes, and API mutations broadcast events to all connected clients. Automatic reconnection with polling fallback when WebSocket is unavailable. Status indicator shows "● live" or "○ polling". New `WebSocketManager` class, health endpoint includes `ws_connections` count.
 - **Cron job editing** — `smolclaw cron edit <job_id>` to modify schedule, prompt, delivery, session mode, or enabled state of existing jobs without remove+re-add. Also adds `Scheduler.edit_job()` method and `PUT /api/cron/jobs/{id}` REST endpoint. Validates new cron expressions before applying, recomputes `next_run` when schedule changes or job is re-enabled.
@@ -42,9 +44,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `ChannelConfig.authorized_users` broadened to `list[int | str]` for multi-platform support (Slack/Discord string user IDs)
 - `ChannelConfig.app_token_env` field added for dual-token auth patterns (Slack Socket Mode)
 - **Cron job execution timing** — both scheduled and manually triggered jobs now log their execution duration (e.g. "job 'heartbeat' completed in 42.3s")
-- Comprehensive documentation overhaul — all 10 docs files synced with current ~5300-line, 14-module codebase
+- Comprehensive documentation overhaul — all 10 docs files synced with current ~6300-line, 14-module codebase
 - CI now tests with `[all]` extras to cover sqlite-vec and watchfiles code paths
-- 925 tests, 97% coverage (up from 524 at v0.1.0)
+- 949 tests, 97% coverage (up from 524 at v0.1.0)
 - Publish workflow now gates on CI (lint + tests must pass before PyPI release)
 
 ## [0.1.0] — 2026-03-07

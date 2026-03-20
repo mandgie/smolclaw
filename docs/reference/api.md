@@ -379,7 +379,7 @@ GET /api/health
 ```json
 {
   "status": "ok",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "agents": 2,
   "channels": 1,
   "jobs": 3,

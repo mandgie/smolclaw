@@ -103,7 +103,7 @@ class TestVersion:
         runner = CliRunner()
         result = runner.invoke(cli, ["version"])
         assert result.exit_code == 0
-        assert "smolclaw 0.1.0" in result.output
+        assert "smolclaw 0.2.0" in result.output
 
 
 class TestGetBaseDir:
@@ -545,8 +545,15 @@ class TestCronEdit:
         result = runner.invoke(
             cli,
             [
-                "--home", str(tmp_path), "cron", "edit", "my-job",
-                "--delivery", "webhook", "--chat-id", "456",
+                "--home",
+                str(tmp_path),
+                "cron",
+                "edit",
+                "my-job",
+                "--delivery",
+                "webhook",
+                "--chat-id",
+                "456",
             ],
         )
         assert result.exit_code == 0
@@ -603,10 +610,17 @@ class TestCronEdit:
         result = runner.invoke(
             cli,
             [
-                "--home", str(tmp_path), "cron", "edit", "my-job",
-                "--schedule", "*/5 * * * *",
-                "--prompt", "Frequent check",
-                "--session-mode", "shared",
+                "--home",
+                str(tmp_path),
+                "cron",
+                "edit",
+                "my-job",
+                "--schedule",
+                "*/5 * * * *",
+                "--prompt",
+                "Frequent check",
+                "--session-mode",
+                "shared",
             ],
         )
         assert result.exit_code == 0
@@ -1145,9 +1159,7 @@ class TestDoctorCommand:
         runner = CliRunner()
         with patch("shutil.which", return_value="/usr/local/bin/claude"):
             with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(
-                    stdout='{"loggedIn": true}', stderr=""
-                )
+                mock_run.return_value = MagicMock(stdout='{"loggedIn": true}', stderr="")
                 result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
         assert result.exit_code == 0
         assert "Claude CLI authenticated" in result.output
@@ -1157,9 +1169,7 @@ class TestDoctorCommand:
         runner = CliRunner()
         with patch("shutil.which", return_value="/usr/local/bin/claude"):
             with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(
-                    stdout='{"loggedIn": false}', stderr=""
-                )
+                mock_run.return_value = MagicMock(stdout='{"loggedIn": false}', stderr="")
                 result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
         assert result.exit_code == 0
         assert "not authenticated" in result.output
