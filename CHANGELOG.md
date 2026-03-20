@@ -6,6 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Cron job editing** — `smolclaw cron edit <job_id>` to modify schedule, prompt, delivery, session mode, or enabled state of existing jobs without remove+re-add. Also adds `Scheduler.edit_job()` method and `PUT /api/cron/jobs/{id}` REST endpoint. Validates new cron expressions before applying, recomputes `next_run` when schedule changes or job is re-enabled.
 - **Extensible channel plugin system** — `register_channel()` for programmatic registration, entry-point discovery via `smolclaw.channels` for third-party packages. Resolution order: built-in → custom → entry points. `list_channel_types()` for enumeration.
 - **Webhook channel** — Outgoing HTTP POST channel for delivering messages to Slack webhooks, Discord, or custom APIs. Zero dependencies.
 - **Message hooks** — Pre-route and post-route hook system at the router level. Hooks can modify messages, transform responses, short-circuit routing, redirect to different agents, or run side effects like logging. HookRegistry with named hooks, error isolation, and GET /api/hooks endpoint.
@@ -42,7 +43,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Cron job execution timing** — both scheduled and manually triggered jobs now log their execution duration (e.g. "job 'heartbeat' completed in 42.3s")
 - Comprehensive documentation overhaul — all 10 docs files synced with current ~5300-line, 14-module codebase
 - CI now tests with `[all]` extras to cover sqlite-vec and watchfiles code paths
-- 893 tests, 97% coverage (up from 524 at v0.1.0)
+- 925 tests, 97% coverage (up from 524 at v0.1.0)
 - Publish workflow now gates on CI (lint + tests must pass before PyPI release)
 
 ## [0.1.0] — 2026-03-07

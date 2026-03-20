@@ -111,7 +111,7 @@ You are TARS, a personal virtual assistant. Inspired by Interstellar.
 | **Scheduler** | Built-in cron | No built-in | No built-in | No built-in |
 | **Dashboard** | Built-in | Studio (paid) | LangSmith (paid) | No built-in |
 | **Memory** | Built-in SQLite | External | External | External |
-| **Code size** | ~6000 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
+| **Code size** | ~6200 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
 | **Focus** | Personal assistant | Enterprise teams | Workflows | General agents |
 
 **smolclaw is opinionated:** one process, filesystem-as-config, batteries-included. If you want a personal AI assistant that just works — start here.
@@ -154,6 +154,9 @@ smolclaw cron add \
   --prompt "morning briefing" \
   --delivery telegram \
   --chat-id 123456789               # Add a cron job with delivery
+smolclaw cron edit <job_id> \
+  --schedule "0 9 * * 1-5" \
+  --prompt "updated prompt"          # Edit an existing job
 smolclaw cron run <job_id>           # Manually trigger a job (for debugging)
 smolclaw cron enable <job_id>        # Enable a disabled job
 smolclaw cron disable <job_id>       # Disable a job without removing
@@ -288,7 +291,7 @@ ruff format --check smolclaw/
 ## Project Structure
 
 ```
-smolclaw/              # Python package (~6000 lines)
+smolclaw/              # Python package (~6200 lines)
 ├── gateway.py         # Single-process orchestrator
 ├── agent.py           # Agent class (loads identity, wraps Claude SDK)
 ├── router.py          # Message routing
@@ -318,7 +321,7 @@ smolclaw/              # Python package (~6000 lines)
 - [x] Vector search in memory (sqlite-vec + FTS5 + RRF hybrid)
 - [x] Hot-reload on config/skill/context changes
 - [x] Cross-agent awareness (peer agents visible in prompts, API-based messaging)
-- [ ] Multiple Telegram bots (one per agent)
+- [x] Multiple Telegram bots (one per agent, unique token per bot)
 - [x] Webhook channel (outgoing HTTP POST delivery)
 - [ ] Discord / Slack channel adapters
 - [x] PyPI publish (v0.1.0 on PyPI)

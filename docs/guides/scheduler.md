@@ -64,6 +64,32 @@ smolclaw cron list
 
 Shows a table with job ID, agent, schedule, status, and next run time.
 
+## Editing Jobs
+
+Modify an existing job's schedule, prompt, delivery, or session mode:
+
+```bash
+# Change schedule
+smolclaw cron edit morning-briefing --schedule "30 9 * * 1-5"
+
+# Change prompt text
+smolclaw cron edit morning-briefing --prompt "Updated morning briefing"
+
+# Change delivery config
+smolclaw cron edit morning-briefing --delivery webhook --chat-id "https://..."
+
+# Multiple fields at once
+smolclaw cron edit morning-briefing --schedule "0 7 * * *" --session-mode shared
+```
+
+Also available via the REST API:
+
+```bash
+curl -X PUT localhost:7890/api/cron/jobs/morning-briefing \
+  -H "Content-Type: application/json" \
+  -d '{"schedule": "30 9 * * 1-5", "prompt": "Updated prompt"}'
+```
+
 ## Removing Jobs
 
 ```bash

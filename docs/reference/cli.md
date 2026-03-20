@@ -242,6 +242,24 @@ smolclaw cron add --agent NAME --schedule EXPR --prompt TEXT [OPTIONS]
 
 ---
 
+### `cron edit`
+
+Edit an existing scheduled job's fields without remove+re-add.
+
+```bash
+smolclaw cron edit <job_id> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--schedule` | New cron expression |
+| `--prompt` | New prompt text or prompt file path |
+| `--delivery` | New delivery channel type (e.g. `telegram`) |
+| `--chat-id` | New delivery chat ID |
+| `--session-mode` | `isolated` or `shared` |
+
+---
+
 ### `cron run`
 
 Manually trigger a scheduled job (for testing/debugging).

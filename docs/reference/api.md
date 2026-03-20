@@ -286,6 +286,31 @@ POST /api/cron/jobs
 }
 ```
 
+### Edit Job
+
+```
+PUT /api/cron/jobs/{job_id}
+```
+
+**Body** (all fields optional):
+```json
+{
+  "schedule": "30 9 * * 1-5",
+  "prompt": "Updated prompt text",
+  "delivery": "telegram",
+  "delivery_chat_id": "123456789",
+  "session_mode": "shared",
+  "enabled": true
+}
+```
+
+**Response:**
+```json
+{
+  "job": { ... }
+}
+```
+
 ### Remove Job
 
 ```
