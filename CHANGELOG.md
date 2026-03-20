@@ -46,7 +46,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Cron job execution timing** — both scheduled and manually triggered jobs now log their execution duration (e.g. "job 'heartbeat' completed in 42.3s")
 - Comprehensive documentation overhaul — all 10 docs files synced with current ~6300-line, 14-module codebase
 - CI now tests with `[all]` extras to cover sqlite-vec and watchfiles code paths
-- 949 tests, 97% coverage (up from 524 at v0.1.0)
+- 963 tests, 98% coverage (up from 524 at v0.1.0). agent.py and scheduler.py at 100%.
 - Publish workflow now gates on CI (lint + tests must pass before PyPI release)
 
 ## [0.1.0] — 2026-03-07
