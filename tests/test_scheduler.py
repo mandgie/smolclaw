@@ -1527,3 +1527,137 @@ class TestComputeSleep:
 
         result = scheduler._compute_sleep()
         assert result == 60.0
+
+
+class TestEditJob:
+    """Tests for edit_job() method."""
+
+    @pytest.fixture()
+    def scheduler_with_jobs(self, tmp_base: Path):
+        """Create a scheduler with two jobs for editing tests."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "editable-job",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Morning check",
+                        "enabled": True,
+                        "delivery": "telegram",
+                        "delivery_chat_id": "123",
+                        "session_mode": "isolated",
+                    },
+                    {
+                        "id": "disabled-job",
+                        "agent": "testagent",
+                        "schedule": "0 22 * * *",
+                        "prompt": "Night check",
+                        "enabled": False,
+                    },
+                ]
+            )
+        )
+        agents_dir = tmp_base / "agents"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, agents_dir, router)
+        scheduler.load_jobs()
+        return scheduler
+
+    def test_edit_schedule(self, scheduler_with_jobs: Scheduler):
+        """Editing schedule updates the field and recomputes next_run."""
+        old_next = next(
+            j for j in scheduler_with_jobs.jobs if j.id == "editable-job"
+        ).next_run
+
+        job = scheduler_with_jobs.edit_job("editable-job", schedule="30 9 * * *")
+        assert job is not None
+        assert job.schedule == "30 9 * * *"
+        # next_run should have been recomputed
+        assert job.next_run != old_next or job.next_run != ""
+
+        # Verify persisted
+        saved = json.loads(scheduler_with_jobs.jobs_path.read_text())
+        saved_job = next(j for j in saved if j["id"] == "editable-job")
+        assert saved_job["schedule"] == "30 9 * * *"
+
+    def test_edit_prompt(self, scheduler_with_jobs: Scheduler):
+        """Editing prompt updates the inline prompt text."""
+        job = scheduler_with_jobs.edit_job("editable-job", prompt="New prompt text")
+        assert job is not None
+        assert job.prompt == "New prompt text"
+
+    def test_edit_delivery(self, scheduler_with_jobs: Scheduler):
+        """Editing delivery fields updates both delivery and chat_id."""
+        job = scheduler_with_jobs.edit_job(
+            "editable-job", delivery="webhook", delivery_chat_id="456"
+        )
+        assert job is not None
+        assert job.delivery == "webhook"
+        assert job.delivery_chat_id == "456"
+
+    def test_edit_session_mode(self, scheduler_with_jobs: Scheduler):
+        """Editing session_mode updates the field."""
+        job = scheduler_with_jobs.edit_job("editable-job", session_mode="shared")
+        assert job is not None
+        assert job.session_mode == "shared"
+
+    def test_edit_enable_recomputes_next_run(self, scheduler_with_jobs: Scheduler):
+        """Re-enabling via edit recomputes next_run."""
+        job = scheduler_with_jobs.edit_job("disabled-job", enabled=True)
+        assert job is not None
+        assert job.enabled is True
+        assert job.next_run != ""
+
+    def test_edit_not_found(self, scheduler_with_jobs: Scheduler):
+        """Editing a non-existent job returns None."""
+        assert scheduler_with_jobs.edit_job("nonexistent", prompt="x") is None
+
+    def test_edit_invalid_schedule(self, scheduler_with_jobs: Scheduler):
+        """Editing with an invalid schedule raises InvalidScheduleError."""
+        with pytest.raises(InvalidScheduleError):
+            scheduler_with_jobs.edit_job("editable-job", schedule="not-a-cron")
+
+    def test_edit_no_fields_raises(self, scheduler_with_jobs: Scheduler):
+        """Editing with no editable fields raises ValueError."""
+        with pytest.raises(ValueError, match="No editable fields"):
+            scheduler_with_jobs.edit_job("editable-job")
+
+    def test_edit_ignores_non_editable_fields(self, scheduler_with_jobs: Scheduler):
+        """Non-editable fields (id, agent, etc.) are silently ignored."""
+        with pytest.raises(ValueError, match="No editable fields"):
+            scheduler_with_jobs.edit_job("editable-job", id="hacked", agent="evil")
+
+    def test_edit_multiple_fields(self, scheduler_with_jobs: Scheduler):
+        """Editing multiple fields at once works."""
+        job = scheduler_with_jobs.edit_job(
+            "editable-job",
+            schedule="*/5 * * * *",
+            prompt="Frequent check",
+            delivery="webhook",
+        )
+        assert job is not None
+        assert job.schedule == "*/5 * * * *"
+        assert job.prompt == "Frequent check"
+        assert job.delivery == "webhook"
+
+    def test_edit_prompt_file(self, scheduler_with_jobs: Scheduler, tmp_base: Path):
+        """Editing with a prompt_file resolves and loads the file content."""
+        prompts_dir = tmp_base / "agents" / "testagent" / "prompts"
+        prompts_dir.mkdir(parents=True, exist_ok=True)
+        (prompts_dir / "new-prompt.md").write_text("Content from file")
+
+        job = scheduler_with_jobs.edit_job("editable-job", prompt_file="new-prompt.md")
+        assert job is not None
+        assert job.prompt == "Content from file"
+
+    def test_edit_persists_to_disk(self, scheduler_with_jobs: Scheduler):
+        """All edits are saved to jobs.json."""
+        scheduler_with_jobs.edit_job("editable-job", prompt="Persisted prompt")
+
+        saved = json.loads(scheduler_with_jobs.jobs_path.read_text())
+        saved_job = next(j for j in saved if j["id"] == "editable-job")
+        assert saved_job["prompt"] == "Persisted prompt"

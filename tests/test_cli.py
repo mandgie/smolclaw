@@ -471,6 +471,151 @@ class TestCronEnableDisable:
         assert "disabled-job" in result.output
 
 
+class TestCronEdit:
+    def _make_jobs(self, tmp_path: Path) -> Path:
+        cron_dir = tmp_path / "shared" / "cron"
+        cron_dir.mkdir(parents=True)
+        (tmp_path / "agents" / "tars" / "prompts").mkdir(parents=True)
+        jobs_path = cron_dir / "jobs.json"
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "my-job",
+                        "agent": "tars",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Morning check",
+                        "enabled": True,
+                        "delivery": "telegram",
+                        "delivery_chat_id": "123",
+                        "session_mode": "isolated",
+                    }
+                ]
+            )
+        )
+        return jobs_path
+
+    def test_edit_schedule(self, tmp_path: Path):
+        """Edit a job's schedule via CLI."""
+        jobs_path = self._make_jobs(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "cron", "edit", "my-job", "--schedule", "30 9 * * *"],
+        )
+        assert result.exit_code == 0
+        assert "Updated job 'my-job'" in result.output
+        assert "schedule" in result.output
+        jobs = json.loads(jobs_path.read_text())
+        assert jobs[0]["schedule"] == "30 9 * * *"
+
+    def test_edit_prompt(self, tmp_path: Path):
+        """Edit a job's prompt text via CLI."""
+        jobs_path = self._make_jobs(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "cron", "edit", "my-job", "--prompt", "New prompt!"],
+        )
+        assert result.exit_code == 0
+        assert "Updated job 'my-job'" in result.output
+        jobs = json.loads(jobs_path.read_text())
+        assert jobs[0]["prompt"] == "New prompt!"
+
+    def test_edit_prompt_file(self, tmp_path: Path):
+        """Edit a job's prompt to use a file when the file exists."""
+        jobs_path = self._make_jobs(tmp_path)
+        prompts_dir = tmp_path / "agents" / "tars" / "prompts"
+        (prompts_dir / "briefing.md").write_text("File-based prompt")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "cron", "edit", "my-job", "--prompt", "briefing.md"],
+        )
+        assert result.exit_code == 0
+        jobs = json.loads(jobs_path.read_text())
+        assert jobs[0]["prompt_file"] == "briefing.md"
+        assert jobs[0]["prompt"] == ""
+
+    def test_edit_delivery(self, tmp_path: Path):
+        """Edit delivery fields."""
+        jobs_path = self._make_jobs(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--home", str(tmp_path), "cron", "edit", "my-job",
+                "--delivery", "webhook", "--chat-id", "456",
+            ],
+        )
+        assert result.exit_code == 0
+        jobs = json.loads(jobs_path.read_text())
+        assert jobs[0]["delivery"] == "webhook"
+        assert jobs[0]["delivery_chat_id"] == "456"
+
+    def test_edit_not_found(self, tmp_path: Path):
+        """Editing a non-existent job gives a friendly message."""
+        self._make_jobs(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "cron", "edit", "ghost", "--prompt", "x"],
+        )
+        assert result.exit_code == 0
+        assert "not found" in result.output
+
+    def test_edit_no_changes(self, tmp_path: Path):
+        """Editing with no options gives a help message."""
+        self._make_jobs(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "cron", "edit", "my-job"],
+        )
+        assert result.exit_code == 0
+        assert "No changes specified" in result.output
+
+    def test_edit_invalid_schedule(self, tmp_path: Path):
+        """Editing with an invalid schedule gives an error."""
+        self._make_jobs(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "cron", "edit", "my-job", "--schedule", "bad"],
+        )
+        assert result.exit_code == 1
+
+    def test_edit_no_file(self, tmp_path: Path):
+        """Editing when no jobs file exists gives a friendly message."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "cron", "edit", "j1", "--prompt", "x"],
+        )
+        assert result.exit_code == 0
+        assert "No jobs file" in result.output
+
+    def test_edit_multiple_fields(self, tmp_path: Path):
+        """Editing multiple fields at once works."""
+        jobs_path = self._make_jobs(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--home", str(tmp_path), "cron", "edit", "my-job",
+                "--schedule", "*/5 * * * *",
+                "--prompt", "Frequent check",
+                "--session-mode", "shared",
+            ],
+        )
+        assert result.exit_code == 0
+        jobs = json.loads(jobs_path.read_text())
+        assert jobs[0]["schedule"] == "*/5 * * * *"
+        assert jobs[0]["prompt"] == "Frequent check"
+        assert jobs[0]["session_mode"] == "shared"
+
+
 class TestCronRun:
     def test_cron_run_success(self, tmp_path: Path):
         """cron run triggers the job via the API and shows the response."""

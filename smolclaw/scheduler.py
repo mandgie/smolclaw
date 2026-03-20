@@ -531,6 +531,76 @@ class Scheduler:
         log.info(f"Scheduler: disabled job '{job_id}'")
         return True
 
+    def edit_job(self, job_id: str, **kwargs: Any) -> Job | None:
+        """Edit an existing job's fields in place.
+
+        Accepts keyword arguments matching editable job fields:
+        ``schedule``, ``prompt``, ``prompt_file``, ``delivery``,
+        ``delivery_chat_id``, ``session_mode``, ``enabled``.
+
+        If ``schedule`` is changed, validates the new cron expression and
+        recomputes ``next_run``. If ``enabled`` is set to True, ``next_run``
+        is recomputed (same as ``enable_job``).
+
+        Args:
+            job_id: The ID of the job to edit.
+            **kwargs: Fields to update.
+
+        Returns:
+            The updated Job, or None if not found.
+
+        Raises:
+            InvalidScheduleError: If a new ``schedule`` value is invalid.
+            ValueError: If no editable fields are provided.
+        """
+        editable = {
+            "schedule",
+            "prompt",
+            "prompt_file",
+            "delivery",
+            "delivery_chat_id",
+            "session_mode",
+            "enabled",
+        }
+        updates = {k: v for k, v in kwargs.items() if k in editable and v is not None}
+        if not updates:
+            raise ValueError("No editable fields provided")
+
+        job = next((j for j in self.jobs if j.id == job_id), None)
+        if job is None:
+            return None
+
+        # Validate new schedule before applying anything
+        if "schedule" in updates:
+            try:
+                croniter(updates["schedule"])
+            except (ValueError, KeyError, TypeError) as e:
+                raise InvalidScheduleError(
+                    f"Job '{job_id}': invalid cron schedule '{updates['schedule']}': {e}"
+                ) from e
+
+        # Resolve prompt_file to actual prompt content
+        if updates.get("prompt_file"):
+            path = self.agents_dir / job.agent / "prompts" / updates["prompt_file"]
+            if path.exists():
+                updates["prompt"] = path.read_text().strip()
+            else:
+                log.warning(f"Job {job_id}: prompt file not found: {path}")
+
+        # Apply updates
+        for key, value in updates.items():
+            setattr(job, key, value)
+
+        # Recompute next_run when schedule changes or job is re-enabled
+        schedule_changed = "schedule" in updates
+        just_enabled = updates.get("enabled") is True
+        if (schedule_changed or just_enabled) and job.enabled and job.prompt:
+            job.next_run = job.compute_next_run().isoformat()
+
+        self.save_jobs()
+        log.info(f"Scheduler: edited job '{job_id}' ({', '.join(updates.keys())})")
+        return job
+
     def list_jobs(self) -> list[dict]:
         """List all jobs as dicts."""
         return [j.to_dict() for j in self.jobs]

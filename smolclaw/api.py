@@ -191,6 +191,18 @@ class AddJobRequest(BaseModel):
     session_mode: str = Field("isolated", description="Session mode: 'isolated' or 'shared'")
 
 
+class EditJobRequest(BaseModel):
+    """Request body for editing an existing scheduled job."""
+
+    schedule: str | None = Field(None, description="New cron expression")
+    prompt: str | None = Field(None, description="New inline prompt text")
+    prompt_file: str | None = Field(None, description="New prompt file path")
+    delivery: str | None = Field(None, description="New delivery channel type")
+    delivery_chat_id: str | None = Field(None, description="New delivery chat ID")
+    session_mode: str | None = Field(None, description="New session mode: 'isolated' or 'shared'")
+    enabled: bool | None = Field(None, description="Enable or disable the job")
+
+
 class AddFactRequest(BaseModel):
     """Request body for adding a fact to memory."""
 
@@ -540,6 +552,24 @@ def create_app(gateway: Gateway) -> FastAPI:
         if not gateway.scheduler:
             raise HTTPException(500, "Scheduler not running")
         job = gateway.scheduler.add_job(body.model_dump())
+        return {"job": job.to_dict()}
+
+    @app.put("/api/cron/jobs/{job_id}", dependencies=[Depends(_require_auth)])
+    async def edit_job(job_id: str, body: EditJobRequest) -> dict[str, Any]:
+        """Edit an existing scheduled cron job."""
+        from .scheduler import InvalidScheduleError
+
+        if not gateway.scheduler:
+            raise HTTPException(500, "Scheduler not running")
+        updates = body.model_dump(exclude_none=True)
+        if not updates:
+            raise HTTPException(400, "No fields to update")
+        try:
+            job = gateway.scheduler.edit_job(job_id, **updates)
+        except (InvalidScheduleError, ValueError) as e:
+            raise HTTPException(400, str(e)) from e
+        if job is None:
+            raise HTTPException(404, f"Job '{job_id}' not found")
         return {"job": job.to_dict()}
 
     @app.delete(

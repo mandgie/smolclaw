@@ -935,6 +935,80 @@ def cron_add(ctx, agent, schedule, prompt, delivery, chat_id, job_id):
     click.echo(f"Added job '{job_id}' for agent '{agent}'")
 
 
+@cron.command("edit")
+@click.argument("job_id")
+@click.option("--schedule", default=None, help="New cron expression")
+@click.option("--prompt", default=None, help="New prompt text or prompt file path")
+@click.option("--delivery", default=None, help="New delivery channel (e.g. 'telegram')")
+@click.option("--chat-id", default=None, help="New delivery chat ID")
+@click.option("--session-mode", default=None, help="Session mode: 'isolated' or 'shared'")
+@click.pass_context
+def cron_edit(ctx, job_id, schedule, prompt, delivery, chat_id, session_mode):
+    """Edit an existing scheduled job."""
+    from croniter import croniter
+
+    base = ctx.obj["base"]
+    jobs_path = base / "shared" / "cron" / "jobs.json"
+
+    if not jobs_path.exists():
+        click.echo("No jobs file found.")
+        return
+
+    # Validate new schedule if provided
+    if schedule is not None:
+        try:
+            croniter(schedule)
+        except (ValueError, KeyError, TypeError) as e:
+            click.echo(f"Invalid cron schedule '{schedule}': {e}", err=True)
+            sys.exit(1)
+
+    jobs = json.loads(jobs_path.read_text())
+    found = False
+    for job in jobs:
+        if job["id"] == job_id:
+            found = True
+            changes = []
+            if schedule is not None:
+                job["schedule"] = schedule
+                changes.append("schedule")
+            if prompt is not None:
+                # Check if it's a file path
+                agent = job.get("agent", "")
+                prompt_path = base / "agents" / agent / "prompts" / prompt
+                if prompt_path.exists():
+                    job["prompt_file"] = prompt
+                    job["prompt"] = ""
+                    changes.append("prompt_file")
+                else:
+                    job["prompt"] = prompt
+                    job.pop("prompt_file", None)
+                    changes.append("prompt")
+            if delivery is not None:
+                job["delivery"] = delivery
+                changes.append("delivery")
+            if chat_id is not None:
+                job["delivery_chat_id"] = chat_id
+                changes.append("delivery_chat_id")
+            if session_mode is not None:
+                job["session_mode"] = session_mode
+                changes.append("session_mode")
+            break
+
+    if not found:
+        click.echo(f"Job '{job_id}' not found.")
+        return
+
+    if not changes:
+        click.echo(
+            "No changes specified. Use --schedule, --prompt, "
+            "--delivery, --chat-id, or --session-mode."
+        )
+        return
+
+    jobs_path.write_text(json.dumps(jobs, indent=2))
+    click.echo(f"Updated job '{job_id}' ({', '.join(changes)})")
+
+
 @cron.command("remove")
 @click.argument("job_id")
 @click.pass_context

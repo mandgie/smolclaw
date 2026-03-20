@@ -648,6 +648,64 @@ class TestTriggerJobApi:
         assert resp.status_code == 500
 
 
+# --- Edit Job ---
+
+
+class TestEditJobApi:
+    def test_edit_job_success(self, client, mock_gateway):
+        mock_job = MagicMock()
+        mock_job.to_dict.return_value = {
+            "id": "my-job",
+            "schedule": "30 9 * * *",
+            "prompt": "Updated",
+        }
+        mock_gateway.scheduler.edit_job = MagicMock(return_value=mock_job)
+
+        resp = client.put(
+            "/api/cron/jobs/my-job",
+            json={"schedule": "30 9 * * *", "prompt": "Updated"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["job"]["schedule"] == "30 9 * * *"
+        mock_gateway.scheduler.edit_job.assert_called_once_with(
+            "my-job", schedule="30 9 * * *", prompt="Updated"
+        )
+
+    def test_edit_job_not_found(self, client, mock_gateway):
+        mock_gateway.scheduler.edit_job = MagicMock(return_value=None)
+        resp = client.put("/api/cron/jobs/nope", json={"prompt": "x"})
+        assert resp.status_code == 404
+
+    def test_edit_job_invalid_schedule(self, client, mock_gateway):
+        from smolclaw.scheduler import InvalidScheduleError
+
+        mock_gateway.scheduler.edit_job = MagicMock(
+            side_effect=InvalidScheduleError("bad schedule")
+        )
+        resp = client.put("/api/cron/jobs/my-job", json={"schedule": "bad"})
+        assert resp.status_code == 400
+
+    def test_edit_job_no_fields(self, client, mock_gateway):
+        resp = client.put("/api/cron/jobs/my-job", json={})
+        assert resp.status_code == 400
+
+    def test_edit_job_no_scheduler(self, client, mock_gateway):
+        mock_gateway.scheduler = None
+        resp = client.put("/api/cron/jobs/any", json={"prompt": "x"})
+        assert resp.status_code == 500
+
+    def test_edit_job_enable_field(self, client, mock_gateway):
+        mock_job = MagicMock()
+        mock_job.to_dict.return_value = {"id": "my-job", "enabled": True}
+        mock_gateway.scheduler.edit_job = MagicMock(return_value=mock_job)
+
+        resp = client.put("/api/cron/jobs/my-job", json={"enabled": True})
+        assert resp.status_code == 200
+        mock_gateway.scheduler.edit_job.assert_called_once_with(
+            "my-job", enabled=True
+        )
+
+
 # --- Health & Dashboard ---
 
 
