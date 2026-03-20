@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 __all__ = ["create_app"]
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -238,6 +238,7 @@ class HealthResponse(BaseModel):
     agents: int
     channels: int
     jobs: int
+    ws_connections: int = 0
 
 
 def create_app(gateway: Gateway) -> FastAPI:
@@ -374,6 +375,7 @@ def create_app(gateway: Gateway) -> FastAPI:
         if not agent:
             raise HTTPException(404, f"Agent '{name}' not found")
         await agent.new_session()
+        await gateway.ws_manager.broadcast("agents")
         return {"status": "ok"}
 
     # --- Session endpoints ---
@@ -469,6 +471,7 @@ def create_app(gateway: Gateway) -> FastAPI:
         if not agent.memory:
             raise HTTPException(400, f"Agent '{name}' has no memory enabled")
         fact_id = agent.memory.add_fact(body.content, category=body.category)
+        await gateway.ws_manager.broadcast("agents")
         return {"id": fact_id, "status": "created"}
 
     @app.get("/api/agents/{name}/memory/facts/{fact_id}", dependencies=[Depends(_require_auth)])
@@ -497,6 +500,7 @@ def create_app(gateway: Gateway) -> FastAPI:
         updated = agent.memory.update_fact(fact_id, content=body.content, category=body.category)
         if not updated:
             raise HTTPException(404, f"Fact {fact_id} not found")
+        await gateway.ws_manager.broadcast("agents")
         return {"status": "updated"}
 
     @app.delete("/api/agents/{name}/memory/facts/{fact_id}", dependencies=[Depends(_require_auth)])
@@ -510,6 +514,7 @@ def create_app(gateway: Gateway) -> FastAPI:
         deleted = agent.memory.delete_fact(fact_id)
         if not deleted:
             raise HTTPException(404, f"Fact {fact_id} not found")
+        await gateway.ws_manager.broadcast("agents")
         return {"status": "deleted"}
 
     @app.get("/api/agents/{name}/memory/stats", dependencies=[Depends(_require_auth)])
@@ -535,6 +540,7 @@ def create_app(gateway: Gateway) -> FastAPI:
         if not agent.memory:
             raise HTTPException(400, f"Agent '{name}' has no memory enabled")
         result = agent.memory.clear()
+        await gateway.ws_manager.broadcast("agents")
         return result
 
     # --- Cron endpoints ---
@@ -552,6 +558,7 @@ def create_app(gateway: Gateway) -> FastAPI:
         if not gateway.scheduler:
             raise HTTPException(500, "Scheduler not running")
         job = gateway.scheduler.add_job(body.model_dump())
+        await gateway.ws_manager.broadcast("jobs")
         return {"job": job.to_dict()}
 
     @app.put("/api/cron/jobs/{job_id}", dependencies=[Depends(_require_auth)])
@@ -570,6 +577,7 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(400, str(e)) from e
         if job is None:
             raise HTTPException(404, f"Job '{job_id}' not found")
+        await gateway.ws_manager.broadcast("jobs")
         return {"job": job.to_dict()}
 
     @app.delete(
@@ -584,6 +592,7 @@ def create_app(gateway: Gateway) -> FastAPI:
         removed = gateway.scheduler.remove_job(job_id)
         if not removed:
             raise HTTPException(404, f"Job '{job_id}' not found")
+        await gateway.ws_manager.broadcast("jobs")
         return {"status": "removed"}
 
     @app.post(
@@ -600,6 +609,7 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(404, f"Job '{job_id}' not found") from e
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
+        await gateway.ws_manager.broadcast("jobs")
         return {"status": "triggered", "job_id": job_id, "response": response}
 
     @app.post(
@@ -613,6 +623,7 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(500, "Scheduler not running")
         if not gateway.scheduler.enable_job(job_id):
             raise HTTPException(404, f"Job '{job_id}' not found")
+        await gateway.ws_manager.broadcast("jobs")
         return {"status": "enabled"}
 
     @app.post(
@@ -626,6 +637,7 @@ def create_app(gateway: Gateway) -> FastAPI:
             raise HTTPException(500, "Scheduler not running")
         if not gateway.scheduler.disable_job(job_id):
             raise HTTPException(404, f"Job '{job_id}' not found")
+        await gateway.ws_manager.broadcast("jobs")
         return {"status": "disabled"}
 
     # --- Hooks ---
@@ -651,7 +663,27 @@ def create_app(gateway: Gateway) -> FastAPI:
             "agents": len(gateway.agents),
             "channels": len(gateway.channels),
             "jobs": len(gateway.scheduler.jobs) if gateway.scheduler else 0,
+            "ws_connections": gateway.ws_manager.connection_count,
         }
+
+    # --- WebSocket for live dashboard updates ---
+
+    @app.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket) -> None:
+        """WebSocket endpoint for live dashboard updates.
+
+        Clients connect here to receive real-time event notifications instead
+        of polling.  Events are JSON objects like ``{"event": "agents"}`` or
+        ``{"event": "jobs"}``, telling the client which data to refetch.
+        """
+        await gateway.ws_manager.connect(websocket)
+        try:
+            while True:
+                # Keep connection alive — we only push, but must read to
+                # detect client disconnects and receive WebSocket pings.
+                await websocket.receive_text()
+        except (WebSocketDisconnect, Exception):
+            gateway.ws_manager.disconnect(websocket)
 
     # --- Dashboard ---
 

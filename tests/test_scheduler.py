@@ -1569,9 +1569,7 @@ class TestEditJob:
 
     def test_edit_schedule(self, scheduler_with_jobs: Scheduler):
         """Editing schedule updates the field and recomputes next_run."""
-        old_next = next(
-            j for j in scheduler_with_jobs.jobs if j.id == "editable-job"
-        ).next_run
+        old_next = next(j for j in scheduler_with_jobs.jobs if j.id == "editable-job").next_run
 
         job = scheduler_with_jobs.edit_job("editable-job", schedule="30 9 * * *")
         assert job is not None
@@ -1661,3 +1659,74 @@ class TestEditJob:
         saved = json.loads(scheduler_with_jobs.jobs_path.read_text())
         saved_job = next(j for j in saved if j["id"] == "editable-job")
         assert saved_job["prompt"] == "Persisted prompt"
+
+
+class TestSchedulerOnEvent:
+    """Tests for the on_event callback."""
+
+    def test_on_event_is_optional(self, tmp_base: Path, jobs_file: Path):
+        """Scheduler works fine without an on_event callback."""
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        assert scheduler._on_event is None
+
+    def test_on_event_stored(self, tmp_base: Path, jobs_file: Path):
+        """on_event callback is stored when provided."""
+        router = MagicMock()
+        callback = AsyncMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router, on_event=callback)
+        assert scheduler._on_event is callback
+
+    async def test_on_event_called_after_job_completes(self, tmp_base: Path, jobs_file: Path):
+        """on_event is called after a scheduled job completes."""
+        from smolclaw.router import OutboundMessage
+
+        on_event = AsyncMock()
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(agent="testagent", text="done", source="cron")
+        )
+        router.get_agent.return_value = None  # No agent for session cleanup
+
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router, on_event=on_event)
+        scheduler.load_jobs()
+        scheduler.jobs[0].next_run = "2020-01-01T00:00:00"
+        scheduler._running = True
+
+        # Run one tick of the loop then stop
+        task = asyncio.create_task(scheduler._loop())
+        # Give the loop time to fire the job
+        await asyncio.sleep(0.5)
+        scheduler._running = False
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+        on_event.assert_awaited()
+
+    async def test_on_event_failure_does_not_crash_scheduler(self, tmp_base: Path, jobs_file: Path):
+        """A failing on_event callback does not crash the scheduler loop."""
+        from smolclaw.router import OutboundMessage
+
+        on_event = AsyncMock(side_effect=RuntimeError("callback failed"))
+        router = MagicMock()
+        router.route = AsyncMock(
+            return_value=OutboundMessage(agent="testagent", text="ok", source="cron")
+        )
+        router.get_agent.return_value = None
+
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router, on_event=on_event)
+        scheduler.load_jobs()
+        scheduler.jobs[0].next_run = "2020-01-01T00:00:00"
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._loop())
+        await asyncio.sleep(0.5)
+        scheduler._running = False
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+        # Callback was called (and failed), but job still completed successfully
+        on_event.assert_awaited()
+        assert scheduler.jobs[0].status == "ok"

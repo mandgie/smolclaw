@@ -6,6 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Dashboard WebSocket live updates** — Dashboard now connects via WebSocket (`/ws`) for instant updates instead of 10-second polling. Job completions, agent config changes, and API mutations broadcast events to all connected clients. Automatic reconnection with polling fallback when WebSocket is unavailable. Status indicator shows "● live" or "○ polling". New `WebSocketManager` class, health endpoint includes `ws_connections` count.
 - **Cron job editing** — `smolclaw cron edit <job_id>` to modify schedule, prompt, delivery, session mode, or enabled state of existing jobs without remove+re-add. Also adds `Scheduler.edit_job()` method and `PUT /api/cron/jobs/{id}` REST endpoint. Validates new cron expressions before applying, recomputes `next_run` when schedule changes or job is re-enabled.
 - **Extensible channel plugin system** — `register_channel()` for programmatic registration, entry-point discovery via `smolclaw.channels` for third-party packages. Resolution order: built-in → custom → entry points. `list_channel_types()` for enumeration.
 - **Webhook channel** — Outgoing HTTP POST channel for delivering messages to Slack webhooks, Discord, or custom APIs. Zero dependencies.

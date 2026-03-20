@@ -109,6 +109,7 @@ class Scheduler:
         agents_dir: Path,
         router: Router,
         deliver_callback: Callable[[Job, str], Awaitable[None]] | None = None,
+        on_event: Callable[[], Awaitable[None]] | None = None,
     ):
         """Initialize the scheduler.
 
@@ -117,11 +118,14 @@ class Scheduler:
             agents_dir: Base directory containing agent folders (for prompt file resolution).
             router: The message router used to dispatch job triggers.
             deliver_callback: Optional async callback for delivering job output to channels.
+            on_event: Optional async callback fired after job state changes (e.g. for
+                broadcasting updates to WebSocket clients).
         """
         self.jobs_path = jobs_path
         self.agents_dir = agents_dir
         self.router = router
         self._deliver_callback = deliver_callback
+        self._on_event = on_event
         self.jobs: list[Job] = []
         self._task: asyncio.Task | None = None
         self._running = False
@@ -370,6 +374,13 @@ class Scheduler:
                     # Compute next run
                     job.next_run = job.compute_next_run(after=now).isoformat()
                     self.save_jobs()
+
+                    # Notify listeners (e.g. WebSocket dashboard clients)
+                    if self._on_event:
+                        try:
+                            await self._on_event()
+                        except Exception as e:
+                            log.debug(f"Scheduler: on_event callback failed: {e}")
 
             # Sleep until the next job is due (or max 60s for responsiveness).
             # CancelledError here means clean shutdown via stop().

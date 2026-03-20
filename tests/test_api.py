@@ -18,6 +18,7 @@ from smolclaw.api import (
     create_app,
 )
 from smolclaw.config import SkillInfo
+from smolclaw.gateway import WebSocketManager
 from smolclaw.memory import Memory
 
 # --- Fixtures ---
@@ -62,6 +63,9 @@ def mock_gateway(tmp_path: Path):
     agent.last_stop_reason = None
 
     gw.agents = {"testagent": agent}
+
+    # WebSocket manager (real instance — no connections, so broadcasts are no-ops)
+    gw.ws_manager = WebSocketManager()
 
     # Gateway config — no auth by default
     gw.config.api_key = None
@@ -701,9 +705,7 @@ class TestEditJobApi:
 
         resp = client.put("/api/cron/jobs/my-job", json={"enabled": True})
         assert resp.status_code == 200
-        mock_gateway.scheduler.edit_job.assert_called_once_with(
-            "my-job", enabled=True
-        )
+        mock_gateway.scheduler.edit_job.assert_called_once_with("my-job", enabled=True)
 
 
 # --- Health & Dashboard ---
@@ -1115,3 +1117,118 @@ class TestHooksApi:
         assert data["pre_route"] == ["rate-limiter"]
         assert data["post_route"] == ["logger"]
         assert data["total"] == 2
+
+
+# --- WebSocket endpoint tests ---
+
+
+class TestWebSocketEndpoint:
+    def test_ws_connect_and_receive_event(self, mock_gateway):
+        """Test that a WebSocket client can connect and receive broadcast events."""
+        app = create_app(mock_gateway)
+        client = TestClient(app)
+        with client.websocket_connect("/ws") as websocket:
+            assert mock_gateway.ws_manager.connection_count == 1
+
+            # Manually broadcast an event from the server side
+            import asyncio
+
+            asyncio.get_event_loop().run_until_complete(mock_gateway.ws_manager.broadcast("agents"))
+            data = websocket.receive_json()
+            assert data == {"event": "agents"}
+
+    def test_ws_disconnect_cleans_up(self, mock_gateway):
+        """Test that disconnecting removes the client from the manager."""
+        app = create_app(mock_gateway)
+        client = TestClient(app)
+        with client.websocket_connect("/ws"):
+            assert mock_gateway.ws_manager.connection_count == 1
+        # After exiting the context manager, connection is closed
+        assert mock_gateway.ws_manager.connection_count == 0
+
+    def test_ws_multiple_clients(self, mock_gateway):
+        """Test that multiple WebSocket clients can connect simultaneously."""
+        app = create_app(mock_gateway)
+        client = TestClient(app)
+        with client.websocket_connect("/ws"):
+            with client.websocket_connect("/ws"):
+                assert mock_gateway.ws_manager.connection_count == 2
+            assert mock_gateway.ws_manager.connection_count == 1
+        assert mock_gateway.ws_manager.connection_count == 0
+
+
+class TestHealthWebSocketConnections:
+    def test_health_includes_ws_connections(self, client):
+        resp = client.get("/api/health")
+        data = resp.json()
+        assert "ws_connections" in data
+        assert data["ws_connections"] == 0
+
+    def test_health_counts_active_ws(self, mock_gateway):
+        app = create_app(mock_gateway)
+        client = TestClient(app)
+        with client.websocket_connect("/ws"):
+            resp = client.get("/api/health")
+            assert resp.json()["ws_connections"] == 1
+
+
+class TestBroadcastOnMutation:
+    """Verify that mutation endpoints trigger WebSocket broadcasts."""
+
+    def test_new_session_broadcasts_agents(self, mock_gateway):
+        ws_mgr = mock_gateway.ws_manager
+        # Spy on broadcast
+        original_broadcast = ws_mgr.broadcast
+        broadcast_calls = []
+
+        async def spy_broadcast(event):
+            broadcast_calls.append(event)
+            await original_broadcast(event)
+
+        ws_mgr.broadcast = spy_broadcast
+
+        app = create_app(mock_gateway)
+        client = TestClient(app)
+        resp = client.post("/api/agents/testagent/new-session")
+        assert resp.status_code == 200
+        assert "agents" in broadcast_calls
+
+    def test_add_fact_broadcasts_agents(self, mock_gateway):
+        ws_mgr = mock_gateway.ws_manager
+        original_broadcast = ws_mgr.broadcast
+        broadcast_calls = []
+
+        async def spy_broadcast(event):
+            broadcast_calls.append(event)
+            await original_broadcast(event)
+
+        ws_mgr.broadcast = spy_broadcast
+
+        app = create_app(mock_gateway)
+        client = TestClient(app)
+        resp = client.post(
+            "/api/agents/testagent/memory/facts",
+            json={"content": "test fact", "category": "test"},
+        )
+        assert resp.status_code == 200
+        assert "agents" in broadcast_calls
+
+    def test_remove_job_broadcasts_jobs(self, mock_gateway):
+        ws_mgr = mock_gateway.ws_manager
+        original_broadcast = ws_mgr.broadcast
+        broadcast_calls = []
+
+        async def spy_broadcast(event):
+            broadcast_calls.append(event)
+            await original_broadcast(event)
+
+        ws_mgr.broadcast = spy_broadcast
+
+        # Make remove_job succeed
+        mock_gateway.scheduler.remove_job.side_effect = lambda jid: True
+
+        app = create_app(mock_gateway)
+        client = TestClient(app)
+        resp = client.delete("/api/cron/jobs/test-job")
+        assert resp.status_code == 200
+        assert "jobs" in broadcast_calls

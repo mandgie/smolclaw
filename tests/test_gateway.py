@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from smolclaw.gateway import Gateway, run_gateway
+from smolclaw.gateway import Gateway, WebSocketManager, run_gateway
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -796,3 +796,139 @@ class TestCrossAgentAwareness:
         prompt = gw.agents["tars"].build_system_prompt()
         assert "Peer Agents" in prompt
         assert "coach" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Tests: WebSocketManager
+# ---------------------------------------------------------------------------
+
+
+class TestWebSocketManager:
+    def test_initial_state(self):
+        mgr = WebSocketManager()
+        assert mgr.connection_count == 0
+
+    @pytest.mark.asyncio
+    async def test_connect_and_disconnect(self):
+        mgr = WebSocketManager()
+        ws = AsyncMock()
+        await mgr.connect(ws)
+        ws.accept.assert_awaited_once()
+        assert mgr.connection_count == 1
+
+        mgr.disconnect(ws)
+        assert mgr.connection_count == 0
+
+    @pytest.mark.asyncio
+    async def test_disconnect_idempotent(self):
+        mgr = WebSocketManager()
+        ws = AsyncMock()
+        await mgr.connect(ws)
+        mgr.disconnect(ws)
+        mgr.disconnect(ws)  # Should not raise
+        assert mgr.connection_count == 0
+
+    @pytest.mark.asyncio
+    async def test_disconnect_unknown_ws(self):
+        mgr = WebSocketManager()
+        ws = AsyncMock()
+        mgr.disconnect(ws)  # Never connected — should not raise
+        assert mgr.connection_count == 0
+
+    @pytest.mark.asyncio
+    async def test_broadcast_to_multiple_clients(self):
+        mgr = WebSocketManager()
+        ws1 = AsyncMock()
+        ws2 = AsyncMock()
+        await mgr.connect(ws1)
+        await mgr.connect(ws2)
+
+        await mgr.broadcast("agents")
+
+        ws1.send_json.assert_awaited_once_with({"event": "agents"})
+        ws2.send_json.assert_awaited_once_with({"event": "agents"})
+
+    @pytest.mark.asyncio
+    async def test_broadcast_no_clients_is_noop(self):
+        mgr = WebSocketManager()
+        await mgr.broadcast("agents")  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_broadcast_removes_dead_connections(self):
+        mgr = WebSocketManager()
+        ws_alive = AsyncMock()
+        ws_dead = AsyncMock()
+        ws_dead.send_json.side_effect = Exception("Connection closed")
+
+        await mgr.connect(ws_alive)
+        await mgr.connect(ws_dead)
+        assert mgr.connection_count == 2
+
+        await mgr.broadcast("jobs")
+
+        assert mgr.connection_count == 1
+        ws_alive.send_json.assert_awaited_once_with({"event": "jobs"})
+
+    @pytest.mark.asyncio
+    async def test_broadcast_all_dead(self):
+        mgr = WebSocketManager()
+        ws1 = AsyncMock()
+        ws1.send_json.side_effect = RuntimeError("gone")
+        ws2 = AsyncMock()
+        ws2.send_json.side_effect = RuntimeError("also gone")
+
+        await mgr.connect(ws1)
+        await mgr.connect(ws2)
+        await mgr.broadcast("agents")
+
+        assert mgr.connection_count == 0
+
+    @pytest.mark.asyncio
+    async def test_broadcast_different_events(self):
+        mgr = WebSocketManager()
+        ws = AsyncMock()
+        await mgr.connect(ws)
+
+        await mgr.broadcast("agents")
+        await mgr.broadcast("jobs")
+
+        assert ws.send_json.await_count == 2
+        ws.send_json.assert_any_await({"event": "agents"})
+        ws.send_json.assert_any_await({"event": "jobs"})
+
+
+class TestGatewayWebSocket:
+    def test_gateway_has_ws_manager(self, gw_base: Path):
+        gw = Gateway(gw_base)
+        assert isinstance(gw.ws_manager, WebSocketManager)
+        assert gw.ws_manager.connection_count == 0
+
+    @pytest.mark.asyncio
+    async def test_reload_agent_broadcasts(self, gw_base: Path):
+        gw = Gateway(gw_base)
+        with patch("smolclaw.gateway.create_channel"):
+            await gw.start()
+
+        ws = AsyncMock()
+        await gw.ws_manager.connect(ws)
+
+        from smolclaw.config import discover_all_agents
+
+        agents = discover_all_agents(gw_base)
+        new_info = agents["testagent"]
+        await gw._reload_agent("testagent", new_info)
+
+        ws.send_json.assert_awaited_with({"event": "agents"})
+
+    @pytest.mark.asyncio
+    async def test_scheduler_event_broadcasts(self, gw_base: Path):
+        gw = Gateway(gw_base)
+        with patch("smolclaw.gateway.create_channel"):
+            await gw.start()
+
+        ws = AsyncMock()
+        await gw.ws_manager.connect(ws)
+
+        await gw._on_scheduler_event()
+
+        ws.send_json.assert_awaited_with({"event": "jobs"})

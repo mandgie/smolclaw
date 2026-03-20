@@ -227,6 +227,8 @@ Health (`/api/health`) and dashboard (`/`) are always public. When no `api_key` 
 
 A built-in dark-mode dashboard runs at `http://localhost:7890` when the gateway starts. Shows agent status, config, and lets you send messages.
 
+The dashboard uses **WebSocket live updates** — changes to agents, jobs, and memory are pushed instantly to all connected browsers. Falls back to 10-second polling automatically if WebSocket is unavailable.
+
 ## Custom Channels
 
 smolclaw supports three ways to add channel adapters:

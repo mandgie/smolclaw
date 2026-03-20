@@ -382,7 +382,8 @@ GET /api/health
   "version": "0.1.0",
   "agents": 2,
   "channels": 1,
-  "jobs": 3
+  "jobs": 3,
+  "ws_connections": 1
 }
 ```
 
@@ -393,6 +394,26 @@ GET /
 ```
 
 Serves a built-in dark-mode dashboard with agent status, configuration, and messaging.
+
+## WebSocket
+
+```
+WS /ws
+```
+
+WebSocket endpoint for live dashboard updates. Clients receive JSON event notifications whenever agents, jobs, or memory change — enabling instant UI updates without polling.
+
+**Event format:**
+```json
+{"event": "agents"}
+```
+
+| Event | Trigger |
+|-------|---------|
+| `agents` | Agent config reload, new session, memory mutation |
+| `jobs` | Job added/removed/edited/triggered/enabled/disabled, cron job completes |
+
+The dashboard connects automatically and falls back to 10-second polling if WebSocket is unavailable.
 
 ## Error Responses
 

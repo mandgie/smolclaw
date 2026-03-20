@@ -8,7 +8,7 @@ import os
 import signal
 from pathlib import Path
 
-__all__ = ["Gateway", "get_log_path", "run_gateway", "setup_logging"]
+__all__ = ["Gateway", "WebSocketManager", "get_log_path", "run_gateway", "setup_logging"]
 
 import contextlib
 
@@ -31,6 +31,43 @@ from .watcher import FileWatcher
 log = logging.getLogger("smolclaw")
 
 
+class WebSocketManager:
+    """Manages WebSocket connections and broadcasts events to dashboard clients.
+
+    Events are simple JSON objects: ``{"event": "agents"}`` tells the dashboard
+    to refetch the agents list; ``{"event": "jobs"}`` for job state changes, etc.
+    Broadcast is best-effort — dead connections are silently pruned.
+    """
+
+    def __init__(self) -> None:
+        self._connections: set = set()
+
+    async def connect(self, websocket: object) -> None:
+        """Accept and register a WebSocket connection."""
+        await websocket.accept()  # type: ignore[union-attr]
+        self._connections.add(websocket)
+
+    def disconnect(self, websocket: object) -> None:
+        """Unregister a WebSocket connection."""
+        self._connections.discard(websocket)
+
+    async def broadcast(self, event: str) -> None:
+        """Broadcast an event name to all connected WebSocket clients."""
+        message = {"event": event}
+        dead: set = set()
+        for ws in list(self._connections):  # snapshot to avoid mutation during iteration
+            try:
+                await ws.send_json(message)  # type: ignore[union-attr]
+            except Exception:
+                dead.add(ws)
+        self._connections -= dead
+
+    @property
+    def connection_count(self) -> int:
+        """Number of active WebSocket connections."""
+        return len(self._connections)
+
+
 class Gateway:
     """The smolclaw gateway — single process running everything."""
 
@@ -47,6 +84,7 @@ class Gateway:
         self.channels: list[Channel] = []
         self.scheduler: Scheduler | None = None
         self.watcher: FileWatcher | None = None
+        self.ws_manager = WebSocketManager()
         self._user_md = ""
 
     def __repr__(self) -> str:
@@ -161,7 +199,11 @@ class Gateway:
         # Start scheduler
         jobs_path = self.base_dir / self.config.shared_dir / "cron" / "jobs.json"
         self.scheduler = Scheduler(
-            jobs_path, agents_dir, self.router, deliver_callback=self._deliver_cron
+            jobs_path,
+            agents_dir,
+            self.router,
+            deliver_callback=self._deliver_cron,
+            on_event=self._on_scheduler_event,
         )
 
         await self.scheduler.start()
@@ -189,6 +231,11 @@ class Gateway:
         agent.info = new_info
         agent.model = new_info.config.model
         log.info(f"[reload] Agent {agent_name} updated (model={new_info.config.model})")
+        await self.ws_manager.broadcast("agents")
+
+    async def _on_scheduler_event(self) -> None:
+        """Broadcast job state changes to WebSocket clients."""
+        await self.ws_manager.broadcast("jobs")
 
     async def _deliver_cron(self, job: Job, text: str) -> None:
         """Deliver cron job output to the right channel."""

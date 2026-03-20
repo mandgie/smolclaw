@@ -118,12 +118,12 @@ examples/              # Example two-agent setup (tars + coach)
 - [ ] `smolclaw cron` interactive — let agents manage their own schedule conversationally
 - [x] Cross-agent awareness (peer agents injected into system prompts, API-based messaging)
 - [x] Dashboard: agent detail view (click card → Details tab shows config, skills, memory, soul)
-- [ ] Dashboard: WebSocket live updates instead of polling
+- [x] Dashboard: WebSocket live updates instead of polling
 - [x] Multiple Telegram bots (one per agent, each with own token — dedup prevents conflicts)
 - [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
 - [x] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
 - [x] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
-- [x] Tests (925 tests, 97% coverage, pytest with mocked Claude SDK)
+- [x] Tests (949 tests, 97% coverage, pytest with mocked Claude SDK)
 - [x] OpenTelemetry tracing (optional, zero overhead when disabled)
 - [x] Message hooks (pre/post-route middleware)
 - [x] Webhook channel adapter (HTTP POST delivery)
