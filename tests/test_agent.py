@@ -965,3 +965,68 @@ class TestAgentRepr:
         assert "tars" in r
         assert "claude-opus-4-6" in r
         assert "connected=False" in r
+
+
+# ---------------------------------------------------------------------------
+# Tests: usage token attributes (covers hasattr input_tokens/output_tokens)
+# ---------------------------------------------------------------------------
+
+
+class TestUsageTokenAttributes:
+    """Cover the input_tokens/output_tokens attribute-access path in _send_internal."""
+
+    @pytest.mark.asyncio
+    async def test_usage_with_attribute_based_object(self):
+        """When usage has input_tokens/output_tokens attributes, they're recorded."""
+        from smolclaw.agent import Agent
+
+        # Create a usage object with attributes (not a dict)
+        usage_obj = MagicMock()
+        usage_obj.input_tokens = 150
+        usage_obj.output_tokens = 75
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(
+            response_text="Hello",
+            usage=usage_obj,
+        )
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            await agent.send("Hi")
+
+        assert agent.last_usage is usage_obj
+        assert agent.last_usage.input_tokens == 150
+        assert agent.last_usage.output_tokens == 75
+
+    @pytest.mark.asyncio
+    async def test_usage_dict_without_attributes(self):
+        """Dict-based usage doesn't have attributes — hasattr returns False (no crash)."""
+        from smolclaw.agent import Agent
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(
+            response_text="Hello",
+            usage={"input_tokens": 100, "output_tokens": 50},
+        )
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            await agent.send("Hi")
+
+        # Should work fine with dict — just doesn't set span attributes
+        assert agent.last_usage == {"input_tokens": 100, "output_tokens": 50}
+
+    @pytest.mark.asyncio
+    async def test_usage_with_only_input_tokens(self):
+        """Usage object with only input_tokens — no crash on missing output_tokens."""
+        from smolclaw.agent import Agent
+
+        usage_obj = MagicMock(spec=["input_tokens"])
+        usage_obj.input_tokens = 200
+
+        agent = Agent(_make_info())
+        mock_client = _mock_sdk_client(response_text="Ok", usage=usage_obj)
+
+        with patch("smolclaw.agent.ClaudeSDKClient", return_value=mock_client):
+            await agent.send("Hi")
+
+        assert agent.last_usage.input_tokens == 200

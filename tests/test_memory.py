@@ -1032,3 +1032,59 @@ class TestStatsVecTableError:
         assert stats["facts"] == 1
         assert stats["vec_enabled"] is True  # Still thinks vec is enabled
         assert "vec_facts" not in stats  # But couldn't query vec tables
+
+
+class TestFTSSetupFailure:
+    """Test Memory init when FTS5 setup fails."""
+
+    def test_fts_setup_exception_logs_warning(self, tmp_path: Path):
+        """Memory init continues when FTS5 setup raises (logs warning, doesn't crash)."""
+        db = tmp_path / "test.db"
+        with patch.object(Memory, "_ensure_fts", side_effect=RuntimeError("FTS5 unavailable")):
+            mem = Memory(db, agent="tars")
+        # Memory is created and works for non-FTS operations
+        assert mem.agent == "tars"
+        # Can still add facts (FTS just won't be indexed)
+        fact_id = mem.add_fact("Test fact without FTS")
+        assert isinstance(fact_id, int)
+
+
+class TestVecSetupFailure:
+    """Test Memory init when sqlite-vec setup fails."""
+
+    def test_vec_setup_exception_logs_warning(self, tmp_path: Path):
+        """Memory init continues when vec setup raises (logs warning, vec_enabled stays False)."""
+        db = tmp_path / "test.db"
+        # Patch _HAS_SQLITE_VEC to True but make the setup fail
+        with (
+            patch("smolclaw.memory._HAS_SQLITE_VEC", True),
+            patch.object(Memory, "_ensure_vec", side_effect=RuntimeError("vec table corrupt")),
+        ):
+            mem = Memory(db, agent="tars", embed_fn=_fake_embed, embed_dim=FAKE_DIM)
+        # vec_enabled should still be False since setup failed
+        assert mem.vec_enabled is False
+
+
+class TestFTSSyncOnUpdateFailure:
+    """Test update_fact when FTS5 sync fails."""
+
+    def test_update_fact_fts_sync_failure(self, tmp_path: Path):
+        """update_fact succeeds even when FTS5 sync on update fails."""
+        db = tmp_path / "test.db"
+        mem = Memory(db, agent="tars")
+        fact_id = mem.add_fact("Original content")
+
+        # Drop FTS tables to cause sync failure on update
+        conn = sqlite3.connect(str(db))
+        conn.execute("DROP TABLE IF EXISTS facts_fts")
+        conn.commit()
+        conn.close()
+
+        # Update should succeed (FTS sync failure is non-fatal)
+        result = mem.update_fact(fact_id, content="Updated content")
+        assert result is True
+
+        # Verify the content was updated
+        fact = mem.get_fact(fact_id)
+        assert fact is not None
+        assert fact["content"] == "Updated content"

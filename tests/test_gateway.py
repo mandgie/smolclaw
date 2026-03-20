@@ -932,3 +932,60 @@ class TestGatewayWebSocket:
         await gw._on_scheduler_event()
 
         ws.send_json.assert_awaited_with({"event": "jobs"})
+
+
+# ---------------------------------------------------------------------------
+# Tests: tracing configuration on start
+# ---------------------------------------------------------------------------
+
+
+class TestGatewayTracing:
+    @pytest.mark.asyncio
+    async def test_tracing_enabled_and_configured(self, gw_base: Path):
+        """When tracing=true in config, configure_tracing is called."""
+        # Enable tracing in config
+        config_path = gw_base / "config.yaml"
+        config_path.write_text(
+            "host: 127.0.0.1\nport: 7890\nlog_level: WARNING\n"
+            "tracing: true\ntracing_exporter: console\n"
+        )
+
+        gw = Gateway(gw_base)
+        with (
+            patch("smolclaw.gateway.create_channel"),
+            patch("smolclaw.gateway.configure_tracing", return_value=True) as mock_trace,
+        ):
+            await gw.start()
+
+        mock_trace.assert_called_once()
+        args = mock_trace.call_args[0][0]
+        assert args.enabled is True
+        assert args.exporter == "console"
+
+    @pytest.mark.asyncio
+    async def test_tracing_enabled_but_unavailable(self, gw_base: Path):
+        """When tracing is enabled but OTEL not installed, logs warning."""
+        config_path = gw_base / "config.yaml"
+        config_path.write_text("host: 127.0.0.1\nport: 7890\nlog_level: WARNING\ntracing: true\n")
+
+        gw = Gateway(gw_base)
+        with (
+            patch("smolclaw.gateway.create_channel"),
+            patch("smolclaw.gateway.configure_tracing", return_value=False) as mock_trace,
+        ):
+            await gw.start()
+
+        # Should have been called (and returned False = unavailable)
+        mock_trace.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_tracing_disabled_by_default(self, gw_base: Path):
+        """When tracing is not set in config, configure_tracing is never called."""
+        gw = Gateway(gw_base)
+        with (
+            patch("smolclaw.gateway.create_channel"),
+            patch("smolclaw.gateway.configure_tracing") as mock_trace,
+        ):
+            await gw.start()
+
+        mock_trace.assert_not_called()

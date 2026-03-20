@@ -153,6 +153,15 @@ class Agent:
         return ThinkingConfigAdaptive(type="adaptive")
 
     def _make_options(self, resume_id: str | None = None) -> ClaudeAgentOptions:
+        """Build ClaudeAgentOptions from agent config and optional session resume.
+
+        Translates the agent.yaml config fields (model, budget, fallback, MCP servers,
+        thinking, etc.) into the SDK's options format. Paths for MCP server configs
+        are resolved relative to the agent directory.
+
+        Args:
+            resume_id: Session ID to resume, or None for a fresh session.
+        """
         opts = ClaudeAgentOptions(
             model=self.model,
             cwd=str(self.info.path),
@@ -217,6 +226,12 @@ class Agent:
             return False
 
     async def _disconnect_stale(self) -> None:
+        """Disconnect any existing SDK client, ignoring errors.
+
+        Called before reconnecting and during shutdown to ensure clean state.
+        Errors during disconnect are logged at debug level and suppressed —
+        the connection may already be dead.
+        """
         if self._client:
             try:
                 await self._client.disconnect()
@@ -231,6 +246,15 @@ class Agent:
             return await self._send_internal(text)
 
     async def _send_internal(self, text: str) -> str:
+        """Execute a query against the Claude SDK and return the response text.
+
+        Handles connection, streaming, structured output, cost tracking, and
+        tracing. Updates ``last_*`` metadata attributes after each call.
+        Must be called under ``self._lock`` (use :meth:`send` for thread safety).
+
+        Raises:
+            CLIConnectionError: If the SDK connection cannot be established.
+        """
         from .tracing import set_span_attribute, trace_llm_call
 
         if not await self.connect(resume_id=self._session_id):

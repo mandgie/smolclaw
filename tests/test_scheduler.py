@@ -7,7 +7,7 @@ import contextlib
 import json
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -1629,6 +1629,59 @@ class TestEditJob:
         with pytest.raises(ValueError, match="No editable fields"):
             scheduler_with_jobs.edit_job("editable-job", id="hacked", agent="evil")
 
+    def test_edit_prompt_file_not_found(self, scheduler_with_jobs: Scheduler):
+        """Editing with a nonexistent prompt_file logs a warning but still applies."""
+        job = scheduler_with_jobs.edit_job("editable-job", prompt_file="nonexistent-prompt.md")
+        # Job is returned (edit succeeded for the prompt_file field at least)
+        assert job is not None
+        # The prompt_file attribute was set
+        assert job.prompt_file == "nonexistent-prompt.md"
+        # But the prompt content was NOT overwritten (file doesn't exist)
+        assert job.prompt == "Morning check"
+
+    def test_edit_prompt_file_found(self, scheduler_with_jobs: Scheduler, tmp_base: Path):
+        """Editing with an existing prompt_file resolves and sets the prompt content."""
+        # Create the prompt file
+        prompt_dir = tmp_base / "agents" / "testagent" / "prompts"
+        prompt_dir.mkdir(parents=True, exist_ok=True)
+        (prompt_dir / "updated.md").write_text("New prompt from file")
+
+        job = scheduler_with_jobs.edit_job("editable-job", prompt_file="updated.md")
+        assert job is not None
+        assert job.prompt == "New prompt from file"
+
+
+class TestEditJobMultiField:
+    """Additional edit_job tests for multi-field edits and persistence."""
+
+    @pytest.fixture()
+    def scheduler_with_jobs(self, tmp_base: Path):
+        """Create a scheduler with one editable job."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        jobs_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "editable-job",
+                        "agent": "testagent",
+                        "schedule": "0 8 * * *",
+                        "prompt": "Morning check",
+                        "enabled": True,
+                        "delivery": "telegram",
+                        "delivery_chat_id": "123",
+                        "session_mode": "isolated",
+                    },
+                ]
+            )
+        )
+        agents_dir = tmp_base / "agents"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, agents_dir, router)
+        scheduler.load_jobs()
+        return scheduler
+
     def test_edit_multiple_fields(self, scheduler_with_jobs: Scheduler):
         """Editing multiple fields at once works."""
         job = scheduler_with_jobs.edit_job(
@@ -1659,6 +1712,67 @@ class TestEditJob:
         saved = json.loads(scheduler_with_jobs.jobs_path.read_text())
         saved_job = next(j for j in saved if j["id"] == "editable-job")
         assert saved_job["prompt"] == "Persisted prompt"
+
+
+class TestSaveJobsFallback:
+    """Tests for save_jobs() atomic write fallback."""
+
+    def test_save_jobs_fallback_on_atomic_failure(self, tmp_base: Path):
+        """save_jobs() falls back to direct write when atomic write fails."""
+        jobs_path = tmp_base / "shared" / "cron" / "jobs.json"
+        jobs_path.write_text("[]")
+        router = MagicMock()
+        scheduler = Scheduler(jobs_path, tmp_base / "agents", router)
+        scheduler.jobs = [
+            Job(
+                {
+                    "id": "test",
+                    "agent": "testagent",
+                    "schedule": "0 8 * * *",
+                    "prompt": "Hello",
+                }
+            )
+        ]
+
+        # Make mkstemp raise OSError to trigger fallback
+        with patch("smolclaw.scheduler.tempfile.mkstemp", side_effect=OSError("cross-device")):
+            scheduler.save_jobs()
+
+        # Data should still be saved via fallback
+        saved = json.loads(jobs_path.read_text())
+        assert len(saved) == 1
+        assert saved[0]["id"] == "test"
+
+
+class TestSchedulerOnLoopDoneNoLoop:
+    """Tests for _on_loop_done when no event loop is available."""
+
+    def test_on_loop_done_no_event_loop(self, tmp_base: Path, jobs_file: Path):
+        """_on_loop_done logs error when no event loop is running."""
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler._running = True
+
+        # Create a fake completed task
+        mock_task = MagicMock(spec=asyncio.Task)
+        mock_task.cancelled.return_value = False
+        mock_task.exception.return_value = RuntimeError("crash")
+
+        # Patch get_running_loop to raise RuntimeError (no loop)
+        with patch("smolclaw.scheduler.asyncio.get_running_loop", side_effect=RuntimeError):
+            # Should not raise — just logs error
+            scheduler._on_loop_done(mock_task)
+
+    def test_on_loop_done_clean_shutdown(self, tmp_base: Path, jobs_file: Path):
+        """_on_loop_done does nothing when _running is False (clean shutdown)."""
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler._running = False
+
+        mock_task = MagicMock(spec=asyncio.Task)
+        # Should return early without checking task state
+        scheduler._on_loop_done(mock_task)
+        mock_task.cancelled.assert_not_called()
 
 
 class TestSchedulerOnEvent:
