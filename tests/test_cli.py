@@ -20,6 +20,7 @@ from smolclaw.cli import (
     _restart_gateway,
     _save_session_id,
     _session_file_path,
+    _setup_telegram,
     _try_api_send,
     cli,
     get_base_dir,
@@ -926,6 +927,142 @@ class TestInitCommand:
         result = runner.invoke(cli, ["--home", str(tmp_base), "init"])
         assert result.exit_code == 0
         assert "already initialized" in result.output
+
+    def test_init_with_telegram(self, tmp_path: Path):
+        """init --telegram should create env file and configure agent.yaml."""
+        import yaml
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "init", "--agent", "tars", "--telegram", "123456:ABC-DEF"],
+        )
+        assert result.exit_code == 0
+        assert "Telegram configured" in result.output
+        assert "TARS_TELEGRAM_TOKEN" in result.output
+
+        # Verify channels/telegram.env
+        env_file = tmp_path / "agents" / "tars" / "channels" / "telegram.env"
+        assert env_file.exists()
+        env_content = env_file.read_text()
+        assert "TARS_TELEGRAM_TOKEN=123456:ABC-DEF" in env_content
+
+        # Verify agent.yaml has Telegram channel
+        yaml_content = yaml.safe_load((tmp_path / "agents" / "tars" / "agent.yaml").read_text())
+        assert "telegram" in yaml_content["channels"]
+        assert yaml_content["channels"]["telegram"]["token_env"] == "TARS_TELEGRAM_TOKEN"
+
+        # Next steps should not suggest --telegram since it's already done
+        assert "Re-run with --telegram" not in result.output
+
+    def test_init_without_telegram_suggests_flag(self, tmp_path: Path):
+        """init without --telegram should suggest it in next steps."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "init"])
+        assert result.exit_code == 0
+        assert "Re-run with --telegram TOKEN" in result.output
+
+
+class TestAddTelegram:
+    def test_add_with_telegram(self, tmp_path: Path):
+        """add --telegram should configure Telegram for the new agent."""
+        import yaml
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "add", "mybot", "--telegram", "999:XYZ"],
+        )
+        assert result.exit_code == 0
+        assert "Telegram configured" in result.output
+
+        agent_dir = tmp_path / "agents" / "mybot"
+
+        # Verify env file
+        env_file = agent_dir / "channels" / "telegram.env"
+        assert env_file.exists()
+        assert "MYBOT_TELEGRAM_TOKEN=999:XYZ" in env_file.read_text()
+
+        # Verify agent.yaml
+        yaml_content = yaml.safe_load((agent_dir / "agent.yaml").read_text())
+        assert yaml_content["channels"]["telegram"]["token_env"] == "MYBOT_TELEGRAM_TOKEN"
+
+    def test_add_without_telegram(self, tmp_path: Path):
+        """add without --telegram should leave channels empty."""
+        import yaml
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_path), "add", "mybot"])
+        assert result.exit_code == 0
+
+        yaml_content = yaml.safe_load((tmp_path / "agents" / "mybot" / "agent.yaml").read_text())
+        assert yaml_content["channels"] == {}
+
+    def test_telegram_env_var_naming(self, tmp_path: Path):
+        """Telegram env var should be uppercase agent name + _TELEGRAM_TOKEN."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "add", "my-agent", "--telegram", "111:TOK"],
+        )
+        assert result.exit_code == 0
+        assert "MY-AGENT_TELEGRAM_TOKEN" in result.output
+
+    def test_telegram_authorized_users_empty(self, tmp_path: Path):
+        """Telegram channel config should include empty authorized_users list."""
+        import yaml
+
+        runner = CliRunner()
+        runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "add", "bot", "--telegram", "555:TOK"],
+        )
+        yaml_content = yaml.safe_load((tmp_path / "agents" / "bot" / "agent.yaml").read_text())
+        assert yaml_content["channels"]["telegram"]["authorized_users"] == []
+
+
+class TestSetupTelegram:
+    def test_setup_telegram_creates_env_file(self, tmp_path: Path):
+        """_setup_telegram should create the channels/telegram.env file."""
+        agent_dir = tmp_path / "agents" / "test"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "agent.yaml").write_text("name: test\nmodel: x\nchannels: {}\n")
+
+        _setup_telegram(agent_dir, "test", "tok:123")
+
+        env_file = agent_dir / "channels" / "telegram.env"
+        assert env_file.exists()
+        assert env_file.read_text() == "TEST_TELEGRAM_TOKEN=tok:123\n"
+
+    def test_setup_telegram_updates_existing_yaml(self, tmp_path: Path):
+        """_setup_telegram should add telegram to existing channels in agent.yaml."""
+        import yaml
+
+        agent_dir = tmp_path / "agents" / "bot"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "agent.yaml").write_text(
+            "name: bot\nmodel: sonnet\nchannels:\n  webhook:\n    url: http://example.com\n"
+        )
+
+        _setup_telegram(agent_dir, "bot", "tok:abc")
+
+        config = yaml.safe_load((agent_dir / "agent.yaml").read_text())
+        # Should have both webhook and telegram
+        assert "webhook" in config["channels"]
+        assert "telegram" in config["channels"]
+        assert config["channels"]["telegram"]["token_env"] == "BOT_TELEGRAM_TOKEN"
+
+    def test_setup_telegram_no_existing_yaml(self, tmp_path: Path):
+        """_setup_telegram should handle missing agent.yaml gracefully."""
+        import yaml
+
+        agent_dir = tmp_path / "agents" / "new"
+        agent_dir.mkdir(parents=True)
+
+        _setup_telegram(agent_dir, "new", "tok:xyz")
+
+        config = yaml.safe_load((agent_dir / "agent.yaml").read_text())
+        assert config["channels"]["telegram"]["token_env"] == "NEW_TELEGRAM_TOKEN"
 
 
 class TestStatusCommand:

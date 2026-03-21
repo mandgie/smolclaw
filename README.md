@@ -50,6 +50,12 @@ smolclaw init --agent tars
 smolclaw up
 ```
 
+Want Telegram? Add `--telegram` with your bot token from [@BotFather](https://t.me/BotFather):
+
+```bash
+smolclaw init --agent tars --telegram YOUR_BOT_TOKEN
+```
+
 This creates a full project at `~/.smolclaw/` with your first agent and starts the gateway. The API + dashboard will be at `http://localhost:7890`.
 
 ## How Agents Work
@@ -134,7 +140,7 @@ All messages — whether from Telegram, the API, the CLI, or the scheduler — f
 ## CLI
 
 ```bash
-smolclaw init                        # Initialize project (first run)
+smolclaw init [--telegram TOKEN]     # Initialize project (first run)
 smolclaw up                          # Start gateway (all agents + API)
 smolclaw chat <agent>                # Interactive REPL with session persistence
 smolclaw status                      # Show agents, jobs, config, issues

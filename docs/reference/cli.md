@@ -19,15 +19,16 @@ smolclaw [--home PATH] <command>
 Initialize a new smolclaw project.
 
 ```bash
-smolclaw init [--agent NAME] [--model MODEL]
+smolclaw init [--agent NAME] [--model MODEL] [--telegram TOKEN]
 ```
 
 | Option | Default | Description |
 |---|---|---|
 | `--agent` | `myagent` | Name of the first agent to create |
 | `--model` | `claude-sonnet-4-6` | Model for the first agent |
+| `--telegram` | — | Telegram bot token from @BotFather — auto-configures Telegram channel |
 
-Creates `~/.smolclaw/` with config, shared directory, and first agent.
+Creates `~/.smolclaw/` with config, shared directory, and first agent. When `--telegram` is provided, automatically creates the `channels/telegram.env` file and configures the Telegram channel in `agent.yaml`.
 
 ---
 
@@ -83,15 +84,16 @@ Checks:
 Scaffold a new agent.
 
 ```bash
-smolclaw add <name> [--model MODEL]
+smolclaw add <name> [--model MODEL] [--telegram TOKEN]
 ```
 
 | Argument/Option | Default | Description |
 |---|---|---|
 | `name` | required | Agent name |
 | `--model` | `claude-sonnet-4-6` | Model to use |
+| `--telegram` | — | Telegram bot token — auto-configures Telegram channel |
 
-Creates the agent directory with `agent.yaml` and `soul.md`.
+Creates the agent directory with `agent.yaml` and `soul.md`. When `--telegram` is provided, also sets up `channels/telegram.env` and configures the channel in `agent.yaml`.
 
 ---
 

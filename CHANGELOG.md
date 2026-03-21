@@ -6,12 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **`--telegram` flag for `init` and `add`** — `smolclaw init --telegram TOKEN` and `smolclaw add NAME --telegram TOKEN` auto-configure Telegram: creates `channels/telegram.env` with the bot token and sets up the Telegram channel in `agent.yaml`. Eliminates the #1 setup friction point — no more manual env file creation or YAML editing.
 - **`doctor` channel token validation** — The `doctor` command now checks that channel token env vars (e.g. `TARS_TELEGRAM_TOKEN`) are actually set, either in the process environment or in the agent's `channels/*.env` files. Catches the most common misconfiguration (forgetting to set the Telegram token). Gracefully handles malformed YAML, non-dict channel configs, and unreadable env files.
 - **`examples/README.md`** — Complete walkthrough for the example two-agent setup: file structure, customization guide, Telegram setup, and key concepts explained.
 
 ### Changed
 - SECURITY.md updated for v0.2.0 supported versions.
-- 992 tests, 99% coverage (up from 982). 10 new tests for channel token validation edge cases.
+- 1001 tests, 99% coverage (up from 982). 9 new tests for `--telegram` flag, 10 for channel token validation.
 
 ## [0.2.0] — 2026-03-20
 

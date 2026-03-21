@@ -80,6 +80,22 @@ memory:
 
 Available models: `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`
 
+### Telegram (optional)
+
+The fastest way to connect Telegram is with the `--telegram` flag during init:
+
+```bash
+smolclaw init --agent tars --telegram YOUR_BOT_TOKEN
+```
+
+This creates `channels/telegram.env` with your token and configures `agent.yaml` automatically. To get a bot token, message [@BotFather](https://t.me/BotFather) on Telegram and use `/newbot`.
+
+You can also add Telegram to an existing agent:
+
+```bash
+smolclaw add coach --telegram ANOTHER_BOT_TOKEN
+```
+
 ## Start the Gateway
 
 ```bash
