@@ -38,9 +38,9 @@ Gateway (one process)
 ## File Structure
 
 ```
-smolclaw/              # Python package (~6300 lines, 14 modules)
+smolclaw/              # Python package (~6400 lines, 14 modules)
 ├── __init__.py        # Package exports (~50 lines)
-├── cli.py             # Click CLI: up, chat, add, list, send, cron, memory, export/import, install (~1914 lines)
+├── cli.py             # Click CLI: up, chat, add, list, send, cron, memory, export/import, install (~2024 lines)
 ├── memory.py          # Namespaced SQLite memory: FTS5 + sqlite-vec + hybrid RRF (~620 lines)
 ├── api.py             # FastAPI REST endpoints + dashboard serving (~668 lines)
 ├── channel.py         # Channel base + Telegram/Webhook + extensible registry (~486 lines)

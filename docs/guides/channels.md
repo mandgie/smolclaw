@@ -4,7 +4,21 @@ Channels connect agents to the outside world. smolclaw includes Telegram and Web
 
 ## Telegram
 
-### Setup
+### Quick Setup
+
+The fastest way — use the `--telegram` flag when creating an agent:
+
+```bash
+smolclaw init --agent tars --telegram 7123456789:AAHxxxxxx
+# or for an existing project:
+smolclaw add coach --telegram 7123456789:AAHxxxxxx
+```
+
+This automatically creates the env file and configures `agent.yaml`. Done.
+
+### Manual Setup
+
+If you prefer to configure manually (or need to add Telegram to an existing agent):
 
 1. **Create a bot** with [@BotFather](https://t.me/botfather) on Telegram
 2. **Get the token** — BotFather gives you something like `7123456789:AAH...`
