@@ -11,6 +11,7 @@ from pathlib import Path
 __all__ = ["Gateway", "WebSocketManager", "get_log_path", "run_gateway", "setup_logging"]
 
 import contextlib
+from datetime import UTC, datetime
 
 from . import __version__
 from .agent import Agent
@@ -85,6 +86,7 @@ class Gateway:
         self.scheduler: Scheduler | None = None
         self.watcher: FileWatcher | None = None
         self.ws_manager = WebSocketManager()
+        self.started_at: datetime | None = None
         self._user_md = ""
 
     def __repr__(self) -> str:
@@ -215,6 +217,8 @@ class Gateway:
         agent_count = len(self.agents)
         channel_count = len(self.channels)
         job_count = len(self.scheduler.jobs) if self.scheduler else 0
+
+        self.started_at = datetime.now(UTC)
 
         log.info(
             f"smolclaw gateway ready: "

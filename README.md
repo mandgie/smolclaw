@@ -176,6 +176,7 @@ smolclaw memory update <agent> <id> \
 smolclaw memory delete <agent> <id>  # Delete a fact
 smolclaw export <agent>              # Export agent as portable .tar.gz
 smolclaw import <archive>            # Import agent from .tar.gz archive
+smolclaw create-skill <name>         # Scaffold new skill with SKILL.md
 smolclaw add-skill <agent> <skill>   # Symlink shared skill to agent
 smolclaw install                     # Auto-start on login (macOS LaunchAgent)
 smolclaw version                     # Show version
@@ -323,7 +324,7 @@ smolclaw/              # Python package (~6400 lines)
 - [x] Budget limits, fallback models, structured output, file checkpointing
 - [x] REST API + dark-mode dashboard
 - [x] Cron scheduler with delivery to Telegram
-- [x] CLI: init, status, doctor, add, remove, add-skill, logs, install
+- [x] CLI: init, status, doctor, add, remove, create-skill, add-skill, logs, install
 - [x] Session persistence (save/resume per agent per chat)
 - [x] CLI interactive REPL (`smolclaw chat <agent>`)
 - [x] Vector search in memory (sqlite-vec + FTS5 + RRF hybrid)

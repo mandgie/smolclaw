@@ -6,13 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **`create-skill` CLI command** — `smolclaw create-skill my-tool` scaffolds a new skill directory with a properly formatted SKILL.md containing YAML frontmatter (name, description) and placeholder sections. Supports `--agent` flag to create directly in an agent's skills/ directory, and `-d` for custom descriptions. Shared skills (default) can then be linked to agents via `add-skill`.
+- **Gateway uptime in health endpoint** — `GET /api/health` now returns `uptime_seconds` and `started_at` fields for monitoring how long the gateway has been running. Useful for health dashboards and debugging restarts.
 - **`--telegram` flag for `init` and `add`** — `smolclaw init --telegram TOKEN` and `smolclaw add NAME --telegram TOKEN` auto-configure Telegram: creates `channels/telegram.env` with the bot token and sets up the Telegram channel in `agent.yaml`. Eliminates the #1 setup friction point — no more manual env file creation or YAML editing.
 - **`doctor` channel token validation** — The `doctor` command now checks that channel token env vars (e.g. `TARS_TELEGRAM_TOKEN`) are actually set, either in the process environment or in the agent's `channels/*.env` files. Catches the most common misconfiguration (forgetting to set the Telegram token). Gracefully handles malformed YAML, non-dict channel configs, and unreadable env files.
 - **`examples/README.md`** — Complete walkthrough for the example two-agent setup: file structure, customization guide, Telegram setup, and key concepts explained.
 
 ### Changed
 - SECURITY.md updated for v0.2.0 supported versions.
-- 1001 tests, 99% coverage (up from 982). 9 new tests for `--telegram` flag, 10 for channel token validation.
+- 1010 tests, 99% coverage (up from 1001). 7 new tests for `create-skill`, 2 for health uptime.
 
 ## [0.2.0] — 2026-03-20
 

@@ -1385,6 +1385,71 @@ def add_skill(ctx, agent_name, skill_name):
     click.echo(f"Linked {skill_name} → {agent_name}")
 
 
+@cli.command("create-skill")
+@click.argument("skill_name")
+@click.option(
+    "--agent",
+    default=None,
+    help="Create skill in an agent's skills/ directory (default: shared/skills/)",
+)
+@click.option(
+    "--description",
+    "-d",
+    default="",
+    help="Short description of what the skill does (for SKILL.md frontmatter)",
+)
+@click.pass_context
+def create_skill(ctx, skill_name, agent, description):
+    """Scaffold a new skill directory with SKILL.md template.
+
+    Creates a skill in shared/skills/ (usable by any agent via add-skill) or
+    directly in an agent's skills/ directory with --agent.
+
+    \b
+    Examples:
+        smolclaw create-skill my-tool
+        smolclaw create-skill my-tool --agent tars -d "Tool integration"
+    """
+    base = ctx.obj["base"]
+
+    if agent:
+        skill_dir = base / "agents" / agent / "skills" / skill_name
+        agent_dir = base / "agents" / agent
+        if not agent_dir.exists():
+            click.echo(f"Agent '{agent}' not found at {agent_dir}")
+            sys.exit(1)
+    else:
+        skill_dir = base / "shared" / "skills" / skill_name
+
+    if skill_dir.exists():
+        click.echo(f"Skill '{skill_name}' already exists at {skill_dir}")
+        sys.exit(1)
+
+    # Create skill directory structure
+    skill_dir.mkdir(parents=True)
+
+    # Write SKILL.md with frontmatter
+    desc = description or f"{skill_name} skill"
+    skill_md = (
+        f"---\n"
+        f"name: {skill_name}\n"
+        f"description: {desc}\n"
+        f"---\n\n"
+        f"# {skill_name}\n\n"
+        f"## Overview\n\n"
+        f"Describe what this skill does and when the agent should use it.\n\n"
+        f"## Usage\n\n"
+        f"Add usage instructions, examples, and available commands here.\n"
+    )
+    (skill_dir / "SKILL.md").write_text(skill_md)
+
+    location = f"agent '{agent}'" if agent else "shared"
+    click.echo(f"Created skill '{skill_name}' ({location})")
+    click.echo(f"  Edit: {skill_dir}/SKILL.md")
+    if not agent:
+        click.echo(f"  Link to agent: smolclaw add-skill <agent> {skill_name}")
+
+
 @cli.command("export")
 @click.argument("name")
 @click.option("-o", "--output", default=None, help="Output file path (default: <name>.tar.gz)")

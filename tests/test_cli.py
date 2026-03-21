@@ -722,6 +722,112 @@ class TestAddSkill:
 
 
 # ---------------------------------------------------------------------------
+# Tests: create-skill command
+# ---------------------------------------------------------------------------
+
+
+class TestCreateSkill:
+    def test_create_shared_skill(self, tmp_path: Path):
+        """Create a skill in shared/skills/ by default."""
+        runner = CliRunner()
+        runner.invoke(cli, ["--home", str(tmp_path), "init"])
+        result = runner.invoke(cli, ["--home", str(tmp_path), "create-skill", "my-tool"])
+        assert result.exit_code == 0
+        assert "Created skill 'my-tool'" in result.output
+        assert "shared" in result.output
+
+        skill_dir = tmp_path / "shared" / "skills" / "my-tool"
+        assert skill_dir.exists()
+        skill_md = (skill_dir / "SKILL.md").read_text()
+        assert "name: my-tool" in skill_md
+        assert "description:" in skill_md
+
+    def test_create_agent_skill(self, tmp_path: Path):
+        """Create a skill directly in an agent's skills/ directory."""
+        runner = CliRunner()
+        runner.invoke(cli, ["--home", str(tmp_path), "init", "--agent", "tars"])
+        result = runner.invoke(
+            cli, ["--home", str(tmp_path), "create-skill", "my-tool", "--agent", "tars"]
+        )
+        assert result.exit_code == 0
+        assert "agent 'tars'" in result.output
+
+        skill_dir = tmp_path / "agents" / "tars" / "skills" / "my-tool"
+        assert skill_dir.exists()
+        assert (skill_dir / "SKILL.md").exists()
+
+    def test_create_skill_with_description(self, tmp_path: Path):
+        """Custom description is written to SKILL.md frontmatter."""
+        runner = CliRunner()
+        runner.invoke(cli, ["--home", str(tmp_path), "init"])
+        result = runner.invoke(
+            cli,
+            [
+                "--home",
+                str(tmp_path),
+                "create-skill",
+                "slack-bot",
+                "-d",
+                "Send and read Slack messages",
+            ],
+        )
+        assert result.exit_code == 0
+        skill_md = (tmp_path / "shared" / "skills" / "slack-bot" / "SKILL.md").read_text()
+        assert "Send and read Slack messages" in skill_md
+
+    def test_create_skill_already_exists(self, tmp_path: Path):
+        """Creating a skill that already exists exits with error."""
+        runner = CliRunner()
+        runner.invoke(cli, ["--home", str(tmp_path), "init"])
+        runner.invoke(cli, ["--home", str(tmp_path), "create-skill", "my-tool"])
+        result = runner.invoke(cli, ["--home", str(tmp_path), "create-skill", "my-tool"])
+        assert result.exit_code == 1
+        assert "already exists" in result.output
+
+    def test_create_skill_agent_not_found(self, tmp_path: Path):
+        """Creating a skill for a nonexistent agent exits with error."""
+        runner = CliRunner()
+        runner.invoke(cli, ["--home", str(tmp_path), "init"])
+        result = runner.invoke(
+            cli,
+            ["--home", str(tmp_path), "create-skill", "my-tool", "--agent", "ghost"],
+        )
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+    def test_create_skill_frontmatter_valid_yaml(self, tmp_path: Path):
+        """SKILL.md frontmatter is valid YAML parseable by the skill loader."""
+        import yaml
+
+        runner = CliRunner()
+        runner.invoke(cli, ["--home", str(tmp_path), "init"])
+        runner.invoke(
+            cli,
+            [
+                "--home",
+                str(tmp_path),
+                "create-skill",
+                "my-tool",
+                "-d",
+                "A useful tool",
+            ],
+        )
+        content = (tmp_path / "shared" / "skills" / "my-tool" / "SKILL.md").read_text()
+        # Extract frontmatter between --- markers
+        parts = content.split("---")
+        fm = yaml.safe_load(parts[1])
+        assert fm["name"] == "my-tool"
+        assert fm["description"] == "A useful tool"
+
+    def test_create_skill_shows_add_skill_hint(self, tmp_path: Path):
+        """Shared skill creation suggests the add-skill command."""
+        runner = CliRunner()
+        runner.invoke(cli, ["--home", str(tmp_path), "init"])
+        result = runner.invoke(cli, ["--home", str(tmp_path), "create-skill", "my-tool"])
+        assert "add-skill" in result.output
+
+
+# ---------------------------------------------------------------------------
 # Tests: up command
 # ---------------------------------------------------------------------------
 

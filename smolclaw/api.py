@@ -239,6 +239,8 @@ class HealthResponse(BaseModel):
     channels: int
     jobs: int
     ws_connections: int = 0
+    uptime_seconds: float | None = None
+    started_at: str | None = None
 
 
 def create_app(gateway: Gateway) -> FastAPI:
@@ -655,9 +657,11 @@ def create_app(gateway: Gateway) -> FastAPI:
     @app.get("/api/health", response_model=HealthResponse)
     async def health() -> dict[str, Any]:
         """Health check endpoint with system status."""
+        from datetime import UTC, datetime
+
         from . import __version__
 
-        return {
+        result: dict[str, Any] = {
             "status": "ok",
             "version": __version__,
             "agents": len(gateway.agents),
@@ -665,6 +669,11 @@ def create_app(gateway: Gateway) -> FastAPI:
             "jobs": len(gateway.scheduler.jobs) if gateway.scheduler else 0,
             "ws_connections": gateway.ws_manager.connection_count,
         }
+        if gateway.started_at:
+            now = datetime.now(UTC)
+            result["uptime_seconds"] = round((now - gateway.started_at).total_seconds(), 1)
+            result["started_at"] = gateway.started_at.isoformat()
+        return result
 
     # --- WebSocket for live dashboard updates ---
 

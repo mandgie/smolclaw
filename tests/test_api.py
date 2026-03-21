@@ -69,6 +69,7 @@ def mock_gateway(tmp_path: Path):
 
     # Gateway config — no auth by default
     gw.config.api_key = None
+    gw.started_at = None
 
     # Mock router
     gw.router.get_agent.side_effect = lambda name: gw.agents.get(name)
@@ -1170,6 +1171,29 @@ class TestHealthWebSocketConnections:
         with client.websocket_connect("/ws"):
             resp = client.get("/api/health")
             assert resp.json()["ws_connections"] == 1
+
+
+class TestHealthUptime:
+    def test_health_no_uptime_when_not_started(self, client):
+        """Health endpoint returns null uptime when gateway hasn't been started."""
+        resp = client.get("/api/health")
+        data = resp.json()
+        assert data["uptime_seconds"] is None
+        assert data["started_at"] is None
+
+    def test_health_includes_uptime_when_started(self, mock_gateway):
+        """Health endpoint returns uptime when gateway has started_at set."""
+        from datetime import UTC, datetime, timedelta
+
+        mock_gateway.started_at = datetime.now(UTC) - timedelta(seconds=120)
+        app = create_app(mock_gateway)
+        client = TestClient(app)
+        resp = client.get("/api/health")
+        data = resp.json()
+        assert data["uptime_seconds"] is not None
+        assert data["uptime_seconds"] >= 119  # Allow 1s tolerance
+        assert data["started_at"] is not None
+        assert "T" in data["started_at"]  # ISO format
 
 
 class TestBroadcastOnMutation:

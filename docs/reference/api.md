@@ -383,7 +383,9 @@ GET /api/health
   "agents": 2,
   "channels": 1,
   "jobs": 3,
-  "ws_connections": 1
+  "ws_connections": 1,
+  "uptime_seconds": 3621.5,
+  "started_at": "2026-03-21T10:00:00+00:00"
 }
 ```
 

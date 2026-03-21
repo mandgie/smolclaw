@@ -193,6 +193,29 @@ smolclaw config set log_level DEBUG  # More verbose logging
 
 ---
 
+### `create-skill`
+
+Scaffold a new skill directory with a SKILL.md template.
+
+```bash
+# Create in shared/skills/ (usable by any agent via add-skill)
+smolclaw create-skill my-tool
+
+# Create directly in an agent's skills/ directory
+smolclaw create-skill my-tool --agent tars
+
+# With a custom description
+smolclaw create-skill my-tool -d "Interact with external API"
+```
+
+Creates a skill directory with a properly formatted `SKILL.md` containing YAML frontmatter (name, description) and placeholder sections for documentation.
+
+**Options:**
+- `--agent AGENT` — Create in the agent's `skills/` directory instead of `shared/skills/`
+- `-d, --description TEXT` — Short description for the SKILL.md frontmatter
+
+---
+
 ### `add-skill`
 
 Link a shared skill to an agent.
