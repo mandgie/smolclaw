@@ -302,6 +302,23 @@ class TestHandleChanges:
 
         cb.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_changes_with_path_outside_agents_dir_skipped(self, tmp_path: Path):
+        """Watched files whose path is not relative to agents_dir are skipped."""
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        cb = AsyncMock()
+        fw = FileWatcher(agents_dir, cb)
+
+        # Create a .md file outside agents_dir — agent_name_from_path returns None
+        outside = tmp_path / "other"
+        outside.mkdir()
+        (outside / "soul.md").write_text("rogue file")
+        changes = {(1, str(outside / "soul.md"))}
+        await fw._handle_changes(changes)
+
+        cb.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # Tests: FileWatcher._watch_loop error handling

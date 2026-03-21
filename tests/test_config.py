@@ -348,3 +348,46 @@ class TestGatewayConfig:
         (tmp_path / "config.yaml").write_text("")
         cfg = load_gateway_config(tmp_path)
         assert cfg == GatewayConfig()
+
+
+class TestSkillFrontmatterEdgeCases:
+    """Cover _parse_skill_frontmatter branches: no closing ---, YAML error."""
+
+    def test_frontmatter_no_closing_delimiter(self):
+        """Frontmatter with opening --- but no closing --- returns empty dict."""
+        from smolclaw.config import _parse_skill_frontmatter
+
+        result = _parse_skill_frontmatter("---\nname: test\ndescription: oops\n")
+        assert result == {}
+
+    def test_frontmatter_yaml_parse_error(self):
+        """Invalid YAML between --- delimiters returns empty dict."""
+        from smolclaw.config import _parse_skill_frontmatter
+
+        # Colons in unquoted values can trigger YAML errors
+        result = _parse_skill_frontmatter("---\n: : :\n  bad: [unterminated\n---\n")
+        assert result == {}
+
+    def test_frontmatter_non_dict_yaml(self):
+        """YAML that parses to a non-dict (e.g. a list) returns empty dict."""
+        from smolclaw.config import _parse_skill_frontmatter
+
+        result = _parse_skill_frontmatter("---\n- item1\n- item2\n---\n")
+        assert result == {}
+
+
+class TestDiscoverAllAgentsFailure:
+    """Cover discover_all_agents when an agent fails to load."""
+
+    def test_discover_all_agents_skips_broken_agent(self, tmp_base: Path, agent_dir: Path):
+        """An agent with a broken agent.yaml is skipped (logged), not crash."""
+        # Create a second agent with invalid YAML
+        broken = tmp_base / "agents" / "broken"
+        broken.mkdir(parents=True)
+        (broken / "agent.yaml").write_text("name: broken\n  bad_indent: oops")
+
+        agents = discover_all_agents(tmp_base)
+        # The valid agent should still be discovered
+        assert "testagent" in agents
+        # The broken agent should be skipped
+        assert "broken" not in agents

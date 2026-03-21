@@ -1232,3 +1232,74 @@ class TestBroadcastOnMutation:
         resp = client.delete("/api/cron/jobs/test-job")
         assert resp.status_code == 200
         assert "jobs" in broadcast_calls
+
+
+class TestSessionParsingEdgeCases:
+    """Cover _parse_session_messages with malformed JSONL lines."""
+
+    def test_malformed_jsonl_lines_skipped(self, tmp_path: Path):
+        """Lines that fail JSON decode or have UnicodeDecodeError are skipped."""
+        session_file = tmp_path / "session.jsonl"
+        lines = [
+            '{"type": "user", "message": {"content": "hello"}}\n',
+            "NOT VALID JSON\n",
+            '{"type": "assistant", "message": {"content": [{"type": "text", "text": "hi"}]}}\n',
+        ]
+        session_file.write_text("".join(lines))
+
+        messages = _parse_session_messages(session_file)
+        # Should get 2 messages (user + assistant), skipping the bad line
+        assert len(messages) == 2
+        assert messages[0]["role"] == "user"
+        assert messages[1]["role"] == "assistant"
+
+
+class TestAgentDetailOptionalFields:
+    """Cover optional config fields in agent detail endpoint."""
+
+    def test_agent_detail_with_all_optional_fields(self, mock_gateway):
+        """Agent detail includes optional config fields when set."""
+        agent = mock_gateway.agents["testagent"]
+        agent.info.config.max_turns = 25
+        agent.info.config.max_budget_usd = 5.0
+        agent.info.config.fallback_model = "claude-haiku-3"
+        agent.info.config.thinking = True
+        agent.info.config.effort = "high"
+        agent.info.config.enable_file_checkpointing = True
+        agent.info.config.mcp_servers = [{"name": "test-server"}]
+
+        app = create_app(mock_gateway)
+        client = TestClient(app)
+        resp = client.get("/api/agents/testagent")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        config = data["config"]
+        assert config["max_turns"] == 25
+        assert config["max_budget_usd"] == 5.0
+        assert config["fallback_model"] == "claude-haiku-3"
+        assert config["thinking"] is True
+        assert config["effort"] == "high"
+        assert config["file_checkpointing"] is True
+        assert config["mcp_servers"] is True
+
+
+class TestDashboardFallback:
+    """Cover dashboard HTML fallback when index.html is missing."""
+
+    def test_dashboard_missing_index_html(self, mock_gateway):
+        """Dashboard returns fallback HTML when index.html doesn't exist."""
+        app = create_app(mock_gateway)
+        client = TestClient(app)
+
+        original_exists = Path.exists
+
+        def fake_exists(self):
+            if str(self).endswith("dashboard/index.html"):
+                return False
+            return original_exists(self)
+
+        with patch.object(Path, "exists", fake_exists):
+            resp = client.get("/")
+            assert resp.status_code == 200
+            assert "Dashboard not found" in resp.text

@@ -377,6 +377,40 @@ class TestSpanKindVariations:
             tracing_mod._configured = False
 
 
+class TestOTLPExporterFallback:
+    """Cover OTLP exporter import failure fallback to console exporter."""
+
+    @pytest.mark.skipif(not TRACING_AVAILABLE, reason="opentelemetry not installed")
+    def test_otlp_import_failure_falls_back_to_console(self):
+        """When OTLP exporter is not installed, tracing falls back to console."""
+        import builtins
+
+        import smolclaw.tracing as tracing_mod
+
+        tracing_mod._configured = False
+        try:
+            cfg = TracingConfig(
+                enabled=True,
+                exporter="otlp",
+                endpoint="http://localhost:4318/v1/traces",
+            )
+
+            original_import = builtins.__import__
+
+            def mock_import(name, *args, **kwargs):
+                if "otlp" in name:
+                    raise ImportError("No OTLP exporter installed")
+                return original_import(name, *args, **kwargs)
+
+            with patch.object(builtins, "__import__", side_effect=mock_import):
+                result = configure_tracing(cfg)
+
+            # Should still succeed (fell back to console)
+            assert result is True
+        finally:
+            tracing_mod._configured = False
+
+
 class TestPublicExports:
     """Verify tracing is exported from the main package."""
 

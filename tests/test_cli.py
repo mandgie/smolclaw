@@ -3287,3 +3287,180 @@ class TestImport:
         assert (agent_dir / "agent.yaml").read_text() == "name: tars\nmodel: claude-opus-4-6\n"
         assert (agent_dir / "soul.md").read_text() == "# TARS\nHumor: 60%\n"
         assert (agent_dir / "prompts" / "brief.md").read_text() == "Morning briefing.\n"
+
+
+class TestUpdateVersionParseError:
+    """Cover update command version parse failure branch."""
+
+    def test_update_unparseable_version(self):
+        """Version that can't be parsed shows error and exits."""
+        runner = CliRunner()
+        with patch(
+            "smolclaw.cli._get_latest_version",
+            return_value=("not.a.version.at.all.x", "pypi"),
+        ):
+            result = runner.invoke(cli, ["update", "--check"])
+            # The _parse_version_tuple should raise ValueError on bad input
+            # which triggers lines 263-265
+            assert result.exit_code == 1 or "Could not parse version" in result.output
+
+
+class TestImportEdgeCases:
+    """Cover import command error branches: empty archive, path traversal, TarError, OSError."""
+
+    def _make_empty_archive(self, tmp_path: Path) -> Path:
+        """Create a .tar.gz with no files."""
+        import tarfile
+
+        archive = tmp_path / "empty.tar.gz"
+        with tarfile.open(str(archive), "w:gz"):
+            pass  # Empty archive
+        return archive
+
+    def _make_unsafe_archive(self, tmp_path: Path) -> Path:
+        """Create a .tar.gz with path traversal attack."""
+        import io
+        import tarfile
+
+        archive = tmp_path / "unsafe.tar.gz"
+        with tarfile.open(str(archive), "w:gz") as tar:
+            content = b"pwned"
+            info = tarfile.TarInfo(name="../../etc/passwd")
+            info.size = len(content)
+            tar.addfile(info, fileobj=io.BytesIO(content))
+        return archive
+
+    def _make_dir_only_archive(self, tmp_path: Path) -> Path:
+        """Create a .tar.gz with only directory entries (no files)."""
+        import tarfile
+
+        archive = tmp_path / "dironly.tar.gz"
+        with tarfile.open(str(archive), "w:gz") as tar:
+            # Add a top-level directory entry
+            info = tarfile.TarInfo(name="myagent/")
+            info.type = tarfile.DIRTYPE
+            tar.addfile(info)
+            # Add a subdirectory
+            info2 = tarfile.TarInfo(name="myagent/skills/")
+            info2.type = tarfile.DIRTYPE
+            tar.addfile(info2)
+        return archive
+
+    def test_import_empty_archive(self, tmp_base: Path, tmp_path: Path):
+        """Import with empty archive shows error."""
+        archive = self._make_empty_archive(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "import", str(archive)])
+        assert result.exit_code == 1
+        assert "empty" in result.output.lower()
+
+    def test_import_unsafe_path_traversal(self, tmp_base: Path, tmp_path: Path):
+        """Import with path traversal in archive shows error."""
+        archive = self._make_unsafe_archive(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "import", str(archive)])
+        assert result.exit_code == 1
+        assert "Unsafe path" in result.output
+
+    def test_import_corrupted_archive(self, tmp_base: Path, tmp_path: Path):
+        """Import with corrupted file shows TarError."""
+        bad_archive = tmp_path / "corrupt.tar.gz"
+        bad_archive.write_bytes(b"this is not a tar file")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "import", str(bad_archive)])
+        assert result.exit_code == 1
+        assert "Failed to read archive" in result.output
+
+    def test_import_oserror(self, tmp_base: Path, tmp_path: Path):
+        """Import OSError (e.g. disk full) shows error."""
+        import io
+        import tarfile
+
+        # Create a valid archive
+        archive = tmp_path / "agent.tar.gz"
+        with tarfile.open(str(archive), "w:gz") as tar:
+            content = b"name: myagent\n"
+            info = tarfile.TarInfo(name="myagent/agent.yaml")
+            info.size = len(content)
+            tar.addfile(info, fileobj=io.BytesIO(content))
+
+        runner = CliRunner()
+        with patch("pathlib.Path.mkdir", side_effect=OSError("No space left on device")):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "import", str(archive)])
+        assert result.exit_code == 1
+        assert "Import failed" in result.output
+
+    def test_import_dir_entries_skipped(self, tmp_base: Path, tmp_path: Path):
+        """Import correctly creates directories from dir entries in archive."""
+        archive = self._make_dir_only_archive(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "import", str(archive)])
+        assert result.exit_code == 0
+        # The skills directory should have been created
+        assert (tmp_base / "agents" / "myagent" / "skills").is_dir()
+
+
+class TestExportOSError:
+    """Cover export command OSError branch."""
+
+    def test_export_oserror(self, tmp_base: Path, tmp_path: Path):
+        """Export OSError (e.g. permission denied) shows error."""
+        # Create agent
+        agent_dir = tmp_base / "agents" / "tars"
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        (agent_dir / "agent.yaml").write_text("name: tars\n")
+        (agent_dir / "soul.md").write_text("# TARS\n")
+
+        runner = CliRunner()
+        with patch("tarfile.open", side_effect=OSError("Permission denied")):
+            result = runner.invoke(
+                cli,
+                ["--home", str(tmp_base), "export", "tars", "-o", str(tmp_path / "out.tar.gz")],
+            )
+        assert result.exit_code == 1
+        assert "Export failed" in result.output
+
+
+class TestDoctorCronError:
+    """Cover doctor command cron jobs.json parse error."""
+
+    def test_doctor_cron_json_error(self, tmp_base: Path, agent_dir: Path):
+        """Doctor reports error when jobs.json is corrupted."""
+        cron_file = tmp_base / "shared" / "cron" / "jobs.json"
+        cron_file.write_text("NOT VALID JSON {{{{")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "jobs.json error" in result.output
+
+
+class TestDoctorOptionalDepMissing:
+    """Cover doctor optional dependency ImportError branch."""
+
+    def test_doctor_shows_missing_optional_dep(self, tmp_base: Path, agent_dir: Path):
+        """Doctor shows 'not installed' for optional deps that can't be imported."""
+        import builtins
+
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "discord":
+                raise ImportError("No module named 'discord'")
+            return original_import(name, *args, **kwargs)
+
+        runner = CliRunner()
+        with patch.object(builtins, "__import__", side_effect=mock_import):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "discord.py not installed" in result.output
+
+
+class TestCliMainEntrypoint:
+    """Cover cli.py __main__ guard (line 1914)."""
+
+    def test_main_function_calls_cli(self):
+        """main() calls cli()."""
+        with patch("smolclaw.cli.cli") as mock_cli:
+            main()
+            mock_cli.assert_called_once()
