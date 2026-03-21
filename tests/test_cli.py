@@ -3456,6 +3456,184 @@ class TestDoctorOptionalDepMissing:
         assert "discord.py not installed" in result.output
 
 
+class TestDoctorChannelTokens:
+    """Cover doctor channel token validation."""
+
+    def test_doctor_token_set_in_env(self, tmp_base: Path):
+        """Doctor reports [ok] when token env var is set in process environment."""
+        agent = tmp_base / "agents" / "bot"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: bot\nmodel: claude-sonnet-4-6\n"
+            "channels:\n  telegram:\n    token_env: BOT_TELEGRAM_TOKEN\n"
+            "memory:\n  enabled: true\n"
+        )
+        (agent / "soul.md").write_text("# BOT\nTest.\n")
+
+        runner = CliRunner()
+        with patch.dict("os.environ", {"BOT_TELEGRAM_TOKEN": "123:fake"}):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "bot/telegram: BOT_TELEGRAM_TOKEN set" in result.output
+
+    def test_doctor_token_set_in_env_file(self, tmp_base: Path):
+        """Doctor reports [ok] when token is in agent's channels/*.env file."""
+        agent = tmp_base / "agents" / "bot"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: bot\nmodel: claude-sonnet-4-6\n"
+            "channels:\n  telegram:\n    token_env: BOT_TG_TOKEN\n"
+            "memory:\n  enabled: true\n"
+        )
+        (agent / "soul.md").write_text("# BOT\nTest.\n")
+        (agent / "channels" / "telegram.env").write_text("BOT_TG_TOKEN=123:fake\n")
+
+        runner = CliRunner()
+        # Ensure the env var is NOT in the process env
+        env = {k: v for k, v in __import__("os").environ.items() if k != "BOT_TG_TOKEN"}
+        with patch.dict("os.environ", env, clear=True):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "bot/telegram: BOT_TG_TOKEN set" in result.output
+
+    def test_doctor_token_missing(self, tmp_base: Path):
+        """Doctor reports [!!] when token env var is not set anywhere."""
+        agent = tmp_base / "agents" / "bot"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: bot\nmodel: claude-sonnet-4-6\n"
+            "channels:\n  telegram:\n    token_env: MISSING_TOKEN_XYZ\n"
+            "memory:\n  enabled: true\n"
+        )
+        (agent / "soul.md").write_text("# BOT\nTest.\n")
+
+        runner = CliRunner()
+        env = {k: v for k, v in __import__("os").environ.items() if k != "MISSING_TOKEN_XYZ"}
+        with patch.dict("os.environ", env, clear=True):
+            result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        assert "MISSING_TOKEN_XYZ not set" in result.output
+        assert "issue" in result.output.lower()
+
+    def test_doctor_no_channels_skips_token_check(self, tmp_base: Path, agent_dir: Path):
+        """Doctor doesn't report token issues for agents without channels."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        # Should not have any token-related output for the default testagent (channels: {})
+        assert "token" not in result.output.lower() or "Token" not in result.output
+
+    def test_doctor_malformed_agent_yaml_skipped(self, tmp_base: Path):
+        """Doctor skips agents with malformed YAML gracefully."""
+        agent = tmp_base / "agents" / "broken"
+        (agent / "channels").mkdir(parents=True)
+        (agent / "agent.yaml").write_text("{{{{NOT VALID YAML")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        # Should not crash — malformed agents are silently skipped in token check
+
+    def test_doctor_non_dict_channels_skipped(self, tmp_base: Path):
+        """Doctor skips agents where channels is not a dict (e.g. channels: null)."""
+        agent = tmp_base / "agents" / "weirdbot"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: weirdbot\nmodel: claude-sonnet-4-6\nchannels: null\nmemory:\n  enabled: true\n"
+        )
+        (agent / "soul.md").write_text("# W\nTest.\n")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        # No token output for this agent
+        assert "weirdbot" not in result.output or "token" not in result.output.lower()
+
+    def test_doctor_channel_no_token_env_skipped(self, tmp_base: Path):
+        """Doctor skips channels that don't have a token_env field."""
+        agent = tmp_base / "agents" / "notoken"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: notoken\nmodel: claude-sonnet-4-6\n"
+            "channels:\n  webhook:\n    url: http://example.com/hook\n"
+            "memory:\n  enabled: true\n"
+        )
+        (agent / "soul.md").write_text("# N\nTest.\n")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        # Webhook has no token_env so no token check output
+        assert "notoken/webhook" not in result.output
+
+    def test_doctor_non_dict_channel_config_skipped(self, tmp_base: Path):
+        """Doctor skips channel entries that are not dicts (e.g. channels: {tg: true})."""
+        agent = tmp_base / "agents" / "badcfg"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: badcfg\nmodel: claude-sonnet-4-6\n"
+            "channels:\n  telegram: true\n"
+            "memory:\n  enabled: true\n"
+        )
+        (agent / "soul.md").write_text("# B\nTest.\n")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        # Non-dict channel config is silently skipped
+        assert "badcfg/telegram" not in result.output
+
+    def test_doctor_skips_non_agent_dirs(self, tmp_base: Path, agent_dir: Path):
+        """Doctor skips directories without agent.yaml in the agents folder."""
+        # Create a non-agent directory (no agent.yaml)
+        (tmp_base / "agents" / "notanagent").mkdir(parents=True, exist_ok=True)
+        # And a plain file in agents/
+        (tmp_base / "agents" / "somefile.txt").write_text("not an agent")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        # Should not crash and should not show token checks for non-agents
+        assert "notanagent" not in result.output
+        assert "somefile" not in result.output
+
+    def test_doctor_env_file_read_error(self, tmp_base: Path):
+        """Doctor handles unreadable .env files gracefully."""
+        agent = tmp_base / "agents" / "envbot"
+        for subdir in ["skills", "prompts", "context", "channels", "sessions"]:
+            (agent / subdir).mkdir(parents=True)
+        (agent / "agent.yaml").write_text(
+            "name: envbot\nmodel: claude-sonnet-4-6\n"
+            "channels:\n  telegram:\n    token_env: ENVBOT_TOKEN\n"
+            "memory:\n  enabled: true\n"
+        )
+        (agent / "soul.md").write_text("# E\nTest.\n")
+        (agent / "channels" / "telegram.env").write_text("ENVBOT_TOKEN=123:fake\n")
+
+        runner = CliRunner()
+        # Mock read_text to raise OSError for .env files
+        original_read = Path.read_text
+
+        def mock_read(self, *args, **kwargs):
+            if str(self).endswith(".env"):
+                raise OSError("Permission denied")
+            return original_read(self, *args, **kwargs)
+
+        with patch.object(Path, "read_text", mock_read):
+            env = {k: v for k, v in __import__("os").environ.items() if k != "ENVBOT_TOKEN"}
+            with patch.dict("os.environ", env, clear=True):
+                result = runner.invoke(cli, ["--home", str(tmp_base), "doctor"])
+        assert result.exit_code == 0
+        # Token should be flagged as missing since env file couldn't be read
+        assert "ENVBOT_TOKEN not set" in result.output
+
+
 class TestCliMainEntrypoint:
     """Cover cli.py __main__ guard (line 1914)."""
 

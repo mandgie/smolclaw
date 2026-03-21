@@ -5,8 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- **`doctor` channel token validation** — The `doctor` command now checks that channel token env vars (e.g. `TARS_TELEGRAM_TOKEN`) are actually set, either in the process environment or in the agent's `channels/*.env` files. Catches the most common misconfiguration (forgetting to set the Telegram token). Gracefully handles malformed YAML, non-dict channel configs, and unreadable env files.
+- **`examples/README.md`** — Complete walkthrough for the example two-agent setup: file structure, customization guide, Telegram setup, and key concepts explained.
+
 ### Changed
-- 982 tests, 99% coverage (up from 963 at v0.2.0). api.py and config.py at 100%.
+- SECURITY.md updated for v0.2.0 supported versions.
+- 992 tests, 99% coverage (up from 982). 10 new tests for channel token validation edge cases.
 
 ## [0.2.0] — 2026-03-20
 

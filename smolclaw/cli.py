@@ -1671,7 +1671,54 @@ def doctor(ctx):
     else:
         click.echo("  [--] No agents directory")
 
-    # 7. Memory DB
+    # 7. Channel tokens
+    if agents_dir.exists():
+        for agent_dir in sorted(agents_dir.iterdir()):
+            if not agent_dir.is_dir() or not (agent_dir / "agent.yaml").exists():
+                continue
+            try:
+                agent_cfg = yaml.safe_load((agent_dir / "agent.yaml").read_text()) or {}
+            except (yaml.YAMLError, OSError):
+                continue
+
+            channels_cfg = agent_cfg.get("channels", {})
+            if not isinstance(channels_cfg, dict):
+                continue
+
+            # Load env files from agent's channels/ directory (same as gateway startup)
+            channels_env_dir = agent_dir / "channels"
+            agent_env: dict[str, str] = {}
+            if channels_env_dir.exists():
+                for env_file in channels_env_dir.glob("*.env"):
+                    try:
+                        for line in env_file.read_text().splitlines():
+                            line = line.strip()
+                            if line and not line.startswith("#") and "=" in line:
+                                key, _, value = line.partition("=")
+                                agent_env[key.strip()] = value.strip()
+                    except OSError:
+                        pass
+
+            for ch_type, ch_cfg in channels_cfg.items():
+                if not isinstance(ch_cfg, dict):
+                    continue
+                token_env = ch_cfg.get("token_env", "")
+                if not token_env:
+                    continue
+                # Check both process env and agent's .env files
+                token_set = token_env in os.environ or token_env in agent_env
+                if token_set:
+                    click.echo(f"  [ok] {agent_dir.name}/{ch_type}: {token_env} set")
+                    ok_count += 1
+                else:
+                    click.echo(f"  [!!] {agent_dir.name}/{ch_type}: {token_env} not set")
+                    issues.append(
+                        f"Agent '{agent_dir.name}' channel '{ch_type}': "
+                        f"env var {token_env} not found — "
+                        f"add it to agents/{agent_dir.name}/channels/{ch_type}.env"
+                    )
+
+    # 8. Memory DB
     memory_db = base / "shared" / "memory.db"
     if memory_db.exists():
         try:
@@ -1687,7 +1734,7 @@ def doctor(ctx):
     else:
         click.echo("  [--] Memory DB not created yet (created on first gateway start)")
 
-    # 8. Cron jobs
+    # 9. Cron jobs
     jobs_path = base / "shared" / "cron" / "jobs.json"
     if jobs_path.exists():
         try:
@@ -1711,7 +1758,7 @@ def doctor(ctx):
     else:
         click.echo("  [--] No cron jobs configured")
 
-    # 9. Port availability
+    # 10. Port availability
     from .config import load_gateway_config
 
     if base.exists():
