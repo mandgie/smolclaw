@@ -5,6 +5,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- 982 tests, 99% coverage (up from 963 at v0.2.0). api.py and config.py at 100%.
+
 ## [0.2.0] — 2026-03-20
 
 ### Added
