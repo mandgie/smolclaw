@@ -179,6 +179,37 @@ def version():
     click.echo(f"smolclaw {__version__}")
 
 
+@cli.command()
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]))
+def completion(shell):
+    """Generate shell completion script.
+
+    Print the completion script for your shell. Add the output to your
+    shell config to enable tab-completion for all smolclaw commands.
+
+    \b
+    Setup:
+      bash:  eval "$(smolclaw completion bash)"
+      zsh:   eval "$(smolclaw completion zsh)"
+      fish:  smolclaw completion fish | source
+
+    \b
+    Or save to a file for faster shell startup:
+      bash:  smolclaw completion bash > ~/.local/share/bash-completion/completions/smolclaw
+      zsh:   smolclaw completion zsh > ~/.zfunc/_smolclaw && echo 'fpath+=~/.zfunc' >> ~/.zshrc
+      fish:  smolclaw completion fish > ~/.config/fish/completions/smolclaw.fish
+    """
+    from click.shell_completion import get_completion_class
+
+    comp_cls = get_completion_class(shell)
+    if comp_cls is None:
+        click.echo(f"Unsupported shell: {shell}", err=True)
+        raise SystemExit(1)
+
+    comp = comp_cls(cli, {}, "smolclaw", "_SMOLCLAW_COMPLETE")
+    click.echo(comp.source())
+
+
 # ---------------------------------------------------------------------------
 # Update
 # ---------------------------------------------------------------------------
@@ -271,14 +302,31 @@ def _is_gateway_running(base: Path) -> bool:
 
 def _restart_gateway(base: Path) -> str:
     """Restart the gateway. Returns a status message."""
-    plist = _plist_path()
-    if plist.exists():
-        subprocess.run(["launchctl", "unload", str(plist)], capture_output=True)
-        result = subprocess.run(["launchctl", "load", str(plist)], capture_output=True, text=True)
-        if result.returncode == 0:
-            return "Gateway restarted via LaunchAgent."
-        return f"LaunchAgent reload failed: {result.stderr.strip()}"
-    return "Gateway is running but not managed by LaunchAgent. Restart manually: smolclaw up"
+    system = platform.system()
+
+    if system == "Darwin":
+        plist = _plist_path()
+        if plist.exists():
+            subprocess.run(["launchctl", "unload", str(plist)], capture_output=True)
+            result = subprocess.run(
+                ["launchctl", "load", str(plist)], capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                return "Gateway restarted via LaunchAgent."
+            return f"LaunchAgent reload failed: {result.stderr.strip()}"
+    elif system == "Linux":
+        unit_path = _systemd_unit_path()
+        if unit_path.exists():
+            result = subprocess.run(
+                ["systemctl", "--user", "restart", SYSTEMD_SERVICE_NAME],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                return "Gateway restarted via systemd."
+            return f"Systemd restart failed: {result.stderr.strip()}"
+
+    return "Gateway is running but not managed by a service. Restart manually: smolclaw up"
 
 
 @cli.command()
@@ -1920,11 +1968,17 @@ def doctor(ctx):
 
 
 LAUNCHAGENT_LABEL = "com.smolclaw.gateway"
+SYSTEMD_SERVICE_NAME = "smolclaw"
 
 
 def _plist_path() -> Path:
     """Return the LaunchAgent plist path for smolclaw."""
     return Path.home() / "Library" / "LaunchAgents" / f"{LAUNCHAGENT_LABEL}.plist"
+
+
+def _systemd_unit_path() -> Path:
+    """Return the systemd user service unit path for smolclaw."""
+    return Path.home() / ".config" / "systemd" / "user" / f"{SYSTEMD_SERVICE_NAME}.service"
 
 
 def _generate_plist(base: Path) -> str:
@@ -2005,20 +2059,43 @@ def _generate_plist(base: Path) -> str:
 """
 
 
-@cli.command()
-@click.pass_context
-def install(ctx):
-    """Install smolclaw as a login service (macOS LaunchAgent).
+def _generate_systemd_unit(base: Path) -> str:
+    """Generate a systemd user service unit for auto-starting the gateway.
 
-    Generates a LaunchAgent plist so the gateway auto-starts on login
-    and restarts if it crashes. Use 'smolclaw uninstall' to remove.
+    Creates a user-level service (no root required) that auto-starts on login
+    and restarts on failure with exponential backoff.
     """
-    if platform.system() != "Darwin":
-        click.echo("install currently supports macOS only.")
-        click.echo("For Linux, create a systemd service manually.")
-        sys.exit(1)
+    smolclaw_bin = shutil.which("smolclaw")
+    if smolclaw_bin:
+        exec_start = f"{smolclaw_bin} --home {base} up"
+    else:
+        exec_start = f"{sys.executable} -m smolclaw --home {base} up"
 
-    base = ctx.obj["base"]
+    env_path = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin")
+
+    return f"""\
+[Unit]
+Description=smolclaw multi-agent gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart={exec_start}
+WorkingDirectory={Path.home()}
+Environment=PATH={env_path}
+Environment=HOME={Path.home()}
+Environment=LANG=en_US.UTF-8
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+"""
+
+
+def _install_macos(base: Path) -> None:
+    """Install smolclaw as a macOS LaunchAgent."""
     plist = _plist_path()
 
     if plist.exists():
@@ -2051,13 +2128,53 @@ def install(ctx):
     click.echo("  Stop: smolclaw uninstall")
 
 
-@cli.command()
-def uninstall():
-    """Remove the smolclaw login service (macOS LaunchAgent)."""
-    if platform.system() != "Darwin":
-        click.echo("uninstall currently supports macOS only.")
-        sys.exit(1)
+def _install_linux(base: Path) -> None:
+    """Install smolclaw as a systemd user service."""
+    unit_path = _systemd_unit_path()
 
+    if unit_path.exists():
+        click.echo(f"Systemd service already installed at {unit_path}")
+        click.echo("Run 'smolclaw uninstall' first to reinstall.")
+        return
+
+    # Ensure logs directory exists
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+
+    # Generate and write unit file
+    unit_content = _generate_systemd_unit(base)
+    unit_path.parent.mkdir(parents=True, exist_ok=True)
+    unit_path.write_text(unit_content)
+    click.echo(f"  Created {unit_path}")
+
+    # Reload systemd and enable
+    result = subprocess.run(
+        ["systemctl", "--user", "daemon-reload"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        click.echo(f"  Warning: daemon-reload failed: {result.stderr.strip()}")
+
+    result = subprocess.run(
+        ["systemctl", "--user", "enable", "--now", SYSTEMD_SERVICE_NAME],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        click.echo(f"  Warning: enable failed: {result.stderr.strip()}")
+        click.echo(
+            f"  You can start manually: systemctl --user enable --now {SYSTEMD_SERVICE_NAME}"
+        )
+    else:
+        click.echo("  Enabled — gateway will start now and on every login")
+
+    click.echo(f"\n  Status: systemctl --user status {SYSTEMD_SERVICE_NAME}")
+    click.echo(f"  Logs:   journalctl --user -u {SYSTEMD_SERVICE_NAME} -f")
+    click.echo("  Stop:   smolclaw uninstall")
+
+
+def _uninstall_macos() -> None:
+    """Uninstall the macOS LaunchAgent."""
     plist = _plist_path()
 
     if not plist.exists():
@@ -2078,6 +2195,78 @@ def uninstall():
     plist.unlink()
     click.echo("  Unloaded and removed LaunchAgent")
     click.echo("  Gateway will no longer auto-start on login")
+
+
+def _uninstall_linux() -> None:
+    """Uninstall the systemd user service."""
+    unit_path = _systemd_unit_path()
+
+    if not unit_path.exists():
+        click.echo("No systemd service installed.")
+        click.echo(f"  Expected: {unit_path}")
+        return
+
+    # Stop and disable
+    result = subprocess.run(
+        ["systemctl", "--user", "disable", "--now", SYSTEMD_SERVICE_NAME],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        click.echo(f"  Warning: disable failed: {result.stderr.strip()}")
+
+    # Remove unit file
+    unit_path.unlink()
+
+    # Reload daemon
+    subprocess.run(
+        ["systemctl", "--user", "daemon-reload"],
+        capture_output=True,
+        text=True,
+    )
+
+    click.echo("  Stopped and removed systemd service")
+    click.echo("  Gateway will no longer auto-start on login")
+
+
+@cli.command()
+@click.pass_context
+def install(ctx):
+    """Install smolclaw as a login service.
+
+    On macOS, generates a LaunchAgent plist. On Linux, generates a systemd
+    user service. Both auto-start the gateway on login and restart on crash.
+    Use 'smolclaw uninstall' to remove.
+    """
+    system = platform.system()
+    base = ctx.obj["base"]
+
+    if system == "Darwin":
+        _install_macos(base)
+    elif system == "Linux":
+        _install_linux(base)
+    else:
+        click.echo(f"install does not support {system}.")
+        click.echo("Supported: macOS (LaunchAgent), Linux (systemd).")
+        sys.exit(1)
+
+
+@cli.command()
+def uninstall():
+    """Remove the smolclaw login service.
+
+    Removes the LaunchAgent (macOS) or systemd user service (Linux)
+    that was created by 'smolclaw install'.
+    """
+    system = platform.system()
+
+    if system == "Darwin":
+        _uninstall_macos()
+    elif system == "Linux":
+        _uninstall_linux()
+    else:
+        click.echo(f"uninstall does not support {system}.")
+        sys.exit(1)
 
 
 def main() -> None:

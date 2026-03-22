@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Shell completion** — `smolclaw completion bash|zsh|fish` generates tab-completion scripts for all smolclaw commands. Supports eval-on-the-fly or saving to file for faster shell startup.
+- **Linux systemd install** — `smolclaw install` now works on Linux, generating a systemd user service (`~/.config/systemd/user/smolclaw.service`) with auto-restart on failure. Previously macOS-only (LaunchAgent). `uninstall` updated to match. Gateway restart logic also supports systemd.
 - **`create-skill` CLI command** — `smolclaw create-skill my-tool` scaffolds a new skill directory with a properly formatted SKILL.md containing YAML frontmatter (name, description) and placeholder sections. Supports `--agent` flag to create directly in an agent's skills/ directory, and `-d` for custom descriptions. Shared skills (default) can then be linked to agents via `add-skill`.
 - **Gateway uptime in health endpoint** — `GET /api/health` now returns `uptime_seconds` and `started_at` fields for monitoring how long the gateway has been running. Useful for health dashboards and debugging restarts.
 - **`--telegram` flag for `init` and `add`** — `smolclaw init --telegram TOKEN` and `smolclaw add NAME --telegram TOKEN` auto-configure Telegram: creates `channels/telegram.env` with the bot token and sets up the Telegram channel in `agent.yaml`. Eliminates the #1 setup friction point — no more manual env file creation or YAML editing.
@@ -13,8 +15,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **`examples/README.md`** — Complete walkthrough for the example two-agent setup: file structure, customization guide, Telegram setup, and key concepts explained.
 
 ### Changed
+- `install`/`uninstall` commands now support both macOS (LaunchAgent) and Linux (systemd). Unsupported platforms get a clear error instead of "macOS only".
 - SECURITY.md updated for v0.2.0 supported versions.
-- 1010 tests, 99% coverage (up from 1001). 7 new tests for `create-skill`, 2 for health uptime.
+- 1028 tests, 99% coverage (up from 1010). 18 new tests: 4 for shell completion, 5 for Linux install, 4 for Linux uninstall, 5 for systemd unit generation and restart.
 
 ## [0.2.0] — 2026-03-20
 

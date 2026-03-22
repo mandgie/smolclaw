@@ -117,7 +117,7 @@ You are TARS, a personal virtual assistant. Inspired by Interstellar.
 | **Scheduler** | Built-in cron | No built-in | No built-in | No built-in |
 | **Dashboard** | Built-in | Studio (paid) | LangSmith (paid) | No built-in |
 | **Memory** | Built-in SQLite | External | External | External |
-| **Code size** | ~6400 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
+| **Code size** | ~6700 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
 | **Focus** | Personal assistant | Enterprise teams | Workflows | General agents |
 
 **smolclaw is opinionated:** one process, filesystem-as-config, batteries-included. If you want a personal AI assistant that just works — start here.
@@ -178,7 +178,8 @@ smolclaw export <agent>              # Export agent as portable .tar.gz
 smolclaw import <archive>            # Import agent from .tar.gz archive
 smolclaw create-skill <name>         # Scaffold new skill with SKILL.md
 smolclaw add-skill <agent> <skill>   # Symlink shared skill to agent
-smolclaw install                     # Auto-start on login (macOS LaunchAgent)
+smolclaw install                     # Auto-start on login (macOS/Linux)
+smolclaw completion bash|zsh|fish    # Generate shell completion script
 smolclaw version                     # Show version
 ```
 

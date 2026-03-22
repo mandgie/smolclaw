@@ -399,22 +399,58 @@ smolclaw memory delete <agent> <fact_id>
 
 ### `install`
 
-Generate and load a macOS LaunchAgent for auto-start on login.
+Install smolclaw as a login service that auto-starts and restarts on crash.
 
 ```bash
 smolclaw install
 ```
 
-Creates a `com.smolclaw.gateway.plist` and bootstraps it with `launchctl`.
+**macOS:** Creates a LaunchAgent plist at `~/Library/LaunchAgents/` and loads it with `launchctl`.
+
+**Linux:** Creates a systemd user service at `~/.config/systemd/user/smolclaw.service` and enables it with `systemctl --user`.
 
 ---
 
 ### `uninstall`
 
-Remove the macOS LaunchAgent.
+Remove the login service created by `install`.
 
 ```bash
 smolclaw uninstall
+```
+
+**macOS:** Unloads and removes the LaunchAgent plist.
+
+**Linux:** Stops, disables, and removes the systemd user service.
+
+---
+
+### `completion`
+
+Generate shell tab-completion scripts.
+
+```bash
+# Bash
+eval "$(smolclaw completion bash)"
+
+# Zsh
+eval "$(smolclaw completion zsh)"
+
+# Fish
+smolclaw completion fish | source
+```
+
+For faster shell startup, save to a file:
+
+```bash
+# Bash
+smolclaw completion bash > ~/.local/share/bash-completion/completions/smolclaw
+
+# Zsh
+smolclaw completion zsh > ~/.zfunc/_smolclaw
+
+# Fish
+smolclaw completion fish > ~/.config/fish/completions/smolclaw.fish
 ```
 
 ---

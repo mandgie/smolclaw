@@ -12,6 +12,7 @@ from click.testing import CliRunner
 
 from smolclaw.cli import (
     _clear_session_file,
+    _generate_systemd_unit,
     _get_latest_version,
     _is_editable_install,
     _is_gateway_running,
@@ -21,6 +22,7 @@ from smolclaw.cli import (
     _save_session_id,
     _session_file_path,
     _setup_telegram,
+    _systemd_unit_path,
     _try_api_send,
     cli,
     get_base_dir,
@@ -1750,14 +1752,88 @@ class TestInstallCommand:
         assert result.exit_code == 0
         assert "already installed" in result.output
 
-    def test_install_not_macos(self, tmp_base: Path):
-        """install fails on non-macOS platforms."""
+    def test_install_unsupported_platform(self, tmp_base: Path):
+        """install fails on unsupported platforms."""
         runner = CliRunner()
-        with patch("smolclaw.cli.platform.system", return_value="Linux"):
+        with patch("smolclaw.cli.platform.system", return_value="Windows"):
             result = runner.invoke(cli, ["--home", str(tmp_base), "install"])
 
         assert result.exit_code != 0
-        assert "macOS only" in result.output
+        assert "does not support" in result.output
+
+    def test_install_linux_creates_systemd_unit(self, tmp_base: Path):
+        """install creates a systemd user service on Linux."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._systemd_unit_path") as mock_unit_path,
+            patch("smolclaw.cli.platform.system", return_value="Linux"),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            unit_file = tmp_base / "smolclaw.service"
+            mock_unit_path.return_value = unit_file
+            mock_run.return_value = MagicMock(returncode=0)
+
+            result = runner.invoke(cli, ["--home", str(tmp_base), "install"])
+
+        assert result.exit_code == 0
+        assert unit_file.exists()
+        content = unit_file.read_text()
+        assert "[Unit]" in content
+        assert "[Service]" in content
+        assert "[Install]" in content
+        assert "smolclaw" in content
+        assert str(tmp_base) in content
+
+    def test_install_linux_already_exists(self, tmp_base: Path):
+        """install refuses if systemd unit already exists."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._systemd_unit_path") as mock_unit_path,
+            patch("smolclaw.cli.platform.system", return_value="Linux"),
+        ):
+            unit_file = tmp_base / "smolclaw.service"
+            unit_file.write_text("existing")
+            mock_unit_path.return_value = unit_file
+
+            result = runner.invoke(cli, ["--home", str(tmp_base), "install"])
+
+        assert result.exit_code == 0
+        assert "already installed" in result.output
+
+    def test_install_linux_systemctl_failure(self, tmp_base: Path):
+        """install warns if systemctl enable fails."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._systemd_unit_path") as mock_unit_path,
+            patch("smolclaw.cli.platform.system", return_value="Linux"),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            unit_file = tmp_base / "smolclaw.service"
+            mock_unit_path.return_value = unit_file
+            mock_run.return_value = MagicMock(returncode=1, stderr="some error")
+
+            result = runner.invoke(cli, ["--home", str(tmp_base), "install"])
+
+        assert result.exit_code == 0
+        assert "Warning" in result.output
+        assert unit_file.exists()
+
+    def test_install_linux_creates_logs_dir(self, tmp_base: Path):
+        """install on Linux creates the logs directory."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._systemd_unit_path") as mock_unit_path,
+            patch("smolclaw.cli.platform.system", return_value="Linux"),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            unit_file = tmp_base / "smolclaw.service"
+            mock_unit_path.return_value = unit_file
+            mock_run.return_value = MagicMock(returncode=0)
+
+            result = runner.invoke(cli, ["--home", str(tmp_base), "install"])
+
+        assert result.exit_code == 0
+        assert (tmp_base / "logs").is_dir()
 
     def test_install_launchctl_failure(self, tmp_base: Path):
         """install warns if launchctl load fails."""
@@ -1830,14 +1906,14 @@ class TestUninstallCommand:
         assert result.exit_code == 0
         assert "No LaunchAgent installed" in result.output
 
-    def test_uninstall_not_macos(self):
-        """uninstall fails on non-macOS platforms."""
+    def test_uninstall_unsupported_platform(self):
+        """uninstall fails on unsupported platforms."""
         runner = CliRunner()
-        with patch("smolclaw.cli.platform.system", return_value="Linux"):
+        with patch("smolclaw.cli.platform.system", return_value="Windows"):
             result = runner.invoke(cli, ["uninstall"])
 
         assert result.exit_code != 0
-        assert "macOS only" in result.output
+        assert "does not support" in result.output
 
     def test_uninstall_launchctl_failure(self, tmp_base: Path):
         """uninstall still removes plist even if launchctl unload fails."""
@@ -1856,6 +1932,58 @@ class TestUninstallCommand:
 
         assert result.exit_code == 0
         assert not plist_file.exists()
+
+    def test_uninstall_linux_removes_unit(self, tmp_base: Path):
+        """uninstall on Linux stops and removes the systemd unit."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._systemd_unit_path") as mock_unit_path,
+            patch("smolclaw.cli.platform.system", return_value="Linux"),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            unit_file = tmp_base / "smolclaw.service"
+            unit_file.write_text("[Unit]")
+            mock_unit_path.return_value = unit_file
+            mock_run.return_value = MagicMock(returncode=0)
+
+            result = runner.invoke(cli, ["uninstall"])
+
+        assert result.exit_code == 0
+        assert not unit_file.exists()
+        assert "Stopped and removed" in result.output
+
+    def test_uninstall_linux_not_installed(self, tmp_base: Path):
+        """uninstall on Linux with no unit gives a friendly message."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._systemd_unit_path") as mock_unit_path,
+            patch("smolclaw.cli.platform.system", return_value="Linux"),
+        ):
+            unit_file = tmp_base / "nonexistent.service"
+            mock_unit_path.return_value = unit_file
+
+            result = runner.invoke(cli, ["uninstall"])
+
+        assert result.exit_code == 0
+        assert "No systemd service installed" in result.output
+
+    def test_uninstall_linux_systemctl_failure(self, tmp_base: Path):
+        """uninstall on Linux still removes unit even if systemctl fails."""
+        runner = CliRunner()
+        with (
+            patch("smolclaw.cli._systemd_unit_path") as mock_unit_path,
+            patch("smolclaw.cli.platform.system", return_value="Linux"),
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            unit_file = tmp_base / "smolclaw.service"
+            unit_file.write_text("[Unit]")
+            mock_unit_path.return_value = unit_file
+            mock_run.return_value = MagicMock(returncode=1, stderr="error")
+
+            result = runner.invoke(cli, ["uninstall"])
+
+        assert result.exit_code == 0
+        assert not unit_file.exists()
 
 
 class TestUpdateCommand:
@@ -3885,3 +4013,119 @@ class TestCliMainEntrypoint:
         with patch("smolclaw.cli.cli") as mock_cli:
             main()
             mock_cli.assert_called_once()
+
+
+class TestCompletionCommand:
+    """Tests for the shell completion command."""
+
+    def test_completion_bash(self):
+        """completion bash outputs a bash completion script."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["completion", "bash"])
+        assert result.exit_code == 0
+        assert "_smolclaw_completion" in result.output
+        assert "COMP_WORDS" in result.output
+
+    def test_completion_zsh(self):
+        """completion zsh outputs a zsh completion script."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["completion", "zsh"])
+        assert result.exit_code == 0
+        assert "#compdef smolclaw" in result.output
+        assert "_smolclaw_completion" in result.output
+
+    def test_completion_fish(self):
+        """completion fish outputs a fish completion script."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["completion", "fish"])
+        assert result.exit_code == 0
+        assert "smolclaw" in result.output
+        assert "complete" in result.output
+
+    def test_completion_invalid_shell(self):
+        """completion with invalid shell gives error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["completion", "powershell"])
+        assert result.exit_code != 0
+        assert "Invalid value" in result.output or "powershell" in result.output
+
+
+class TestSystemdSupport:
+    """Tests for Linux systemd service generation."""
+
+    def test_systemd_unit_path(self):
+        """_systemd_unit_path returns expected path."""
+        path = _systemd_unit_path()
+        assert path.name == "smolclaw.service"
+        assert "systemd" in str(path)
+        assert "user" in str(path)
+
+    def test_generate_systemd_unit(self, tmp_path: Path):
+        """_generate_systemd_unit produces a valid systemd unit file."""
+        unit = _generate_systemd_unit(tmp_path)
+        assert "[Unit]" in unit
+        assert "[Service]" in unit
+        assert "[Install]" in unit
+        assert "ExecStart=" in unit
+        assert str(tmp_path) in unit
+        assert "Restart=on-failure" in unit
+        assert "WantedBy=default.target" in unit
+        assert "network-online.target" in unit
+
+    def test_generate_systemd_unit_fallback_python(self, tmp_path: Path):
+        """_generate_systemd_unit falls back to python -m smolclaw when binary not found."""
+        with patch("smolclaw.cli.shutil.which", return_value=None):
+            unit = _generate_systemd_unit(tmp_path)
+        assert "-m smolclaw" in unit
+
+    def test_generate_systemd_unit_uses_binary(self, tmp_path: Path):
+        """_generate_systemd_unit uses the smolclaw binary when available."""
+        with patch("smolclaw.cli.shutil.which", return_value="/usr/local/bin/smolclaw"):
+            unit = _generate_systemd_unit(tmp_path)
+        assert "/usr/local/bin/smolclaw" in unit
+        assert "-m smolclaw" not in unit
+
+    def test_restart_gateway_linux(self, tmp_path: Path):
+        """_restart_gateway uses systemctl on Linux when unit exists."""
+        with (
+            patch("smolclaw.cli.platform.system", return_value="Linux"),
+            patch("smolclaw.cli._systemd_unit_path") as mock_unit_path,
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            unit_file = tmp_path / "smolclaw.service"
+            unit_file.write_text("[Unit]")
+            mock_unit_path.return_value = unit_file
+            mock_run.return_value = MagicMock(returncode=0)
+
+            result = _restart_gateway(tmp_path)
+
+        assert "systemd" in result
+        mock_run.assert_called_once()
+
+    def test_restart_gateway_linux_no_unit(self, tmp_path: Path):
+        """_restart_gateway on Linux without unit suggests manual restart."""
+        with (
+            patch("smolclaw.cli.platform.system", return_value="Linux"),
+            patch("smolclaw.cli._systemd_unit_path") as mock_unit_path,
+        ):
+            mock_unit_path.return_value = tmp_path / "nonexistent.service"
+
+            result = _restart_gateway(tmp_path)
+
+        assert "manually" in result.lower()
+
+    def test_restart_gateway_linux_failure(self, tmp_path: Path):
+        """_restart_gateway on Linux reports systemctl failure."""
+        with (
+            patch("smolclaw.cli.platform.system", return_value="Linux"),
+            patch("smolclaw.cli._systemd_unit_path") as mock_unit_path,
+            patch("smolclaw.cli.subprocess.run") as mock_run,
+        ):
+            unit_file = tmp_path / "smolclaw.service"
+            unit_file.write_text("[Unit]")
+            mock_unit_path.return_value = unit_file
+            mock_run.return_value = MagicMock(returncode=1, stderr="failed to restart")
+
+            result = _restart_gateway(tmp_path)
+
+        assert "failed" in result.lower()

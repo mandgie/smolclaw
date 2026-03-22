@@ -38,9 +38,9 @@ Gateway (one process)
 ## File Structure
 
 ```
-smolclaw/              # Python package (~6500 lines, 14 modules)
+smolclaw/              # Python package (~6700 lines, 14 modules)
 ├── __init__.py        # Package exports (~50 lines)
-├── cli.py             # Click CLI: up, chat, add, list, send, cron, memory, export/import, install (~2024 lines)
+├── cli.py             # Click CLI: up, chat, add, list, send, cron, memory, export/import, install, completion (~2278 lines)
 ├── memory.py          # Namespaced SQLite memory: FTS5 + sqlite-vec + hybrid RRF (~620 lines)
 ├── api.py             # FastAPI REST endpoints + dashboard serving (~668 lines)
 ├── channel.py         # Channel base + Telegram/Webhook + extensible registry (~486 lines)
@@ -123,7 +123,7 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
 - [x] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
 - [x] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
-- [x] Tests (1000+ tests, 99% coverage, pytest with mocked Claude SDK)
+- [x] Tests (1028 tests, 99% coverage, pytest with mocked Claude SDK)
 - [x] OpenTelemetry tracing (optional, zero overhead when disabled)
 - [x] Message hooks (pre/post-route middleware)
 - [x] Webhook channel adapter (HTTP POST delivery)
