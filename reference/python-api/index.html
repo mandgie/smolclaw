@@ -1,0 +1,5821 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Lightweight multi-agent framework for personal AI assistants">
+      
+      
+        <meta name="author" content="Magnus Friberg">
+      
+      
+        <link rel="canonical" href="https://mandgie.github.io/smolclaw/reference/python-api/">
+      
+      
+        <link rel="prev" href="../api/">
+      
+      
+        <link rel="next" href="../../architecture/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Python API - smolclaw</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="orange">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#python-api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="smolclaw" class="md-header__button md-logo" aria-label="smolclaw" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            smolclaw
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Python API
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="orange"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="orange"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/mandgie/smolclaw" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mandgie/smolclaw
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="smolclaw" class="md-nav__button md-logo" aria-label="smolclaw" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    smolclaw
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/mandgie/smolclaw" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mandgie/smolclaw
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/channels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Channels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/memory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/scheduler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.gateway.Gateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gateway
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Gateway">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.gateway.Gateway.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.gateway.Gateway.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.gateway.Gateway.send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.build_system_prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_system_prompt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.connect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.new_session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        new_session
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.shutdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        shutdown
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.Router" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Router
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Router">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.Router.register_agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_agent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.Router.on_response" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_response
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.Router.route" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        route
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.Router.get_agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_agent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Memory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.add_fact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_fact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.search_facts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_facts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.vector_search_facts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vector_search_facts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.hybrid_search_facts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hybrid_search_facts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.list_facts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list_facts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.get_fact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_fact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.update_fact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        update_fact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.delete_fact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        delete_fact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.add_chunk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_chunk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.search_chunks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_chunks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.vector_search_chunks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vector_search_chunks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.hybrid_search_chunks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hybrid_search_chunks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clear
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scheduler
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scheduler">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.load_jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.save_jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        save_jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.add_job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.remove_job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remove_job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.enable_job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        enable_job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.disable_job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        disable_job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.list_jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list_jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hooks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hooks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HookRegistry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="HookRegistry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.pre_hook_names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pre_hook_names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.post_hook_names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        post_hook_names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.add_pre_hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_pre_hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.add_post_hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_post_hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.remove_hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remove_hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clear
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.run_pre_hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run_pre_hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.run_post_hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run_post_hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HookContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel System
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Channel System">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.Channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Channel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.Channel.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.Channel.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.Channel.send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.TelegramChannel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TelegramChannel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TelegramChannel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.TelegramChannel.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.TelegramChannel.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.TelegramChannel.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.TelegramChannel.send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.WebhookChannel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebhookChannel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="WebhookChannel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.WebhookChannel.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.WebhookChannel.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.WebhookChannel.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.WebhookChannel.send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#channel-registry-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel Registry Functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Models
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.config.AgentConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AgentConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.config.MemoryConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MemoryConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.config.GatewayConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GatewayConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GatewayConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.config.GatewayConfig.port_in_range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        port_in_range
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.config.AgentInfo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AgentInfo
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#message-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Message Types
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Message Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.InboundMessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InboundMessage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.OutboundMessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OutboundMessage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tracing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tracing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tracing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.tracing.TracingConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TracingConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-watcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Watcher
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="File Watcher">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.watcher.FileWatcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FileWatcher
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="FileWatcher">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.watcher.FileWatcher.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.watcher.FileWatcher.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.gateway.Gateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gateway
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Gateway">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.gateway.Gateway.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.gateway.Gateway.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.gateway.Gateway.send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.build_system_prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build_system_prompt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.connect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.new_session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        new_session
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.agent.Agent.shutdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        shutdown
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.Router" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Router
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Router">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.Router.register_agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_agent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.Router.on_response" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_response
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.Router.route" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        route
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.Router.get_agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_agent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Memory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.add_fact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_fact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.search_facts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_facts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.vector_search_facts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vector_search_facts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.hybrid_search_facts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hybrid_search_facts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.list_facts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list_facts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.get_fact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_fact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.update_fact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        update_fact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.delete_fact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        delete_fact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.add_chunk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_chunk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.search_chunks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_chunks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.vector_search_chunks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vector_search_chunks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.hybrid_search_chunks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hybrid_search_chunks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clear
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.memory.Memory.stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scheduler
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scheduler">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.load_jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.save_jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        save_jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.add_job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.remove_job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remove_job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.enable_job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        enable_job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.disable_job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        disable_job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.scheduler.Scheduler.list_jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list_jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hooks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hooks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HookRegistry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="HookRegistry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.pre_hook_names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pre_hook_names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.post_hook_names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        post_hook_names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.add_pre_hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_pre_hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.add_post_hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_post_hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.remove_hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remove_hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clear
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.run_pre_hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run_pre_hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookRegistry.run_post_hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run_post_hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.hooks.HookContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HookContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel System
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Channel System">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.Channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Channel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.Channel.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.Channel.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.Channel.send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.TelegramChannel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TelegramChannel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TelegramChannel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.TelegramChannel.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.TelegramChannel.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.TelegramChannel.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.TelegramChannel.send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.WebhookChannel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebhookChannel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="WebhookChannel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.WebhookChannel.__init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.WebhookChannel.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.WebhookChannel.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.channel.WebhookChannel.send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        send
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#channel-registry-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel Registry Functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Models
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.config.AgentConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AgentConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.config.MemoryConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MemoryConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.config.GatewayConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GatewayConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GatewayConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.config.GatewayConfig.port_in_range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        port_in_range
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.config.AgentInfo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AgentInfo
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#message-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Message Types
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Message Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.InboundMessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InboundMessage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.router.OutboundMessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OutboundMessage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tracing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tracing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tracing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.tracing.TracingConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TracingConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-watcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Watcher
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="File Watcher">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.watcher.FileWatcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FileWatcher
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="FileWatcher">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.watcher.FileWatcher.start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smolclaw.watcher.FileWatcher.stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="python-api-reference">Python API Reference<a class="headerlink" href="#python-api-reference" title="Permanent link">&para;</a></h1>
+<p>smolclaw exports all core classes from the top-level package:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">smolclaw</span><span class="w"> </span><span class="kn">import</span> <span class="n">Agent</span><span class="p">,</span> <span class="n">Gateway</span><span class="p">,</span> <span class="n">Router</span><span class="p">,</span> <span class="n">Memory</span><span class="p">,</span> <span class="n">Scheduler</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">smolclaw</span><span class="w"> </span><span class="kn">import</span> <span class="n">AgentConfig</span><span class="p">,</span> <span class="n">AgentInfo</span><span class="p">,</span> <span class="n">GatewayConfig</span><span class="p">,</span> <span class="n">MemoryConfig</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">smolclaw</span><span class="w"> </span><span class="kn">import</span> <span class="n">InboundMessage</span><span class="p">,</span> <span class="n">OutboundMessage</span><span class="p">,</span> <span class="n">Job</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">smolclaw</span><span class="w"> </span><span class="kn">import</span> <span class="n">HookRegistry</span><span class="p">,</span> <span class="n">HookContext</span><span class="p">,</span> <span class="n">PreRouteHook</span><span class="p">,</span> <span class="n">PostRouteHook</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">smolclaw</span><span class="w"> </span><span class="kn">import</span> <span class="n">TelegramChannel</span><span class="p">,</span> <span class="n">WebhookChannel</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">smolclaw</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_channel</span><span class="p">,</span> <span class="n">register_channel</span><span class="p">,</span> <span class="n">list_channel_types</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">smolclaw</span><span class="w"> </span><span class="kn">import</span> <span class="n">FileWatcher</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="kn">from</span><span class="w"> </span><span class="nn">smolclaw</span><span class="w"> </span><span class="kn">import</span> <span class="n">TracingConfig</span><span class="p">,</span> <span class="n">configure_tracing</span><span class="p">,</span> <span class="n">span</span><span class="p">,</span> <span class="n">TRACING_AVAILABLE</span>
+</code></pre></div>
+<h2 id="core-classes">Core Classes<a class="headerlink" href="#core-classes" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.gateway.Gateway" class="doc doc-heading">
+            <code>smolclaw.gateway.Gateway</code>
+
+
+<a href="#smolclaw.gateway.Gateway" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>The smolclaw gateway — single process running everything.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.gateway.Gateway.start" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">start</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.gateway.Gateway.start" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Boot everything: agents, channels, scheduler.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.gateway.Gateway.stop" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stop</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.gateway.Gateway.stop" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Graceful shutdown.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.gateway.Gateway.send" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">send</span><span class="p">(</span><span class="n">agent_name</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.gateway.Gateway.send" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Send a one-shot message to an agent (for CLI use).</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.agent.Agent" class="doc doc-heading">
+            <code>smolclaw.agent.Agent</code>
+
+
+<a href="#smolclaw.agent.Agent" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>A named AI agent with its own identity, skills, and Claude SDK session.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.agent.Agent.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">info</span><span class="p">,</span> <span class="n">user_md</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span></code>
+
+<a href="#smolclaw.agent.Agent.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Initialize an agent from its discovered filesystem info.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>info</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="smolclaw.config.AgentInfo" href="#smolclaw.config.AgentInfo">AgentInfo</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Agent identity, config, skills, and context loaded from disk.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>user_md</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Shared USER.md content injected into the system prompt.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.agent.Agent.build_system_prompt" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">build_system_prompt</span><span class="p">()</span></code>
+
+<a href="#smolclaw.agent.Agent.build_system_prompt" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Assemble the system prompt from agent files.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.agent.Agent.connect" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">connect</span><span class="p">(</span><span class="n">resume_id</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.agent.Agent.connect" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Connect to Claude SDK. Returns True if successful.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.agent.Agent.send" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">send</span><span class="p">(</span><span class="n">text</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.agent.Agent.send" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Send a message and return the response. Thread-safe per agent.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.agent.Agent.new_session" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">new_session</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.agent.Agent.new_session" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Drop current session and start fresh. Thread-safe.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.agent.Agent.shutdown" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">shutdown</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.agent.Agent.shutdown" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Clean shutdown.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.router.Router" class="doc doc-heading">
+            <code>smolclaw.router.Router</code>
+
+
+<a href="#smolclaw.router.Router" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Routes messages to agents and collects responses.</p>
+<p>Supports pre-route and post-route hooks via a HookRegistry. Hooks are
+executed in order before and after agent invocation, allowing message
+transformation, short-circuiting, rate limiting, logging, etc.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.router.Router.register_agent" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">register_agent</span><span class="p">(</span><span class="n">agent</span><span class="p">)</span></code>
+
+<a href="#smolclaw.router.Router.register_agent" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Register an agent so it can receive routed messages.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.router.Router.on_response" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">on_response</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">callback</span><span class="p">)</span></code>
+
+<a href="#smolclaw.router.Router.on_response" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Register a callback for outbound messages from a source.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.router.Router.route" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">route</span><span class="p">(</span><span class="n">message</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.router.Router.route" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Route an inbound message to the correct agent, return response.</p>
+<p>If hooks are registered, pre-route hooks execute first (may modify the
+message or short-circuit). After the agent responds, post-route hooks
+execute (may modify the response).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.router.Router.get_agent" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">get_agent</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
+
+<a href="#smolclaw.router.Router.get_agent" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Look up a registered agent by name, or None if not found.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.memory.Memory" class="doc doc-heading">
+            <code>smolclaw.memory.Memory</code>
+
+
+<a href="#smolclaw.memory.Memory" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Agent-namespaced memory backed by SQLite.</p>
+<p>All agents share one memory.db. Each entry is tagged with an agent name.
+Agents query their own namespace by default, with optional cross-agent search.</p>
+<p>When sqlite-vec is installed and an embed_fn is provided, vector search
+is available for semantic similarity queries. Otherwise, FTS5/LIKE is used.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">db_path</span><span class="p">,</span> <span class="n">agent</span><span class="o">=</span><span class="s1">&#39;shared&#39;</span><span class="p">,</span> <span class="n">embed_fn</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Initialize memory for an agent, creating tables if needed.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>db_path</code>
+            </td>
+            <td>
+                  <code><span title="pathlib.Path">Path</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Path to the shared SQLite database file.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>agent</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Agent name used to namespace all stored data.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;shared&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>embed_fn</code>
+            </td>
+            <td>
+                  <code><span title="smolclaw.memory.EmbedFn">EmbedFn</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional callable that takes text and returns a float vector.
+      When provided with sqlite-vec, enables semantic vector search.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>embed_dim</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dimensionality of the embedding vectors (default: 256).</p>
+              </div>
+            </td>
+            <td>
+                  <code>256</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.add_fact" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">add_fact</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="s1">&#39;general&#39;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s1">&#39;manual&#39;</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.add_fact" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Add a fact to this agent's namespace. Embeds for vector search if available.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.search_facts" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">search_facts</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cross_agent</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.search_facts" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Search facts using best available method (vector &gt; FTS5 &gt; LIKE).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.vector_search_facts" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">vector_search_facts</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cross_agent</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.vector_search_facts" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Search facts using vector similarity. Returns results with distance scores.</p>
+<p>Requires sqlite-vec and embed_fn. Returns empty list if not available.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.hybrid_search_facts" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">hybrid_search_facts</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cross_agent</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.hybrid_search_facts" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Combine vector + FTS5 results using reciprocal rank fusion.</p>
+<p>Falls back to FTS5-only if vector search is unavailable.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.list_facts" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">list_facts</span><span class="p">(</span><span class="n">limit</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.list_facts" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>List facts for this agent, optionally filtered by category.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.get_fact" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">get_fact</span><span class="p">(</span><span class="n">fact_id</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.get_fact" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Get a single fact by ID (must belong to this agent).</p>
+<p>Returns the fact as a dict, or None if not found.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.update_fact" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">update_fact</span><span class="p">(</span><span class="n">fact_id</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.update_fact" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Update a fact's content and/or category (must belong to this agent).</p>
+<p>Syncs FTS5 and re-embeds for vector search when content changes.
+Returns True if the fact was found and updated.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.delete_fact" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">delete_fact</span><span class="p">(</span><span class="n">fact_id</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.delete_fact" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Delete a fact by ID (must belong to this agent). Returns True if deleted.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.add_chunk" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">add_chunk</span><span class="p">(</span><span class="n">user_text</span><span class="p">,</span> <span class="n">assistant_text</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">session_id</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.add_chunk" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Store a conversation chunk. Embeds for vector search if available.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.search_chunks" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">search_chunks</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cross_agent</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.search_chunks" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Search conversation chunks using FTS5 with BM25 ranking.</p>
+<p>Falls back to LIKE search if FTS5 query fails.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.vector_search_chunks" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">vector_search_chunks</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cross_agent</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.vector_search_chunks" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Search chunks using vector similarity. Returns results with distance scores.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.hybrid_search_chunks" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">hybrid_search_chunks</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cross_agent</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+<a href="#smolclaw.memory.Memory.hybrid_search_chunks" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Combine vector + FTS5 results using reciprocal rank fusion.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.clear" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">clear</span><span class="p">()</span></code>
+
+<a href="#smolclaw.memory.Memory.clear" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Clear all facts and chunks for this agent. Returns counts of deleted rows.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.memory.Memory.stats" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stats</span><span class="p">()</span></code>
+
+<a href="#smolclaw.memory.Memory.stats" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return memory statistics: fact/chunk counts for this agent and globally.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.scheduler.Scheduler" class="doc doc-heading">
+            <code>smolclaw.scheduler.Scheduler</code>
+
+
+<a href="#smolclaw.scheduler.Scheduler" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Cron scheduler that fires job triggers through the router.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.scheduler.Scheduler.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">jobs_path</span><span class="p">,</span> <span class="n">agents_dir</span><span class="p">,</span> <span class="n">router</span><span class="p">,</span> <span class="n">deliver_callback</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">on_event</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#smolclaw.scheduler.Scheduler.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Initialize the scheduler.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>jobs_path</code>
+            </td>
+            <td>
+                  <code><span title="pathlib.Path">Path</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Path to the jobs.json file.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>agents_dir</code>
+            </td>
+            <td>
+                  <code><span title="pathlib.Path">Path</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Base directory containing agent folders (for prompt file resolution).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>router</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="smolclaw.router.Router" href="#smolclaw.router.Router">Router</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The message router used to dispatch job triggers.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>deliver_callback</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Callable">Callable</span>[[<span title="smolclaw.scheduler.Job">Job</span>, <span title="str">str</span>], <span title="collections.abc.Awaitable">Awaitable</span>[None]] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional async callback for delivering job output to channels.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>on_event</code>
+            </td>
+            <td>
+                  <code><span title="collections.abc.Callable">Callable</span>[[], <span title="collections.abc.Awaitable">Awaitable</span>[None]] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional async callback fired after job state changes (e.g. for
+broadcasting updates to WebSocket clients).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.scheduler.Scheduler.load_jobs" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">load_jobs</span><span class="p">()</span></code>
+
+<a href="#smolclaw.scheduler.Scheduler.load_jobs" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Load jobs from jobs.json.</p>
+<p>All valid jobs are loaded, including disabled ones, to avoid data loss
+when <code>save_jobs()</code> persists the list back to disk.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.scheduler.Scheduler.save_jobs" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">save_jobs</span><span class="p">()</span></code>
+
+<a href="#smolclaw.scheduler.Scheduler.save_jobs" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Persist jobs back to jobs.json.</p>
+<p>Uses atomic write (write-to-temp + rename) to avoid corrupting the file
+if the process crashes mid-write.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.scheduler.Scheduler.start" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">start</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.scheduler.Scheduler.start" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Start the scheduler loop.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.scheduler.Scheduler.stop" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stop</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.scheduler.Scheduler.stop" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Stop the scheduler.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.scheduler.Scheduler.add_job" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">add_job</span><span class="p">(</span><span class="n">job_data</span><span class="p">)</span></code>
+
+<a href="#smolclaw.scheduler.Scheduler.add_job" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Add a new job at runtime.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.scheduler.Scheduler.remove_job" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">remove_job</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span></code>
+
+<a href="#smolclaw.scheduler.Scheduler.remove_job" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Remove a job by ID.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.scheduler.Scheduler.enable_job" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">enable_job</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span></code>
+
+<a href="#smolclaw.scheduler.Scheduler.enable_job" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Enable a disabled job so it will be scheduled.</p>
+<p>Always recomputes <code>next_run</code> from the current time to avoid stale
+values causing an unexpected immediate fire (e.g. job was disabled for
+hours/days and its old <code>next_run</code> is in the past).</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>job_id</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The ID of the job to enable.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>True if the job was found and enabled, False if not found.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.scheduler.Scheduler.disable_job" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">disable_job</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span></code>
+
+<a href="#smolclaw.scheduler.Scheduler.disable_job" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Disable a job so it won't be scheduled (but remains in the job list).</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>job_id</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The ID of the job to disable.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>True if the job was found and disabled, False if not found.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.scheduler.Scheduler.list_jobs" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">list_jobs</span><span class="p">()</span></code>
+
+<a href="#smolclaw.scheduler.Scheduler.list_jobs" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>List all jobs as dicts.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="hooks">Hooks<a class="headerlink" href="#hooks" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.hooks.HookRegistry" class="doc doc-heading">
+            <code>smolclaw.hooks.HookRegistry</code>
+
+
+<a href="#smolclaw.hooks.HookRegistry" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Registry of pre-route and post-route message hooks.</p>
+<p>Hooks execute in registration order. Pre-route hooks can modify the inbound
+message or short-circuit routing entirely. Post-route hooks can modify the
+outbound response.</p>
+<p>Example::</p>
+<div class="highlight"><pre><span></span><code>registry = HookRegistry()
+
+async def log_messages(msg, ctx):
+    print(f&quot;[{ctx.agent_name}] {msg.text}&quot;)
+    return None  # pass through
+
+registry.add_pre_hook(&quot;logger&quot;, log_messages)
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="smolclaw.hooks.HookRegistry.pre_hook_names" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">pre_hook_names</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#smolclaw.hooks.HookRegistry.pre_hook_names" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>List registered pre-route hook names in execution order.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="smolclaw.hooks.HookRegistry.post_hook_names" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">post_hook_names</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#smolclaw.hooks.HookRegistry.post_hook_names" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>List registered post-route hook names in execution order.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="smolclaw.hooks.HookRegistry.stats" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stats</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#smolclaw.hooks.HookRegistry.stats" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Summary of registered hooks.</p>
+
+    </div>
+
+</div>
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.hooks.HookRegistry.add_pre_hook" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">add_pre_hook</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">hook</span><span class="p">)</span></code>
+
+<a href="#smolclaw.hooks.HookRegistry.add_pre_hook" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Register a pre-route hook.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>name</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Unique identifier for this hook (used for removal/debugging).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>hook</code>
+            </td>
+            <td>
+                  <code><span title="smolclaw.hooks.PreRouteHook">PreRouteHook</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Async callable matching the PreRouteHook signature.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.hooks.HookRegistry.add_post_hook" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">add_post_hook</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">hook</span><span class="p">)</span></code>
+
+<a href="#smolclaw.hooks.HookRegistry.add_post_hook" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Register a post-route hook.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>name</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Unique identifier for this hook (used for removal/debugging).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>hook</code>
+            </td>
+            <td>
+                  <code><span title="smolclaw.hooks.PostRouteHook">PostRouteHook</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Async callable matching the PostRouteHook signature.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.hooks.HookRegistry.remove_hook" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">remove_hook</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
+
+<a href="#smolclaw.hooks.HookRegistry.remove_hook" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Remove a hook by name from both pre and post registries.</p>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>True if a hook was found and removed, False otherwise.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.hooks.HookRegistry.clear" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">clear</span><span class="p">()</span></code>
+
+<a href="#smolclaw.hooks.HookRegistry.clear" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Remove all hooks.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.hooks.HookRegistry.run_pre_hooks" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">run_pre_hooks</span><span class="p">(</span><span class="n">message</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.hooks.HookRegistry.run_pre_hooks" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Execute all pre-route hooks in registration order.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>message</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="smolclaw.router.InboundMessage
+
+
+  
+      dataclass
+  " href="#smolclaw.router.InboundMessage">InboundMessage</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The inbound message about to be routed.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="smolclaw.router.InboundMessage
+
+
+  
+      dataclass
+  " href="#smolclaw.router.InboundMessage">InboundMessage</a> | <a class="autorefs autorefs-internal" title="smolclaw.router.OutboundMessage
+
+
+  
+      dataclass
+  " href="#smolclaw.router.OutboundMessage">OutboundMessage</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>InboundMessage (possibly modified) if routing should continue,</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="smolclaw.router.InboundMessage
+
+
+  
+      dataclass
+  " href="#smolclaw.router.InboundMessage">InboundMessage</a> | <a class="autorefs autorefs-internal" title="smolclaw.router.OutboundMessage
+
+
+  
+      dataclass
+  " href="#smolclaw.router.OutboundMessage">OutboundMessage</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>or OutboundMessage if a hook short-circuited routing.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.hooks.HookRegistry.run_post_hooks" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">run_post_hooks</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">response</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.hooks.HookRegistry.run_post_hooks" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Execute all post-route hooks in registration order.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>message</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="smolclaw.router.InboundMessage
+
+
+  
+      dataclass
+  " href="#smolclaw.router.InboundMessage">InboundMessage</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The original inbound message.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>response</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="smolclaw.router.OutboundMessage
+
+
+  
+      dataclass
+  " href="#smolclaw.router.OutboundMessage">OutboundMessage</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The outbound response from the agent.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="smolclaw.router.OutboundMessage
+
+
+  
+      dataclass
+  " href="#smolclaw.router.OutboundMessage">OutboundMessage</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>OutboundMessage, possibly modified by hooks.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.hooks.HookContext" class="doc doc-heading">
+            <code>smolclaw.hooks.HookContext</code>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#smolclaw.hooks.HookContext" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Context passed to every hook invocation.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="smolclaw.hooks.HookContext.agent_name">agent_name</span></code></td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Name of the target agent.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="smolclaw.hooks.HookContext.source">source</span></code></td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Message source (telegram, cli, api, cron).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="smolclaw.hooks.HookContext.metadata">metadata</span></code></td>
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Arbitrary key-value data hooks can read/write to share state.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="channel-system">Channel System<a class="headerlink" href="#channel-system" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.channel.Channel" class="doc doc-heading">
+            <code>smolclaw.channel.Channel</code>
+
+
+<a href="#smolclaw.channel.Channel" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="abc.ABC">ABC</span></code></p>
+
+
+
+        <p>Base class for messaging channel adapters.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.channel.Channel.start" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">start</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-abstractmethod"><code>abstractmethod</code></small>
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.channel.Channel.start" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Start listening for messages.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.channel.Channel.stop" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stop</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-abstractmethod"><code>abstractmethod</code></small>
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.channel.Channel.stop" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Stop the channel.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.channel.Channel.send" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">send</span><span class="p">(</span><span class="n">chat_id</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-abstractmethod"><code>abstractmethod</code></small>
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.channel.Channel.send" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Send a message to a chat.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.channel.TelegramChannel" class="doc doc-heading">
+            <code>smolclaw.channel.TelegramChannel</code>
+
+
+<a href="#smolclaw.channel.TelegramChannel" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="smolclaw.channel.Channel" href="#smolclaw.channel.Channel">Channel</a></code></p>
+
+
+
+        <p>Telegram bot channel adapter.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.channel.TelegramChannel.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">agent_name</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">router</span><span class="p">)</span></code>
+
+<a href="#smolclaw.channel.TelegramChannel.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Initialize the Telegram channel with token and authorization config.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.channel.TelegramChannel.start" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">start</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.channel.TelegramChannel.start" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Start polling Telegram for messages and register command handlers.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.channel.TelegramChannel.stop" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stop</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.channel.TelegramChannel.stop" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Stop the Telegram polling loop and shut down the application.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.channel.TelegramChannel.send" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">send</span><span class="p">(</span><span class="n">chat_id</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.channel.TelegramChannel.send" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Send a message to a specific chat (for cron delivery etc.).</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.channel.WebhookChannel" class="doc doc-heading">
+            <code>smolclaw.channel.WebhookChannel</code>
+
+
+<a href="#smolclaw.channel.WebhookChannel" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="smolclaw.channel.Channel" href="#smolclaw.channel.Channel">Channel</a></code></p>
+
+
+
+        <p>Outgoing webhook channel — POSTs agent responses to a configured URL.</p>
+<p>Send-only channel for delivering messages to HTTP endpoints (e.g. Slack
+incoming webhooks, Discord webhooks, custom APIs). Does not receive
+inbound messages (use the REST API for that).</p>
+<p>Config in agent.yaml::</p>
+<div class="highlight"><pre><span></span><code>channels:
+  webhook:
+    url: &quot;https://hooks.example.com/endpoint&quot;
+    headers:
+      X-Custom-Header: &quot;value&quot;
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.channel.WebhookChannel.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">agent_name</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">router</span><span class="p">)</span></code>
+
+<a href="#smolclaw.channel.WebhookChannel.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Initialize the webhook channel with URL and optional headers.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.channel.WebhookChannel.start" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">start</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.channel.WebhookChannel.start" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Validate webhook configuration (no persistent connection needed).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.channel.WebhookChannel.stop" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stop</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.channel.WebhookChannel.stop" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>No-op — webhook channel has no persistent connection.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.channel.WebhookChannel.send" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">send</span><span class="p">(</span><span class="n">chat_id</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.channel.WebhookChannel.send" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>POST a JSON payload to the configured webhook URL.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div><h3 id="channel-registry-functions">Channel Registry Functions<a class="headerlink" href="#channel-registry-functions" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">smolclaw</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_channel</span><span class="p">,</span> <span class="n">list_channel_types</span><span class="p">,</span> <span class="n">create_channel</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Register a custom channel type</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">register_channel</span><span class="p">(</span><span class="s2">&quot;discord&quot;</span><span class="p">,</span> <span class="n">DiscordChannel</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># List all available channel types (built-in + custom + entry points)</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">types</span> <span class="o">=</span> <span class="n">list_channel_types</span><span class="p">()</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="c1"># {&#39;telegram&#39;: TelegramChannel, &#39;webhook&#39;: WebhookChannel, &#39;discord&#39;: DiscordChannel}</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Create a channel instance by type name</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">channel</span> <span class="o">=</span> <span class="n">create_channel</span><span class="p">(</span><span class="s2">&quot;telegram&quot;</span><span class="p">,</span> <span class="n">agent_name</span><span class="o">=</span><span class="s2">&quot;tars&quot;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">cfg</span><span class="p">,</span> <span class="n">router</span><span class="o">=</span><span class="n">router</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="configuration-models">Configuration Models<a class="headerlink" href="#configuration-models" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.config.AgentConfig" class="doc doc-heading">
+            <code>smolclaw.config.AgentConfig</code>
+
+
+<a href="#smolclaw.config.AgentConfig" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
+
+
+
+        <p>Parsed agent.yaml — the structured part of an agent definition.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.config.MemoryConfig" class="doc doc-heading">
+            <code>smolclaw.config.MemoryConfig</code>
+
+
+<a href="#smolclaw.config.MemoryConfig" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
+
+
+
+        <p>Memory settings for an agent.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.config.GatewayConfig" class="doc doc-heading">
+            <code>smolclaw.config.GatewayConfig</code>
+
+
+<a href="#smolclaw.config.GatewayConfig" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
+
+
+
+        <p>Top-level gateway configuration.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.config.GatewayConfig.port_in_range" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">port_in_range</span><span class="p">(</span><span class="n">v</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#smolclaw.config.GatewayConfig.port_in_range" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Validate that the port number is within the valid TCP range (1–65535).</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.config.AgentInfo" class="doc doc-heading">
+            <code>smolclaw.config.AgentInfo</code>
+
+
+<a href="#smolclaw.config.AgentInfo" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
+
+
+
+        <p>Complete agent information discovered from the filesystem.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="message-types">Message Types<a class="headerlink" href="#message-types" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.router.InboundMessage" class="doc doc-heading">
+            <code>smolclaw.router.InboundMessage</code>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#smolclaw.router.InboundMessage" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>A message from any source, normalized.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.router.OutboundMessage" class="doc doc-heading">
+            <code>smolclaw.router.OutboundMessage</code>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#smolclaw.router.OutboundMessage" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>A response to be delivered.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="tracing">Tracing<a class="headerlink" href="#tracing" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.tracing.TracingConfig" class="doc doc-heading">
+            <code>smolclaw.tracing.TracingConfig</code>
+
+
+<a href="#smolclaw.tracing.TracingConfig" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Lightweight config container for tracing options.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div><div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">smolclaw</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_tracing</span><span class="p">,</span> <span class="n">span</span><span class="p">,</span> <span class="n">TRACING_AVAILABLE</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Check if OpenTelemetry is installed</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">if</span> <span class="n">TRACING_AVAILABLE</span><span class="p">:</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">configure_tracing</span><span class="p">(</span><span class="n">TracingConfig</span><span class="p">(</span><span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="s2">&quot;http://localhost:4318&quot;</span><span class="p">))</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Use the @span decorator on any async function</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nd">@span</span><span class="p">(</span><span class="s2">&quot;my_operation&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">do_work</span><span class="p">():</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="o">...</span>
+</code></pre></div>
+<h2 id="file-watcher">File Watcher<a class="headerlink" href="#file-watcher" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="smolclaw.watcher.FileWatcher" class="doc doc-heading">
+            <code>smolclaw.watcher.FileWatcher</code>
+
+
+<a href="#smolclaw.watcher.FileWatcher" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Watches agent directories for file changes and triggers reload callbacks.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.watcher.FileWatcher.start" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">start</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.watcher.FileWatcher.start" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Start watching for file changes in the background.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="smolclaw.watcher.FileWatcher.stop" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">stop</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#smolclaw.watcher.FileWatcher.stop" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Stop the file watcher.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/mandgie/smolclaw" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/smolclaw/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
