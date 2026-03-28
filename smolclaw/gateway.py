@@ -59,7 +59,7 @@ class WebSocketManager:
         for ws in list(self._connections):  # snapshot to avoid mutation during iteration
             try:
                 await ws.send_json(message)  # type: ignore[union-attr]
-            except Exception:
+            except (Exception, asyncio.CancelledError):
                 dead.add(ws)
         self._connections -= dead
 
