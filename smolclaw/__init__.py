@@ -4,6 +4,7 @@ __version__ = "0.2.1"
 
 from .agent import Agent
 from .channel import (
+    DiscordChannel,
     TelegramChannel,
     WebhookChannel,
     create_channel,
@@ -25,6 +26,7 @@ __all__ = [
     "AgentConfig",
     "AgentInfo",
     "ChannelConfig",
+    "DiscordChannel",
     "FileWatcher",
     "Gateway",
     "GatewayConfig",

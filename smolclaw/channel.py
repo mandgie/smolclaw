@@ -18,6 +18,7 @@ log = logging.getLogger("smolclaw")
 __all__ = [
     "CHANNEL_TYPES",
     "Channel",
+    "DiscordChannel",
     "TelegramChannel",
     "WebhookChannel",
     "create_channel",
@@ -455,11 +456,153 @@ class WebhookChannel(Channel):
             log.error(f"[{self.agent_name}] Webhook POST to {self._url} failed: {e}")
 
 
+# --- Discord Channel ---
+
+MAX_DISCORD_LENGTH = 2000
+
+
+class DiscordChannel(Channel):
+    """Discord bot channel adapter.
+
+    Connects as a Discord bot via discord.py, listens for DMs and @mentions,
+    routes messages through the agent, and sends responses back. Supports
+    typing indicators, user authorization, and message splitting for Discord's
+    2000-character limit.
+
+    Requires ``pip install smolclaw[discord]`` (discord.py).
+
+    Config in agent.yaml::
+
+        channels:
+          discord:
+            token_env: MYAGENT_DISCORD_TOKEN
+            authorized_users: []   # empty = allow all, or list of Discord user IDs
+    """
+
+    channel_type = "discord"
+
+    def __init__(self, agent_name: str, config: ChannelConfig, router: Router):
+        """Initialize the Discord channel with bot token and authorization config."""
+        super().__init__(agent_name, config, router)
+        self._token = os.environ.get(config.token_env, "")
+        self._authorized: set[int | str] = set(config.authorized_users)
+        self._client: object | None = None
+        self._runner_task: asyncio.Task | None = None
+
+    def _is_authorized(self, user_id: int) -> bool:
+        """Check if a user is authorized (empty set = allow all)."""
+        if not self._authorized:
+            return True
+        return user_id in self._authorized or str(user_id) in self._authorized
+
+    async def start(self) -> None:
+        """Connect to Discord and start listening for messages."""
+        try:
+            import discord
+        except ImportError:
+            log.error(
+                f"[{self.agent_name}] Discord: discord.py not installed. "
+                "Run: pip install smolclaw[discord]"
+            )
+            return
+
+        if not self._token:
+            log.error(f"[{self.agent_name}] Discord: no token in env var {self.config.token_env}")
+            return
+
+        agent_name = self.agent_name
+        router = self.router
+        is_auth = self._is_authorized
+
+        intents = discord.Intents.default()
+        intents.message_content = True
+        client = discord.Client(intents=intents)
+
+        @client.event
+        async def on_ready() -> None:
+            log.info(f"[{agent_name}] Discord: logged in as {client.user}")
+
+        @client.event
+        async def on_message(message: object) -> None:
+            # Ignore own messages
+            if message.author == client.user:  # type: ignore[union-attr]
+                return
+
+            author_id: int = message.author.id  # type: ignore[union-attr]
+            if not is_auth(author_id):
+                return
+
+            # Respond to DMs or @mentions in servers
+            is_dm = isinstance(message.channel, discord.DMChannel)  # type: ignore[union-attr]
+            is_mentioned = client.user in message.mentions  # type: ignore[union-attr]
+            if not is_dm and not is_mentioned:
+                return
+
+            text: str = message.content  # type: ignore[union-attr]
+            # Strip bot mention from server messages
+            if client.user:
+                text = text.replace(f"<@{client.user.id}>", "").strip()
+
+            if not text:
+                return
+
+            chat_id = str(message.channel.id)  # type: ignore[union-attr]
+
+            try:
+                async with message.channel.typing():  # type: ignore[union-attr]
+                    msg = InboundMessage(
+                        agent=agent_name,
+                        text=text,
+                        source="discord",
+                        chat_id=chat_id,
+                    )
+                    outbound = await asyncio.wait_for(router.route(msg), timeout=900)
+                    for chunk in split_message(outbound.text, max_len=MAX_DISCORD_LENGTH):
+                        await message.channel.send(chunk)  # type: ignore[union-attr]
+            except TimeoutError:
+                await message.channel.send("Request timed out.")  # type: ignore[union-attr]
+            except Exception as e:
+                log.error(f"[{agent_name}] Discord message handling error: {e}")
+                with contextlib.suppress(Exception):
+                    await message.channel.send(f"Error: {e}")  # type: ignore[union-attr]
+
+        self._client = client
+        self._runner_task = asyncio.create_task(client.start(self._token))
+        log.info(f"[{self.agent_name}] Discord channel starting")
+
+    async def stop(self) -> None:
+        """Disconnect from Discord and cancel the runner task."""
+        if self._client:
+            log.info(f"[{self.agent_name}] Discord channel stopping")
+            await self._client.close()  # type: ignore[union-attr]
+            self._client = None
+        if self._runner_task:
+            self._runner_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._runner_task
+            self._runner_task = None
+
+    async def send(self, chat_id: str, text: str) -> None:
+        """Send a message to a Discord channel (for cron delivery etc.)."""
+        if not self._client:
+            return
+
+        try:
+            channel = self._client.get_channel(int(chat_id))  # type: ignore[union-attr]
+            if channel is None:
+                channel = await self._client.fetch_channel(int(chat_id))  # type: ignore[union-attr]
+            for chunk in split_message(text, max_len=MAX_DISCORD_LENGTH):
+                await channel.send(chunk)
+        except Exception as e:
+            log.error(f"[{self.agent_name}] Discord send to {chat_id} failed: {e}")
+
+
 # --- Channel Registry ---
 
 _BUILTIN_CHANNELS: dict[str, type[Channel]] = {
     "telegram": TelegramChannel,
     "webhook": WebhookChannel,
+    "discord": DiscordChannel,
 }
 
 _custom_channels: dict[str, type[Channel]] = {}

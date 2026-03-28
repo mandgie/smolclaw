@@ -11,7 +11,9 @@ import pytest
 
 from smolclaw.channel import (
     CHANNEL_TYPES,
+    MAX_DISCORD_LENGTH,
     Channel,
+    DiscordChannel,
     TelegramChannel,
     WebhookChannel,
     _custom_channels,
@@ -777,7 +779,7 @@ class TestCreateChannel:
         config = ChannelConfig(token_env="TEST_TOKEN", authorized_users=[])
         router = Router()
         with pytest.raises(ValueError, match="Unknown channel type"):
-            create_channel("discord", "myagent", config, router)
+            create_channel("nonexistent_platform", "myagent", config, router)
 
     def test_channel_types_registry(self):
         assert "telegram" in CHANNEL_TYPES
@@ -981,6 +983,10 @@ class TestRegisterChannel:
         with pytest.raises(ValueError, match="Cannot override built-in channel"):
             register_channel("webhook", _DummyChannel)
 
+    def test_register_builtin_discord_raises(self):
+        with pytest.raises(ValueError, match="Cannot override built-in channel"):
+            register_channel("discord", _DummyChannel)
+
     def test_register_then_create(self):
         register_channel("dummy", _DummyChannel)
         config = ChannelConfig()
@@ -1022,6 +1028,7 @@ class TestListChannelTypes:
         types = list_channel_types()
         assert "telegram" in types
         assert "webhook" in types
+        assert "discord" in types
 
     def test_custom_included(self):
         register_channel("dummy", _DummyChannel)
@@ -1187,3 +1194,479 @@ class TestChannelConfigAppToken:
         config = ChannelConfig(token_env="SLACK_BOT_TOKEN", app_token_env="SLACK_APP_TOKEN")
         assert config.token_env == "SLACK_BOT_TOKEN"
         assert config.app_token_env == "SLACK_APP_TOKEN"
+
+
+# --- Discord Channel ---
+
+
+def _make_discord_channel(
+    token: str = "discord-test-token",
+    authorized_users: list[int | str] | None = None,
+) -> DiscordChannel:
+    config = ChannelConfig(
+        token_env="TEST_DISCORD_TOKEN",
+        authorized_users=authorized_users or [],
+    )
+    router = Router()
+    with patch.dict("os.environ", {"TEST_DISCORD_TOKEN": token}):
+        channel = DiscordChannel("testagent", config, router)
+    return channel
+
+
+class TestDiscordChannelInit:
+    def test_basic_init(self):
+        ch = _make_discord_channel()
+        assert ch.agent_name == "testagent"
+        assert ch.channel_type == "discord"
+        assert ch._token == "discord-test-token"
+        assert ch._client is None
+        assert ch._runner_task is None
+
+    def test_authorized_users(self):
+        ch = _make_discord_channel(authorized_users=[111, 222])
+        assert ch._authorized == {111, 222}
+
+    def test_no_authorized_users(self):
+        ch = _make_discord_channel(authorized_users=[])
+        assert ch._authorized == set()
+
+    def test_missing_token_env(self):
+        config = ChannelConfig(token_env="NONEXISTENT_TOKEN", authorized_users=[])
+        router = Router()
+        ch = DiscordChannel("testagent", config, router)
+        assert ch._token == ""
+
+    def test_repr(self):
+        ch = _make_discord_channel()
+        r = repr(ch)
+        assert "DiscordChannel" in r
+        assert "testagent" in r
+
+
+class TestDiscordChannelAuth:
+    def test_authorized_when_no_whitelist(self):
+        ch = _make_discord_channel(authorized_users=[])
+        assert ch._is_authorized(12345) is True
+
+    def test_authorized_user_in_whitelist(self):
+        ch = _make_discord_channel(authorized_users=[111, 222])
+        assert ch._is_authorized(111) is True
+        assert ch._is_authorized(222) is True
+
+    def test_unauthorized_user(self):
+        ch = _make_discord_channel(authorized_users=[111])
+        assert ch._is_authorized(999) is False
+
+    def test_string_user_ids(self):
+        ch = _make_discord_channel(authorized_users=["111", "222"])
+        assert ch._is_authorized(111) is True
+        assert ch._is_authorized(999) is False
+
+
+class TestDiscordChannelStart:
+    @pytest.mark.asyncio
+    async def test_start_no_token_returns_early(self):
+        """start() should log error and return if no token."""
+        ch = _make_discord_channel(token="")
+        ch._token = ""
+
+        mock_discord = MagicMock()
+        with patch.dict("sys.modules", {"discord": mock_discord}):
+            await ch.start()
+
+        assert ch._client is None
+        assert ch._runner_task is None
+
+    @pytest.mark.asyncio
+    async def test_start_missing_discord_py(self):
+        """start() should log error if discord.py is not installed."""
+        ch = _make_discord_channel()
+
+        # Remove discord from sys.modules and make import fail
+        with patch.dict("sys.modules", {"discord": None}):
+            await ch.start()
+
+        assert ch._client is None
+
+    @pytest.mark.asyncio
+    async def test_start_creates_client_and_task(self):
+        """start() should create a Discord client and start a runner task."""
+        ch = _make_discord_channel()
+
+        mock_client = MagicMock()
+        mock_client.start = AsyncMock()
+        mock_client.event = lambda fn: fn  # Decorator passthrough
+
+        mock_intents_cls = MagicMock()
+        mock_intents = MagicMock()
+        mock_intents_cls.default.return_value = mock_intents
+
+        mock_discord = MagicMock()
+        mock_discord.Intents = mock_intents_cls
+        mock_discord.Client.return_value = mock_client
+        mock_discord.DMChannel = type("DMChannel", (), {})
+
+        with patch.dict("sys.modules", {"discord": mock_discord}):
+            await ch.start()
+
+        assert ch._client is mock_client
+        assert ch._runner_task is not None
+
+        # Cleanup
+        ch._runner_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await ch._runner_task
+
+
+class TestDiscordChannelStop:
+    @pytest.mark.asyncio
+    async def test_stop_closes_client(self):
+        """stop() should close the Discord client."""
+        ch = _make_discord_channel()
+        mock_client = MagicMock()
+        mock_client.close = AsyncMock()
+        ch._client = mock_client
+        ch._runner_task = asyncio.create_task(asyncio.sleep(100))
+
+        await ch.stop()
+
+        mock_client.close.assert_awaited_once()
+        assert ch._client is None
+        assert ch._runner_task is None
+
+    @pytest.mark.asyncio
+    async def test_stop_no_client_is_noop(self):
+        """stop() should not raise when no client exists."""
+        ch = _make_discord_channel()
+        await ch.stop()  # Should not raise
+
+
+class TestDiscordChannelSend:
+    @pytest.mark.asyncio
+    async def test_send_to_channel(self):
+        """send() should fetch channel and send message chunks."""
+        ch = _make_discord_channel()
+        mock_channel = MagicMock()
+        mock_channel.send = AsyncMock()
+
+        mock_client = MagicMock()
+        mock_client.get_channel.return_value = mock_channel
+        ch._client = mock_client
+
+        await ch.send("12345", "Hello Discord!")
+
+        mock_client.get_channel.assert_called_once_with(12345)
+        mock_channel.send.assert_awaited_once_with("Hello Discord!")
+
+    @pytest.mark.asyncio
+    async def test_send_fetches_when_cache_miss(self):
+        """send() should fetch_channel when get_channel returns None."""
+        ch = _make_discord_channel()
+        mock_channel = MagicMock()
+        mock_channel.send = AsyncMock()
+
+        mock_client = MagicMock()
+        mock_client.get_channel.return_value = None
+        mock_client.fetch_channel = AsyncMock(return_value=mock_channel)
+        ch._client = mock_client
+
+        await ch.send("12345", "Hello!")
+
+        mock_client.fetch_channel.assert_awaited_once_with(12345)
+        mock_channel.send.assert_awaited_once_with("Hello!")
+
+    @pytest.mark.asyncio
+    async def test_send_splits_long_message(self):
+        """send() should split messages exceeding Discord's 2000 char limit."""
+        ch = _make_discord_channel()
+        mock_channel = MagicMock()
+        mock_channel.send = AsyncMock()
+
+        mock_client = MagicMock()
+        mock_client.get_channel.return_value = mock_channel
+        ch._client = mock_client
+
+        long_text = "A" * 3000
+        await ch.send("12345", long_text)
+
+        assert mock_channel.send.await_count >= 2
+        for call in mock_channel.send.await_args_list:
+            assert len(call[0][0]) <= MAX_DISCORD_LENGTH
+
+    @pytest.mark.asyncio
+    async def test_send_no_client_noop(self):
+        """send() should be a no-op when client is None."""
+        ch = _make_discord_channel()
+        ch._client = None
+        await ch.send("12345", "Hello")  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_send_error_logged(self):
+        """send() should catch and log errors instead of raising."""
+        ch = _make_discord_channel()
+        mock_client = MagicMock()
+        mock_client.get_channel.side_effect = Exception("channel not found")
+        ch._client = mock_client
+
+        await ch.send("12345", "Hello")  # Should not raise
+
+
+async def _start_discord_and_get_handlers(
+    authorized_users: list[int] | None = None,
+) -> tuple[DiscordChannel, dict]:
+    """Start a Discord channel with mocks and capture event handlers."""
+    ch = _make_discord_channel(authorized_users=authorized_users)
+
+    # Track registered event handlers
+    captured: dict[str, object] = {}
+
+    mock_client = MagicMock()
+    mock_client.start = AsyncMock()
+    mock_client.user = MagicMock()
+    mock_client.user.id = 99999  # Bot's own user ID
+
+    def capture_event(fn):
+        captured[fn.__name__] = fn
+        return fn
+
+    mock_client.event = capture_event
+
+    mock_intents_cls = MagicMock()
+    mock_intents = MagicMock()
+    mock_intents_cls.default.return_value = mock_intents
+
+    mock_discord = MagicMock()
+    mock_discord.Intents = mock_intents_cls
+    mock_discord.Client.return_value = mock_client
+    mock_discord.DMChannel = type("MockDMChannel", (), {})
+
+    with patch.dict("sys.modules", {"discord": mock_discord}):
+        await ch.start()
+
+    # Store DMChannel class on channel for test access
+    ch._dm_channel_cls = mock_discord.DMChannel  # type: ignore[attr-defined]
+
+    # Cleanup runner task
+    if ch._runner_task:
+        ch._runner_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await ch._runner_task
+
+    return ch, captured
+
+
+def _make_mock_discord_message(
+    content: str = "Hello",
+    author_id: int = 111,
+    channel_id: int = 999,
+    is_dm: bool = True,
+    mentions: list | None = None,
+    author_is_bot: bool = False,
+    bot_user: object | None = None,
+) -> MagicMock:
+    """Create a mock Discord Message object."""
+    message = MagicMock()
+    message.content = content
+    message.author.id = author_id
+    message.channel.id = channel_id
+    message.channel.send = AsyncMock()
+    message.mentions = mentions or []
+
+    # For DM detection — need real isinstance check
+    if is_dm:
+        # Patch the channel type
+        message.channel.__class__ = type("MockDMChannel", (), {})
+    else:
+        message.channel.__class__ = type("MockTextChannel", (), {})
+
+    # Set author != bot user for non-bot messages
+    if bot_user and author_is_bot:
+        message.author = bot_user
+    elif bot_user:
+        # Different object
+        message.author = MagicMock()
+        message.author.id = author_id
+
+    return message
+
+
+class TestDiscordHandlers:
+    @pytest.mark.asyncio
+    async def test_on_ready_handler_captured(self):
+        _ch, handlers = await _start_discord_and_get_handlers()
+        assert "on_ready" in handlers
+
+    @pytest.mark.asyncio
+    async def test_on_ready_runs(self):
+        _ch, handlers = await _start_discord_and_get_handlers()
+        # Should not raise
+        await handlers["on_ready"]()
+
+    @pytest.mark.asyncio
+    async def test_on_message_handler_captured(self):
+        _ch, handlers = await _start_discord_and_get_handlers()
+        assert "on_message" in handlers
+
+    @pytest.mark.asyncio
+    async def test_on_message_ignores_own_messages(self):
+        ch, handlers = await _start_discord_and_get_handlers()
+        # Create a message where author IS the bot
+        message = MagicMock()
+        message.author = ch._client.user
+        message.content = "self-message"
+
+        await handlers["on_message"](message)
+        # No send should happen (message from self)
+
+    @pytest.mark.asyncio
+    async def test_on_message_ignores_unauthorized(self):
+        _ch, handlers = await _start_discord_and_get_handlers(authorized_users=[111])
+        message = MagicMock()
+        message.author = MagicMock()
+        message.author.id = 999  # Not authorized
+        message.content = "Hello"
+
+        await handlers["on_message"](message)
+        # No crash = test pass
+
+    @pytest.mark.asyncio
+    async def test_on_message_ignores_non_dm_non_mention(self):
+        _ch, handlers = await _start_discord_and_get_handlers()
+        message = MagicMock()
+        message.author = MagicMock()
+        message.author.id = 111
+        message.content = "Hello"
+        message.mentions = []  # Bot not mentioned
+        # Not a DM channel - use isinstance check mock
+        message.channel.__class__ = type("TextChannel", (), {})
+
+        # Patch isinstance for discord.DMChannel
+        # The handler uses isinstance(message.channel, discord.DMChannel)
+        # which will be False since we're using a fake class
+        await handlers["on_message"](message)
+        # No crash = test pass (message should be ignored)
+
+    @pytest.mark.asyncio
+    async def test_on_message_skips_empty_text_after_mention_strip(self):
+        ch, handlers = await _start_discord_and_get_handlers()
+        bot_user = ch._client.user
+        bot_user.id = 99999
+
+        message = MagicMock()
+        message.author = MagicMock()
+        message.author.id = 111
+        # Content is just the mention — after stripping, text is empty
+        message.content = "<@99999>"
+        message.channel.__class__ = ch._dm_channel_cls  # type: ignore[attr-defined]
+        message.mentions = [bot_user]
+        message.channel.send = AsyncMock()
+
+        await handlers["on_message"](message)
+        # send should not be called since text is empty after strip
+        message.channel.send.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_on_message_routes_dm(self):
+        ch, handlers = await _start_discord_and_get_handlers()
+        from smolclaw.router import OutboundMessage
+
+        # Create a DM channel as an instance of the mock DMChannel class
+        dm_cls = ch._dm_channel_cls  # type: ignore[attr-defined]
+        dm_channel = dm_cls()
+        dm_channel.id = 12345
+        dm_channel.send = AsyncMock()
+
+        # Create an async context manager for typing()
+        mock_typing = MagicMock()
+        mock_typing.__aenter__ = AsyncMock(return_value=None)
+        mock_typing.__aexit__ = AsyncMock(return_value=None)
+        dm_channel.typing = MagicMock(return_value=mock_typing)
+
+        message = MagicMock()
+        message.author = MagicMock()
+        message.author.id = 111
+        message.content = "Hello TARS"
+        message.channel = dm_channel
+        message.mentions = []
+
+        ch.router.route = AsyncMock(
+            return_value=OutboundMessage(text="Hello human!", agent="testagent", source="discord")
+        )
+
+        await handlers["on_message"](message)
+
+        dm_channel.send.assert_awaited_once_with("Hello human!")
+
+    @pytest.mark.asyncio
+    async def test_on_message_handles_timeout(self):
+        ch, handlers = await _start_discord_and_get_handlers()
+
+        dm_cls = ch._dm_channel_cls  # type: ignore[attr-defined]
+        dm_channel = dm_cls()
+        dm_channel.id = 12345
+        dm_channel.send = AsyncMock()
+
+        mock_typing = MagicMock()
+        mock_typing.__aenter__ = AsyncMock(return_value=None)
+        mock_typing.__aexit__ = AsyncMock(return_value=None)
+        dm_channel.typing = MagicMock(return_value=mock_typing)
+
+        message = MagicMock()
+        message.author = MagicMock()
+        message.author.id = 111
+        message.content = "slow request"
+        message.channel = dm_channel
+        message.mentions = []
+
+        ch.router.route = AsyncMock(side_effect=TimeoutError())
+
+        await handlers["on_message"](message)
+
+        dm_channel.send.assert_awaited_once_with("Request timed out.")
+
+    @pytest.mark.asyncio
+    async def test_on_message_handles_error(self):
+        ch, handlers = await _start_discord_and_get_handlers()
+
+        dm_cls = ch._dm_channel_cls  # type: ignore[attr-defined]
+        dm_channel = dm_cls()
+        dm_channel.id = 12345
+        dm_channel.send = AsyncMock()
+
+        mock_typing = MagicMock()
+        mock_typing.__aenter__ = AsyncMock(return_value=None)
+        mock_typing.__aexit__ = AsyncMock(return_value=None)
+        dm_channel.typing = MagicMock(return_value=mock_typing)
+
+        message = MagicMock()
+        message.author = MagicMock()
+        message.author.id = 111
+        message.content = "broken request"
+        message.channel = dm_channel
+        message.mentions = []
+
+        ch.router.route = AsyncMock(side_effect=RuntimeError("agent crashed"))
+
+        await handlers["on_message"](message)
+
+        # Error message should be sent
+        dm_channel.send.assert_awaited_once()
+        sent_text = dm_channel.send.call_args[0][0]
+        assert "agent crashed" in sent_text
+
+
+class TestDiscordChannelFactory:
+    def test_create_discord(self):
+        config = ChannelConfig(token_env="TEST_DISCORD_TOKEN")
+        router = Router()
+        with patch.dict("os.environ", {"TEST_DISCORD_TOKEN": "tok"}):
+            ch = create_channel("discord", "myagent", config, router)
+        assert isinstance(ch, DiscordChannel)
+        assert ch.agent_name == "myagent"
+
+    def test_discord_in_registry(self):
+        assert "discord" in CHANNEL_TYPES
+        assert CHANNEL_TYPES["discord"] is DiscordChannel
+
+    def test_max_discord_length(self):
+        assert MAX_DISCORD_LENGTH == 2000

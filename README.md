@@ -23,7 +23,8 @@ Run multiple AI agents — each with its own personality, skills, and channels �
 - **Filesystem-as-config** — Drop a folder, get an agent. `soul.md` for personality, `agent.yaml` for model/channels, `skills/` for capabilities.
 - **Single gateway process** — All agents, channels, scheduler, and API run in one async process. No microservices, no Docker, no infra.
 - **Telegram integration** — Each agent gets its own Telegram bot with typing indicators, markdown rendering, and user authorization.
-- **Webhook delivery** — POST agent responses to any HTTP endpoint (Slack incoming webhooks, Discord, custom APIs). Zero dependencies.
+- **Discord integration** — Connect agents to Discord bots with DM and @mention support, typing indicators, and user authorization. `pip install smolclaw[discord]`.
+- **Webhook delivery** — POST agent responses to any HTTP endpoint (Slack incoming webhooks, Discord webhooks, custom APIs). Zero dependencies.
 - **Extensible channels** — Register custom channel adapters via `register_channel()` or distribute them as plugins via entry points. Third-party packages just work.
 - **Cron scheduler** — Schedule jobs with cron expressions, deliver results to Telegram. Jobs route through the same message bus as everything else.
 - **Semantic memory** — Shared SQLite database with per-agent isolation, FTS5 full-text search, and optional vector search via sqlite-vec with hybrid retrieval (RRF).
@@ -54,6 +55,13 @@ Want Telegram? Add `--telegram` with your bot token from [@BotFather](https://t.
 
 ```bash
 smolclaw init --agent tars --telegram YOUR_BOT_TOKEN
+```
+
+Want Discord? Use `--discord` with your bot token from the [Discord Developer Portal](https://discord.com/developers/applications):
+
+```bash
+pip install smolclaw[discord]
+smolclaw init --agent tars --discord YOUR_BOT_TOKEN
 ```
 
 This creates a full project at `~/.smolclaw/` with your first agent and starts the gateway. The API + dashboard will be at `http://localhost:7890`.
@@ -113,11 +121,11 @@ You are TARS, a personal virtual assistant. Inspired by Interstellar.
 | **Config** | Markdown files | Python classes | Python code | Python decorators |
 | **Agents defined as** | Folders with `.md` files | Python code | Graph nodes | Python classes |
 | **Multi-model** | Per-agent model selection | Per-agent | Per-node | OpenAI only |
-| **Channels** | Telegram built-in, API | No built-in | No built-in | No built-in |
+| **Channels** | Telegram, Discord, API | No built-in | No built-in | No built-in |
 | **Scheduler** | Built-in cron | No built-in | No built-in | No built-in |
 | **Dashboard** | Built-in | Studio (paid) | LangSmith (paid) | No built-in |
 | **Memory** | Built-in SQLite | External | External | External |
-| **Code size** | ~6900 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
+| **Code size** | ~7000 lines | ~15K+ lines | ~25K+ lines | ~5K+ lines |
 | **Focus** | Personal assistant | Enterprise teams | Workflows | General agents |
 
 **smolclaw is opinionated:** one process, filesystem-as-config, batteries-included. If you want a personal AI assistant that just works — start here.
@@ -277,7 +285,7 @@ channels:
 
 ### 3. Built-in channels
 
-`telegram` and `webhook` are included out of the box.
+`telegram`, `discord`, and `webhook` are included out of the box. Discord requires `pip install smolclaw[discord]`.
 
 ## Development
 
@@ -302,11 +310,11 @@ ruff format --check smolclaw/
 ## Project Structure
 
 ```
-smolclaw/              # Python package (~6800 lines)
+smolclaw/              # Python package (~7000 lines)
 ├── gateway.py         # Single-process orchestrator
 ├── agent.py           # Agent class (loads identity, wraps Claude SDK)
 ├── router.py          # Message routing
-├── channel.py         # Channel adapters (Telegram, Webhook)
+├── channel.py         # Channel adapters (Telegram, Discord, Webhook)
 ├── hooks.py           # Pre/post-route message hooks (middleware)
 ├── memory.py          # Namespaced SQLite memory (FTS5 + vector search)
 ├── scheduler.py       # Cron scheduler (croniter)
@@ -334,7 +342,8 @@ smolclaw/              # Python package (~6800 lines)
 - [x] Cross-agent awareness (peer agents visible in prompts, API-based messaging)
 - [x] Multiple Telegram bots (one per agent, unique token per bot)
 - [x] Webhook channel (outgoing HTTP POST delivery)
-- [ ] Discord / Slack channel adapters
+- [x] Discord channel adapter (`pip install smolclaw[discord]`)
+- [ ] Slack channel adapter
 - [x] PyPI publish (v0.2.0 on PyPI)
 
 ## Contributing

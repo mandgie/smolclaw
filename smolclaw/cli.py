@@ -80,11 +80,48 @@ def _setup_telegram(agent_dir: Path, agent_name: str, token: str) -> None:
     click.echo(f"  Env var: {env_var}")
 
 
+def _setup_discord(agent_dir: Path, agent_name: str, token: str) -> None:
+    """Configure Discord channel for an agent.
+
+    Creates the channels/discord.env file with the bot token and updates
+    agent.yaml to reference the Discord channel configuration.
+
+    Args:
+        agent_dir: Path to the agent directory.
+        agent_name: Name of the agent (used for env var naming).
+        token: Discord bot token from the Discord Developer Portal.
+    """
+    env_var = f"{agent_name.upper()}_DISCORD_TOKEN"
+
+    # Write token to channels/discord.env
+    env_file = agent_dir / "channels" / "discord.env"
+    env_file.parent.mkdir(parents=True, exist_ok=True)
+    env_file.write_text(f"{env_var}={token}\n")
+
+    # Update agent.yaml with Discord channel config
+    yaml_path = agent_dir / "agent.yaml"
+    config = (yaml.safe_load(yaml_path.read_text()) or {}) if yaml_path.exists() else {}
+
+    if "channels" not in config or not isinstance(config["channels"], dict):
+        config["channels"] = {}
+
+    config["channels"]["discord"] = {
+        "token_env": env_var,
+        "authorized_users": [],
+    }
+
+    yaml_path.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
+
+    click.echo("  Discord configured (token in channels/discord.env)")
+    click.echo(f"  Env var: {env_var}")
+
+
 def _scaffold(
     base: Path,
     agent_name: str = "myagent",
     model: str = "claude-sonnet-4-6",
     telegram_token: str | None = None,
+    discord_token: str | None = None,
 ):
     """Scaffold smolclaw home directory and first agent. Safe to re-run."""
     click.echo(f"\n  First run — setting up smolclaw at {base}\n")
@@ -126,6 +163,10 @@ def _scaffold(
     # Telegram setup (if token provided)
     if telegram_token:
         _setup_telegram(agent_dir, agent_name, telegram_token)
+
+    # Discord setup (if token provided)
+    if discord_token:
+        _setup_discord(agent_dir, agent_name, discord_token)
 
     # soul.md
     soul_path = agent_dir / "soul.md"
@@ -426,8 +467,14 @@ def update(ctx, check, restart, force):
     default=None,
     help="Telegram bot token from @BotFather — auto-configures Telegram channel",
 )
+@click.option(
+    "--discord",
+    "discord_token",
+    default=None,
+    help="Discord bot token — auto-configures Discord channel",
+)
 @click.pass_context
-def init(ctx, agent, model, telegram_token):
+def init(ctx, agent, model, telegram_token, discord_token):
     """Initialize a new smolclaw project directory."""
     base = ctx.obj["base"]
 
@@ -438,14 +485,21 @@ def init(ctx, agent, model, telegram_token):
         click.echo("Use 'smolclaw add <name>' to create additional agents.")
         return
 
-    _scaffold(base, agent_name=agent, model=model, telegram_token=telegram_token)
+    _scaffold(
+        base,
+        agent_name=agent,
+        model=model,
+        telegram_token=telegram_token,
+        discord_token=discord_token,
+    )
 
     click.echo("Next steps:")
     click.echo(f"  1. Edit {base / 'agents' / agent / 'soul.md'} — define personality")
     click.echo(f"  2. Edit {base / 'shared' / 'USER.md'} — describe yourself")
-    if not telegram_token:
-        click.echo("  3. (Optional) Re-run with --telegram TOKEN to add Telegram")
-    click.echo(f"  {'3' if telegram_token else '4'}. Run: smolclaw up")
+    has_channel = telegram_token or discord_token
+    if not has_channel:
+        click.echo("  3. (Optional) Re-run with --telegram TOKEN or --discord TOKEN")
+    click.echo(f"  {'3' if has_channel else '4'}. Run: smolclaw up")
 
 
 @cli.command()
@@ -657,8 +711,14 @@ def up(ctx, no_api):
     default=None,
     help="Telegram bot token from @BotFather — auto-configures Telegram channel",
 )
+@click.option(
+    "--discord",
+    "discord_token",
+    default=None,
+    help="Discord bot token — auto-configures Discord channel",
+)
 @click.pass_context
-def add(ctx, name, model, telegram_token):
+def add(ctx, name, model, telegram_token, discord_token):
     """Scaffold a new agent."""
     base = ctx.obj["base"]
     agent_dir = base / "agents" / name
@@ -694,9 +754,11 @@ memory:
         f"# {name.upper()} — Operational Rules\n\nDefine tools, skills, and behavior rules here.\n"
     )
 
-    # Telegram setup (if token provided)
+    # Channel setup (if tokens provided)
     if telegram_token:
         _setup_telegram(agent_dir, name, telegram_token)
+    if discord_token:
+        _setup_discord(agent_dir, name, discord_token)
 
     # Create USER.md if it doesn't exist
     user_md = base / "shared" / "USER.md"

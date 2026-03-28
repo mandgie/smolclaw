@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- **Discord channel adapter** — Full-featured Discord bot channel with DM and @mention support, typing indicators, user authorization, and message splitting for Discord's 2000-character limit. Requires `pip install smolclaw[discord]` (discord.py). Config: add `discord:` to `agent.yaml` channels with `token_env` and `authorized_users`. Empty authorized_users allows all users.
+- **`--discord` flag for `init` and `add`** — `smolclaw init --discord TOKEN` and `smolclaw add NAME --discord TOKEN` auto-configure Discord: creates `channels/discord.env` with the bot token and sets up the Discord channel in `agent.yaml`. Can be combined with `--telegram` for multi-channel agents.
+- **`DiscordChannel` in public API** — Exported from the top-level `smolclaw` package and registered as a built-in channel type.
+
 ## [0.2.1] — 2026-03-28
 
 ### Added
