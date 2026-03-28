@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,6 +14,30 @@ from smolclaw.gateway import Gateway, WebSocketManager, run_gateway
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def _cleanup_gateway_tasks():
+    """Stop scheduler/watcher loops spawned by Gateway.start() after each test.
+
+    The CancelledError-resilient scheduler absorbs spurious cancellations
+    from the Claude SDK, so ``task.cancel()`` alone won't stop it. We track
+    all Gateway instances created during the test and call ``stop()`` on
+    their schedulers (which sets ``_running=False`` before cancelling).
+    """
+    created: list[Gateway] = []
+    _orig_init = Gateway.__init__
+
+    def _tracking_init(self, *args, **kwargs):
+        _orig_init(self, *args, **kwargs)
+        created.append(self)
+
+    with patch.object(Gateway, "__init__", _tracking_init):
+        yield
+
+    for gw in created:
+        with contextlib.suppress(Exception):
+            await gw.stop()
 
 
 @pytest.fixture
@@ -49,6 +74,7 @@ class TestGatewayInit:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("_cleanup_gateway_tasks")
 class TestGatewayStart:
     @pytest.mark.asyncio
     async def test_discovers_agents(self, gw_base: Path):
@@ -291,6 +317,7 @@ class TestGatewayStart:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("_cleanup_gateway_tasks")
 class TestDeliverCron:
     @pytest.mark.asyncio
     async def test_delivers_to_matching_channel(self, gw_base: Path):
@@ -361,6 +388,7 @@ class TestDeliverCron:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("_cleanup_gateway_tasks")
 class TestReloadAgent:
     @pytest.mark.asyncio
     async def test_reload_updates_agent_info(self, gw_base: Path):
@@ -417,6 +445,7 @@ class TestReloadAgent:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("_cleanup_gateway_tasks")
 class TestGatewayStop:
     @pytest.mark.asyncio
     async def test_stop_shuts_down_everything(self, gw_base: Path):
@@ -462,6 +491,7 @@ class TestGatewayStop:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("_cleanup_gateway_tasks")
 class TestGatewaySend:
     @pytest.mark.asyncio
     async def test_send_routes_to_agent(self, gw_base: Path):
@@ -569,6 +599,7 @@ class TestLogging:
             logger.handlers.extend(original_handlers)
 
 
+@pytest.mark.usefixtures("_cleanup_gateway_tasks")
 class TestRunGateway:
     @pytest.mark.asyncio
     async def test_start_failure_raises(self, gw_base: Path):
@@ -723,6 +754,7 @@ class TestRunGateway:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("_cleanup_gateway_tasks")
 class TestCrossAgentAwareness:
     @pytest.fixture
     def multi_agent_base(self, tmp_base: Path) -> Path:
@@ -897,6 +929,7 @@ class TestWebSocketManager:
         ws.send_json.assert_any_await({"event": "jobs"})
 
 
+@pytest.mark.usefixtures("_cleanup_gateway_tasks")
 class TestGatewayWebSocket:
     def test_gateway_has_ws_manager(self, gw_base: Path):
         gw = Gateway(gw_base)
@@ -939,6 +972,7 @@ class TestGatewayWebSocket:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("_cleanup_gateway_tasks")
 class TestGatewayTracing:
     @pytest.mark.asyncio
     async def test_tracing_enabled_and_configured(self, gw_base: Path):

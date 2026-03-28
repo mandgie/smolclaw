@@ -745,7 +745,7 @@ class TestLoopEdgeCases:
         # No exception means success — it returned early
 
     async def test_loop_cancellation_exits_cleanly(self, tmp_base: Path, jobs_file: Path):
-        """CancelledError during sleep exits the loop cleanly (no propagation)."""
+        """CancelledError during sleep exits the loop when _running is False."""
         router = MagicMock()
         scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
         scheduler.load_jobs()
@@ -754,12 +754,45 @@ class TestLoopEdgeCases:
         task = asyncio.create_task(scheduler._loop())
         await asyncio.sleep(0.05)
 
-        # Cancel the task — it should exit cleanly, not raise
+        # Signal shutdown, then cancel — it should exit cleanly, not raise.
+        # The scheduler absorbs spurious CancelledErrors when _running is True
+        # (SDK cancel scope leaks), but exits on cancellation when _running is False.
+        scheduler._running = False
         task.cancel()
         await task  # Should complete without error
 
         assert task.done()
         assert not task.cancelled()
+
+    async def test_spurious_cancellation_absorbed_while_running(
+        self, tmp_base: Path, jobs_file: Path
+    ):
+        """Spurious CancelledError during sleep is absorbed when _running is True.
+
+        The Claude Agent SDK leaks CancelledErrors from anyio cancel scopes.
+        The scheduler must absorb these and continue looping, not exit.
+        """
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        scheduler.load_jobs()
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._loop())
+        await asyncio.sleep(0.05)
+
+        # Simulate spurious cancellation (SDK cancel scope leak)
+        task.cancel()
+        await asyncio.sleep(0.1)
+
+        # Loop should still be running (not exited)
+        assert not task.done()
+
+        # Now shut down cleanly
+        scheduler._running = False
+        task.cancel()
+        await task
+
+        assert task.done()
 
     async def test_cancelled_job_does_not_kill_loop(self, tmp_base: Path, jobs_file: Path):
         """A CancelledError during job execution marks it cancelled, loop continues."""
@@ -838,6 +871,45 @@ class TestLoopEdgeCases:
 
         # Call _on_loop_done — it should not crash and should schedule restart
         scheduler._on_loop_done(task)
+
+
+class TestDrainCancellation:
+    """Tests for the _drain_cancellation helper method."""
+
+    @pytest.mark.asyncio
+    async def test_drain_noop_when_not_cancelled(self, tmp_base: Path, jobs_file: Path):
+        """_drain_cancellation is a no-op when the task has no pending cancellations."""
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+        # Should not raise or fail
+        scheduler._drain_cancellation()
+
+    @pytest.mark.asyncio
+    async def test_drain_absorbs_multiple_cancellations(self, tmp_base: Path, jobs_file: Path):
+        """_drain_cancellation absorbs all pending cancel requests, not just one."""
+        router = MagicMock()
+        scheduler = Scheduler(jobs_file, tmp_base / "agents", router)
+
+        absorbed = False
+
+        async def worker():
+            nonlocal absorbed
+            try:
+                await asyncio.sleep(100)
+            except asyncio.CancelledError:
+                scheduler._drain_cancellation()
+                absorbed = True
+                # If drain worked, the task can await without re-raising
+                return "survived"
+
+        task = asyncio.create_task(worker())
+        await asyncio.sleep(0.01)
+        task.cancel()
+        result = await task
+
+        assert absorbed
+        assert result == "survived"
+        assert not task.cancelled()
 
 
 class TestNoSuggestionsSuppression:

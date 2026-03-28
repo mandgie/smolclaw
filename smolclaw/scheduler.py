@@ -290,104 +290,148 @@ class Scheduler:
         while self._running:
             now = datetime.now()
 
-            for job in self.jobs:
-                if not job.enabled or not job.prompt or not job.next_run:
-                    continue
+            # Wrap the entire job-firing loop so that CancelledErrors from
+            # ANY unprotected await point (e.g. _on_event, _deliver, save)
+            # cannot kill the scheduler.  Individual handlers inside still
+            # catch job-specific cancellations for status tracking.
+            try:
+                for job in self.jobs:
+                    if not job.enabled or not job.prompt or not job.next_run:
+                        continue
 
-                # Per-job isolation: a bad next_run string must not kill the loop
-                try:
-                    next_dt = datetime.fromisoformat(job.next_run)
-                except (ValueError, TypeError) as e:
-                    log.error(
-                        f"Scheduler: job '{job.id}' has invalid next_run "
-                        f"'{job.next_run}', recomputing: {e}"
-                    )
+                    # Per-job isolation: a bad next_run string must not kill the loop
                     try:
-                        job.next_run = job.compute_next_run().isoformat()
-                        self.save_jobs()
-                    except Exception as e2:
+                        next_dt = datetime.fromisoformat(job.next_run)
+                    except (ValueError, TypeError) as e:
                         log.error(
-                            f"Scheduler: job '{job.id}' failed to recompute next_run, "
-                            f"disabling: {e2}"
+                            f"Scheduler: job '{job.id}' has invalid next_run "
+                            f"'{job.next_run}', recomputing: {e}"
                         )
-                        job.enabled = False
-                        self.save_jobs()
-                    continue
-
-                if now >= next_dt:
-                    log.info(f"Scheduler: firing job '{job.id}' for agent '{job.agent}'")
-                    job_start = time.monotonic()
-                    from .tracing import trace_cron_job
-
-                    with trace_cron_job(job.id, job.agent):
                         try:
-                            message = InboundMessage(
-                                agent=job.agent,
-                                text=job.prompt,
-                                source="cron",
-                                chat_id=job.delivery_chat_id,
-                                session_key=f"cron:{job.id}",
+                            job.next_run = job.compute_next_run().isoformat()
+                            self.save_jobs()
+                        except Exception as e2:
+                            log.error(
+                                f"Scheduler: job '{job.id}' failed to recompute next_run, "
+                                f"disabling: {e2}"
                             )
-                            outbound = await self.router.route(message)
+                            job.enabled = False
+                            self.save_jobs()
+                        continue
 
-                            # Deliver to channel if configured.
-                            # Suppress delivery when the agent responds with
-                            # NO_SUGGESTIONS (convention: nothing needs attention).
-                            if self._is_no_suggestions(outbound.text):
-                                log.info(
-                                    f"Scheduler: job '{job.id}' returned "
-                                    f"NO_SUGGESTIONS — skipping delivery"
-                                )
-                            elif job.delivery and job.delivery_chat_id:
-                                await self._deliver(job, outbound.text)
+                    if now >= next_dt:
+                        log.info(f"Scheduler: firing job '{job.id}' for agent '{job.agent}'")
+                        job_start = time.monotonic()
+                        from .tracing import trace_cron_job
 
-                            job.last_run = now.isoformat()
-                            job.status = "ok"
-                            job.failures = 0
-                        except asyncio.CancelledError:
-                            # A cancelled job must not kill the entire scheduler.
-                            # Log and continue — the loop will pick up the next job.
-                            log.warning(f"Scheduler: job '{job.id}' was cancelled mid-flight")
-                            job.status = "cancelled"
-                        except Exception as e:
-                            log.error(f"Scheduler: job '{job.id}' failed: {e}")
-                            job.status = "error"
-                            job.failures += 1
-
-                    # Clean up: disconnect agent session after cron jobs to
-                    # prevent stale SDK connections from accumulating and
-                    # burning CPU (CLOSE_WAIT sockets, leaked file descriptors).
-                    if job.session_mode == "isolated":
-                        agent = self.router.get_agent(job.agent)
-                        if agent:
+                        with trace_cron_job(job.id, job.agent):
                             try:
-                                await agent.new_session()
-                            except (Exception, asyncio.CancelledError) as e:
-                                log.debug(
-                                    f"Scheduler: session cleanup for "
-                                    f"'{job.agent}' failed (ignored): {e}"
+                                message = InboundMessage(
+                                    agent=job.agent,
+                                    text=job.prompt,
+                                    source="cron",
+                                    chat_id=job.delivery_chat_id,
+                                    session_key=f"cron:{job.id}",
                                 )
+                                outbound = await self.router.route(message)
 
-                    elapsed = time.monotonic() - job_start
-                    log.info(f"Scheduler: job '{job.id}' completed in {elapsed:.1f}s")
+                                # Deliver to channel if configured.
+                                # Suppress delivery when the agent responds with
+                                # NO_SUGGESTIONS (convention: nothing needs attention).
+                                if self._is_no_suggestions(outbound.text):
+                                    log.info(
+                                        f"Scheduler: job '{job.id}' returned "
+                                        f"NO_SUGGESTIONS — skipping delivery"
+                                    )
+                                elif job.delivery and job.delivery_chat_id:
+                                    await self._deliver(job, outbound.text)
 
-                    # Compute next run
-                    job.next_run = job.compute_next_run(after=now).isoformat()
-                    self.save_jobs()
+                                job.last_run = now.isoformat()
+                                job.status = "ok"
+                                job.failures = 0
+                            except asyncio.CancelledError:
+                                # A cancelled job must not kill the entire scheduler.
+                                log.warning(f"Scheduler: job '{job.id}' was cancelled mid-flight")
+                                job.status = "cancelled"
+                                self._drain_cancellation()
+                            except Exception as e:
+                                log.error(f"Scheduler: job '{job.id}' failed: {e}")
+                                job.status = "error"
+                                job.failures += 1
 
-                    # Notify listeners (e.g. WebSocket dashboard clients)
-                    if self._on_event:
-                        try:
-                            await self._on_event()
-                        except Exception as e:
-                            log.debug(f"Scheduler: on_event callback failed: {e}")
+                        # Clean up: disconnect agent session after cron jobs to
+                        # prevent stale SDK connections from accumulating and
+                        # burning CPU (CLOSE_WAIT sockets, leaked file descriptors).
+                        if job.session_mode == "isolated":
+                            agent = self.router.get_agent(job.agent)
+                            if agent:
+                                try:
+                                    await agent.new_session()
+                                except asyncio.CancelledError:
+                                    self._drain_cancellation()
+                                    log.debug(
+                                        f"Scheduler: session cleanup for "
+                                        f"'{job.agent}' raised CancelledError (absorbed)"
+                                    )
+                                except Exception as e:
+                                    log.debug(
+                                        f"Scheduler: session cleanup for "
+                                        f"'{job.agent}' failed (ignored): {e}"
+                                    )
+
+                        elapsed = time.monotonic() - job_start
+                        log.info(f"Scheduler: job '{job.id}' completed in {elapsed:.1f}s")
+
+                        # Compute next run
+                        job.next_run = job.compute_next_run(after=now).isoformat()
+                        self.save_jobs()
+
+                        # Notify listeners (e.g. WebSocket dashboard clients)
+                        if self._on_event:
+                            try:
+                                await self._on_event()
+                            except (Exception, asyncio.CancelledError) as e:
+                                # CancelledError is BaseException — plain `except Exception`
+                                # misses it, letting it kill the scheduler loop.
+                                if isinstance(e, asyncio.CancelledError):
+                                    self._drain_cancellation()
+                                log.debug(f"Scheduler: on_event callback failed: {e}")
+
+            except asyncio.CancelledError:
+                # Safety net: catches CancelledErrors that escaped all inner
+                # handlers (e.g. from _on_event, _deliver, save_jobs, or any
+                # future await point added inside the for-loop).
+                self._drain_cancellation()
+                log.debug("Scheduler: absorbed CancelledError from job loop, continuing")
 
             # Sleep until the next job is due (or max 60s for responsiveness).
-            # CancelledError here means clean shutdown via stop().
             try:
                 await asyncio.sleep(self._compute_sleep())
             except asyncio.CancelledError:
-                return
+                if not self._running:
+                    return  # Clean shutdown requested
+                self._drain_cancellation()
+                log.debug("Scheduler: absorbed spurious CancelledError in sleep, continuing")
+                continue
+
+    @staticmethod
+    def _drain_cancellation() -> None:
+        """Consume all pending cancellation requests on the current asyncio Task.
+
+        The Claude Agent SDK uses anyio cancel scopes internally. When an SDK
+        session disconnects, the cancel scope may leak one or more ``cancel()``
+        calls into the caller's task. A single ``uncancel()`` only absorbs one
+        pending cancellation — if the SDK fired ``cancel()`` multiple times
+        (e.g. via nested cancel scopes), remaining requests will re-raise
+        ``CancelledError`` at the next ``await``.
+
+        This helper drains **all** pending cancellations so the task can
+        safely continue its event loop.
+        """
+        task = asyncio.current_task()
+        if task:
+            while task.cancelling() > 0:
+                task.uncancel()
 
     @staticmethod
     def _is_no_suggestions(text: str) -> bool:
