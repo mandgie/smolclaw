@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -363,8 +364,17 @@ class TestTelegramChannelStart:
         assert ch._app is mock_app
         mock_app.initialize.assert_awaited_once()
         mock_app.start.assert_awaited_once()
-        mock_updater.start_polling.assert_awaited_once_with(drop_pending_updates=True)
+        mock_updater.start_polling.assert_awaited_once()
+        call_kwargs = mock_updater.start_polling.call_args[1]
+        assert call_kwargs["drop_pending_updates"] is True
+        assert callable(call_kwargs["error_callback"])
         assert mock_app.add_handler.call_count == 3  # /start, /new, message
+        mock_app.add_error_handler.assert_called_once()
+        # Cleanup watchdog
+        if ch._watchdog_task:
+            ch._watchdog_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await ch._watchdog_task
 
 
 async def _start_channel_and_get_handlers(
@@ -390,6 +400,12 @@ async def _start_channel_and_get_handlers(
 
     with patch.dict("sys.modules", modules):
         await ch.start()
+
+    # Cleanup watchdog spawned by start()
+    if ch._watchdog_task:
+        ch._watchdog_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await ch._watchdog_task
 
     return ch, captured
 
@@ -582,6 +598,97 @@ class TestTelegramChannelStop:
         mock_updater.stop.assert_awaited_once()
         mock_app.stop.assert_awaited_once()
         mock_app.shutdown.assert_awaited_once()
+        assert ch._app is None
+
+
+class TestTelegramPollingWatchdog:
+    @pytest.mark.asyncio
+    async def test_watchdog_restarts_dead_polling(self):
+        """Watchdog should restart polling when updater.running is False."""
+        ch = _make_channel()
+        mock_updater = MagicMock()
+        mock_updater.running = False
+        mock_updater.start_polling = AsyncMock()
+        mock_app = MagicMock()
+        mock_app.updater = mock_updater
+        ch._app = mock_app
+
+        # Run watchdog for one iteration by patching the sleep interval
+        with patch("smolclaw.channel.POLLING_WATCHDOG_INTERVAL", 0):
+            task = asyncio.create_task(ch._polling_watchdog())
+            await asyncio.sleep(0.05)
+            # After restart, set running=True to prevent further restarts
+            mock_updater.running = True
+            await asyncio.sleep(0.05)
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+        mock_updater.start_polling.assert_awaited()
+        assert mock_updater.start_polling.call_args[1]["drop_pending_updates"] is True
+
+    @pytest.mark.asyncio
+    async def test_watchdog_noop_when_polling_healthy(self):
+        """Watchdog should not restart polling when updater.running is True."""
+        ch = _make_channel()
+        mock_updater = MagicMock()
+        mock_updater.running = True
+        mock_updater.start_polling = AsyncMock()
+        mock_app = MagicMock()
+        mock_app.updater = mock_updater
+        ch._app = mock_app
+
+        with patch("smolclaw.channel.POLLING_WATCHDOG_INTERVAL", 0):
+            task = asyncio.create_task(ch._polling_watchdog())
+            await asyncio.sleep(0.05)
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+        mock_updater.start_polling.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_watchdog_gives_up_after_max_failures(self):
+        """Watchdog should stop after POLLING_WATCHDOG_MAX_FAILURES consecutive failures."""
+        ch = _make_channel()
+        mock_updater = MagicMock()
+        mock_updater.running = False
+        mock_updater.start_polling = AsyncMock(side_effect=RuntimeError("connection failed"))
+        mock_app = MagicMock()
+        mock_app.updater = mock_updater
+        ch._app = mock_app
+
+        with (
+            patch("smolclaw.channel.POLLING_WATCHDOG_INTERVAL", 0),
+            patch("smolclaw.channel.POLLING_WATCHDOG_MAX_FAILURES", 2),
+        ):
+            task = asyncio.create_task(ch._polling_watchdog())
+            # Let it hit max failures and exit naturally
+            await asyncio.sleep(0.1)
+            assert task.done()
+
+        assert mock_updater.start_polling.await_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_watchdog(self):
+        """stop() should cancel the watchdog task."""
+        ch = _make_channel()
+        mock_updater = MagicMock()
+        mock_updater.running = True
+        mock_updater.stop = AsyncMock()
+        mock_app = MagicMock()
+        mock_app.updater = mock_updater
+        mock_app.stop = AsyncMock()
+        mock_app.shutdown = AsyncMock()
+        ch._app = mock_app
+
+        # Create a real watchdog task
+        with patch("smolclaw.channel.POLLING_WATCHDOG_INTERVAL", 60):
+            ch._watchdog_task = asyncio.create_task(ch._polling_watchdog())
+            await asyncio.sleep(0.01)
+            await ch.stop()
+
+        assert ch._watchdog_task is None
         assert ch._app is None
 
 

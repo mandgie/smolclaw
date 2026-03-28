@@ -180,6 +180,10 @@ def split_message(text: str, max_len: int = MAX_TELEGRAM_LENGTH) -> list[str]:
     return chunks if chunks else [text[:max_len]]
 
 
+POLLING_WATCHDOG_INTERVAL = 30  # seconds between health checks
+POLLING_WATCHDOG_MAX_FAILURES = 3  # consecutive restart failures before giving up
+
+
 class TelegramChannel(Channel):
     """Telegram bot channel adapter."""
 
@@ -192,6 +196,7 @@ class TelegramChannel(Channel):
         self._token = os.environ.get(config.token_env, "")
         # Normalize authorized_users to a set — accept both int and str IDs
         self._authorized: set[int | str] = set(config.authorized_users)
+        self._watchdog_task: asyncio.Task | None = None
 
     def _is_authorized(self, user_id: int) -> bool:
         """Check if a user is authorized (empty set = allow all)."""
@@ -284,6 +289,12 @@ class TelegramChannel(Channel):
                 await agent.new_session()
             await update.message.reply_text("Session cleared.")
 
+        async def on_error(update, context):
+            log.error(f"[{agent_name}] Telegram handler error: {context.error}")
+
+        def on_polling_error(exc):
+            log.error(f"[{agent_name}] Telegram polling network error: {exc}")
+
         app = (
             Application.builder()
             .token(self._token)
@@ -296,16 +307,57 @@ class TelegramChannel(Channel):
         app.add_handler(CommandHandler("start", cmd_start))
         app.add_handler(CommandHandler("new", cmd_new))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        app.add_error_handler(on_error)
 
         self._app = app
 
         log.info(f"[{self.agent_name}] Telegram channel starting")
         await app.initialize()
         await app.start()
-        await app.updater.start_polling(drop_pending_updates=True)
+        await app.updater.start_polling(
+            drop_pending_updates=True,
+            error_callback=on_polling_error,
+        )
+        self._watchdog_task = asyncio.create_task(self._polling_watchdog())
+
+    async def _polling_watchdog(self) -> None:
+        """Monitor the polling loop and restart it if it dies."""
+        failures = 0
+        try:
+            while True:
+                await asyncio.sleep(POLLING_WATCHDOG_INTERVAL)
+                if not self._app or not self._app.updater:
+                    break
+                if not self._app.updater.running:
+                    failures += 1
+                    log.warning(
+                        f"[{self.agent_name}] Polling loop dead "
+                        f"(attempt {failures}/{POLLING_WATCHDOG_MAX_FAILURES}) — restarting"
+                    )
+                    try:
+                        await self._app.updater.start_polling(drop_pending_updates=True)
+                        log.info(f"[{self.agent_name}] Polling loop restarted successfully")
+                        failures = 0
+                    except Exception as e:
+                        log.error(f"[{self.agent_name}] Polling restart failed: {e}")
+                        if failures >= POLLING_WATCHDOG_MAX_FAILURES:
+                            log.error(
+                                f"[{self.agent_name}] Polling watchdog giving up "
+                                f"after {failures} consecutive failures"
+                            )
+                            break
+                else:
+                    failures = 0
+        except asyncio.CancelledError:
+            pass
 
     async def stop(self) -> None:
         """Stop the Telegram polling loop and shut down the application."""
+        if self._watchdog_task:
+            self._watchdog_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._watchdog_task
+            self._watchdog_task = None
         if self._app:
             log.info(f"[{self.agent_name}] Telegram channel stopping")
             await self._app.updater.stop()
