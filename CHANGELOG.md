@@ -14,10 +14,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **`doctor` channel token validation** — The `doctor` command now checks that channel token env vars (e.g. `TARS_TELEGRAM_TOKEN`) are actually set, either in the process environment or in the agent's `channels/*.env` files. Catches the most common misconfiguration (forgetting to set the Telegram token). Gracefully handles malformed YAML, non-dict channel configs, and unreadable env files.
 - **`examples/README.md`** — Complete walkthrough for the example two-agent setup: file structure, customization guide, Telegram setup, and key concepts explained.
 
+### Fixed
+- **Scheduler CancelledError resilience** — The Claude Agent SDK leaks `CancelledError` from anyio cancel scopes at arbitrary `await` points. A single leaked cancellation would kill the scheduler loop, stopping all cron jobs until gateway restart. Now the scheduler absorbs spurious cancellations and continues running. New `_drain_cancellation()` helper handles the SDK's pattern of firing `cancel()` multiple times via nested scopes. Production-tested fix — prevented 5+ scheduler deaths over 2 weeks.
+- **Telegram polling watchdog** — `python-telegram-bot`'s updater loop can silently stop without raising errors, leaving the process alive but unable to receive messages. Added a watchdog that checks `updater.running` every 30s and auto-restarts polling (up to 3 consecutive failures). Also added error handlers for handler-level and network-level Telegram errors. Production-tested — prevents multi-day Telegram outages.
+- **SDK disconnect cancel scope isolation** — `Agent._disconnect_stale()` now runs `disconnect()` in an isolated background `asyncio.Task` instead of the caller's task. The SDK's anyio cancel scope previously leaked into the caller, killing Telegram polling and scheduler sleep. Task reference stored to prevent GC warnings.
+- **WebSocket broadcast CancelledError** — `asyncio.CancelledError` is a `BaseException`, not `Exception`. The broadcast handler's `except Exception` missed it, letting leaked SDK cancel scopes kill the WebSocket manager.
+
 ### Changed
 - `install`/`uninstall` commands now support both macOS (LaunchAgent) and Linux (systemd). Unsupported platforms get a clear error instead of "macOS only".
 - SECURITY.md updated for v0.2.0 supported versions.
-- 1028 tests, 99% coverage (up from 1010). 18 new tests: 4 for shell completion, 5 for Linux install, 4 for Linux uninstall, 5 for systemd unit generation and restart.
+- 1035 tests, 99% coverage (up from 1028). 7 new tests: 3 for scheduler CancelledError handling, 4 for Telegram polling watchdog.
 
 ## [0.2.0] — 2026-03-20
 
