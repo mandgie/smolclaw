@@ -622,6 +622,8 @@ class TestSessionManagement:
             await agent.shutdown()
 
         assert agent.is_connected is False
+        # disconnect runs in an isolated asyncio task; give it a tick to execute
+        await asyncio.sleep(0)
         mock_client.disconnect.assert_awaited()
 
     @pytest.mark.asyncio

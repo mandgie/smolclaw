@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -59,6 +60,7 @@ class Agent:
         self._connected = False
         self._session_id: str | None = None
         self._lock = asyncio.Lock()
+        self._disconnect_task: asyncio.Task[None] | None = None
 
         # Last query metadata (updated after each send)
         self.last_cost_usd: float | None = None
@@ -231,14 +233,24 @@ class Agent:
         Called before reconnecting and during shutdown to ensure clean state.
         Errors during disconnect are logged at debug level and suppressed —
         the connection may already be dead.
+
+        IMPORTANT: disconnect() is run in an isolated asyncio Task because
+        the Claude Agent SDK uses anyio cancel scopes internally. If run
+        directly in the caller's task, the cancel scope leaks and kills
+        other async operations (e.g. Telegram polling).
         """
         if self._client:
-            try:
-                await self._client.disconnect()
-            except Exception as e:
-                log.debug(f"[{self.name}] Disconnect error (ignored): {e}")
+            client = self._client
             self._client = None
             self._connected = False
+            # Store ref to prevent GC warnings; fire-and-forget is intentional
+            self._disconnect_task = asyncio.create_task(self._safe_disconnect(client))
+
+    @staticmethod
+    async def _safe_disconnect(client: Any) -> None:
+        """Run SDK disconnect in isolation to contain anyio cancel scopes."""
+        with contextlib.suppress(Exception):
+            await client.disconnect()
 
     async def send(self, text: str) -> str:
         """Send a message and return the response. Thread-safe per agent."""
