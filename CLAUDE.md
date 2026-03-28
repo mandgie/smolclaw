@@ -6,7 +6,7 @@ Lightweight multi-agent framework for personal AI assistants. Think "OpenClaw bu
 
 **Repo:** https://github.com/mandgie/smolclaw
 **Author:** Magnus Friberg (mandgie / Saltfish-AB)
-**Status:** v0.2.0 — feature-complete framework, production-tested with TARS
+**Status:** v0.2.1 — feature-complete framework, production-tested with TARS
 
 ## Architecture
 
@@ -123,7 +123,7 @@ examples/              # Example two-agent setup (tars + coach)
 - [x] CLI channel adapter (interactive REPL mode) — `smolclaw chat <agent>`
 - [x] LaunchAgent plist generation (`smolclaw install` → auto-start on boot)
 - [x] Migrate TARS from ~/.tars/ to run on smolclaw as proof of full migration
-- [x] Tests (1035 tests, 99% coverage, pytest with mocked Claude SDK)
+- [x] Tests (1040+ tests, 99% coverage, pytest with mocked Claude SDK)
 - [x] OpenTelemetry tracing (optional, zero overhead when disabled)
 - [x] Message hooks (pre/post-route middleware)
 - [x] Webhook channel adapter (HTTP POST delivery)

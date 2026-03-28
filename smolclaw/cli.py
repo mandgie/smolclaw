@@ -1411,6 +1411,35 @@ def memory_delete(ctx, agent_name, fact_id):
         sys.exit(1)
 
 
+@memory.command("clear")
+@click.argument("agent_name")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+@click.pass_context
+def memory_clear(ctx, agent_name, yes):
+    """Clear all facts and conversation chunks for an agent.
+
+    This permanently deletes all memory entries for the specified agent.
+    Other agents' memory is not affected.
+    """
+    base = ctx.obj["base"]
+    mem = _open_memory(base, agent_name)
+
+    # Show what will be deleted
+    s = mem.stats()
+    total = s["facts"] + s["chunks"]
+    if total == 0:
+        click.echo(f"Agent '{agent_name}' has no memory entries.")
+        return
+
+    click.echo(f"Agent '{agent_name}' memory: {s['facts']} facts, {s['chunks']} chunks")
+
+    if not yes:
+        click.confirm("Permanently delete all entries?", abort=True)
+
+    result = mem.clear()
+    click.echo(f"Cleared: {result['facts_deleted']} facts, {result['chunks_deleted']} chunks")
+
+
 @cli.command("add-skill")
 @click.argument("agent_name")
 @click.argument("skill_name")

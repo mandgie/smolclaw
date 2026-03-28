@@ -161,6 +161,10 @@ smolclaw memory update tars 42 --content "User prefers light mode" -c preference
 
 # Delete a fact
 smolclaw memory delete tars 42
+
+# Clear all memory for an agent (with confirmation)
+smolclaw memory clear tars
+smolclaw memory clear tars --yes  # skip confirmation
 ```
 
 ## Namespacing

@@ -106,7 +106,7 @@ class TestVersion:
         runner = CliRunner()
         result = runner.invoke(cli, ["version"])
         assert result.exit_code == 0
-        assert "smolclaw 0.2.0" in result.output
+        assert "smolclaw 0.2.1" in result.output
 
 
 class TestGetBaseDir:
@@ -2822,6 +2822,58 @@ class TestMemoryCli:
         result = runner.invoke(cli, ["--home", str(base), "memory", "delete", "tars", "999"])
         assert result.exit_code != 0
         assert "not found" in result.output
+
+    def test_memory_clear_with_confirmation(self, tmp_path: Path):
+        """Clear all memory for an agent with interactive confirmation."""
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(base), "memory", "clear", "tars"],
+            input="y\n",
+        )
+        assert result.exit_code == 0
+        assert "Cleared:" in result.output
+        assert "3 facts" in result.output
+
+    def test_memory_clear_with_yes_flag(self, tmp_path: Path):
+        """Clear all memory with --yes flag skips confirmation."""
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(base), "memory", "clear", "tars", "--yes"],
+        )
+        assert result.exit_code == 0
+        assert "Cleared:" in result.output
+
+    def test_memory_clear_abort(self, tmp_path: Path):
+        """Declining confirmation aborts the clear operation."""
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--home", str(base), "memory", "clear", "tars"],
+            input="n\n",
+        )
+        assert result.exit_code != 0  # click.Abort
+
+    def test_memory_clear_empty(self, tmp_path: Path):
+        """Clear on an agent with no memory entries shows 'no entries' message."""
+        base = _setup_agent_with_memory(tmp_path)
+        runner = CliRunner()
+        # First clear everything
+        runner.invoke(
+            cli,
+            ["--home", str(base), "memory", "clear", "tars", "--yes"],
+        )
+        # Second clear should show no entries
+        result = runner.invoke(
+            cli,
+            ["--home", str(base), "memory", "clear", "tars"],
+        )
+        assert result.exit_code == 0
+        assert "no memory entries" in result.output
 
     def test_memory_get(self, tmp_path: Path):
         base = _setup_agent_with_memory(tmp_path)

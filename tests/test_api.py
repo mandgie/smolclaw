@@ -725,7 +725,7 @@ class TestHealth:
         resp = client.get("/api/health")
         data = resp.json()
         assert "version" in data
-        assert data["version"] == "0.2.0"
+        assert data["version"] == "0.2.1"
 
 
 class TestDashboard:

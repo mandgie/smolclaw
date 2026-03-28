@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-03-28
+
 ### Added
 - **Shell completion** — `smolclaw completion bash|zsh|fish` generates tab-completion scripts for all smolclaw commands. Supports eval-on-the-fly or saving to file for faster shell startup.
 - **Linux systemd install** — `smolclaw install` now works on Linux, generating a systemd user service (`~/.config/systemd/user/smolclaw.service`) with auto-restart on failure. Previously macOS-only (LaunchAgent). `uninstall` updated to match. Gateway restart logic also supports systemd.
@@ -12,6 +14,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Gateway uptime in health endpoint** — `GET /api/health` now returns `uptime_seconds` and `started_at` fields for monitoring how long the gateway has been running. Useful for health dashboards and debugging restarts.
 - **`--telegram` flag for `init` and `add`** — `smolclaw init --telegram TOKEN` and `smolclaw add NAME --telegram TOKEN` auto-configure Telegram: creates `channels/telegram.env` with the bot token and sets up the Telegram channel in `agent.yaml`. Eliminates the #1 setup friction point — no more manual env file creation or YAML editing.
 - **`doctor` channel token validation** — The `doctor` command now checks that channel token env vars (e.g. `TARS_TELEGRAM_TOKEN`) are actually set, either in the process environment or in the agent's `channels/*.env` files. Catches the most common misconfiguration (forgetting to set the Telegram token). Gracefully handles malformed YAML, non-dict channel configs, and unreadable env files.
+- **`memory clear` CLI command** — `smolclaw memory clear <agent>` permanently deletes all facts and conversation chunks for an agent. Shows entry count before deletion, requires confirmation (or `--yes` to skip). Other agents' memory is unaffected.
+- **`ChannelConfig` in public API** — `ChannelConfig` is now exported from the top-level `smolclaw` package, making it available for custom channel authors who need to type-hint their constructors.
 - **`examples/README.md`** — Complete walkthrough for the example two-agent setup: file structure, customization guide, Telegram setup, and key concepts explained.
 
 ### Fixed
@@ -22,8 +26,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 - `install`/`uninstall` commands now support both macOS (LaunchAgent) and Linux (systemd). Unsupported platforms get a clear error instead of "macOS only".
-- SECURITY.md updated for v0.2.0 supported versions.
-- 1035 tests, 99% coverage (up from 1028). 7 new tests: 3 for scheduler CancelledError handling, 4 for Telegram polling watchdog.
+- SECURITY.md updated for v0.2.1 supported versions.
 
 ## [0.2.0] — 2026-03-20
 

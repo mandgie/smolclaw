@@ -1,6 +1,6 @@
 """smolclaw — Lightweight multi-agent framework for personal AI assistants."""
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from .agent import Agent
 from .channel import (
@@ -10,7 +10,7 @@ from .channel import (
     list_channel_types,
     register_channel,
 )
-from .config import AgentConfig, AgentInfo, GatewayConfig, MemoryConfig, SkillInfo
+from .config import AgentConfig, AgentInfo, ChannelConfig, GatewayConfig, MemoryConfig, SkillInfo
 from .gateway import Gateway
 from .hooks import HookContext, HookRegistry, PostRouteHook, PreRouteHook
 from .memory import Memory, serialize_f32
@@ -24,6 +24,7 @@ __all__ = [
     "Agent",
     "AgentConfig",
     "AgentInfo",
+    "ChannelConfig",
     "FileWatcher",
     "Gateway",
     "GatewayConfig",

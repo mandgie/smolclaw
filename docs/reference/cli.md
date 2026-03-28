@@ -395,6 +395,15 @@ Delete a specific fact.
 smolclaw memory delete <agent> <fact_id>
 ```
 
+### `memory clear`
+
+Permanently delete all facts and conversation chunks for an agent. Shows entry count before deletion, requires confirmation (or `--yes` to skip). Other agents' memory is unaffected.
+
+```bash
+smolclaw memory clear <agent>
+smolclaw memory clear <agent> --yes  # skip confirmation
+```
+
 ---
 
 ### `install`
