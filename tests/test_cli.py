@@ -2183,6 +2183,7 @@ class TestUpdateCommand:
         plist_file = tmp_base / "test.plist"
         plist_file.write_text("plist content")
         with (
+            patch("smolclaw.cli.platform.system", return_value="Darwin"),
             patch("smolclaw.cli._plist_path", return_value=plist_file),
             patch("smolclaw.cli.subprocess.run") as mock_run,
         ):
@@ -3114,6 +3115,7 @@ class TestRestartGatewayEdgeCases:
             return result
 
         with (
+            patch("smolclaw.cli.platform.system", return_value="Darwin"),
             patch("smolclaw.cli._plist_path", return_value=plist_file),
             patch("smolclaw.cli.subprocess.run", side_effect=mock_run_side_effect),
         ):
